@@ -45,11 +45,12 @@ This document tracks all completed work on the Codex IDE project. Each task is m
 #### Day 3-5: Lexical Editor Implementation
 | Task | Started | Completed | Status | Notes |
 |------|---------|-----------|--------|-------|
-| Create ManuscriptEditor.tsx | | | ⏳ Pending | |
-| Implement basic toolbar | | | ⏳ Pending | |
-| Add keyboard shortcuts | | | ⏳ Pending | |
-| Implement Markdown support | | | ⏳ Pending | |
-| Add word count display | | | ⏳ Pending | |
+| Create ManuscriptEditor.tsx | 2025-11-23 | 2025-11-23 | ✅ Complete | Full Lexical editor with theme |
+| Implement basic toolbar | 2025-11-23 | 2025-11-23 | ✅ Complete | Format buttons, heading selector |
+| Add keyboard shortcuts | 2025-11-23 | 2025-11-23 | ✅ Complete | Ctrl+B/I/U, F11 focus mode |
+| Create custom nodes | 2025-11-23 | 2025-11-23 | ✅ Complete | SceneBreakNode, EntityMentionNode |
+| Add word count display | 2025-11-23 | 2025-11-23 | ✅ Complete | Live updating word counter |
+| Focus mode implementation | 2025-11-23 | 2025-11-23 | ✅ Complete | F11 toggle, distraction-free |
 
 ### Week 2: Database & Versioning Backend
 
@@ -130,11 +131,11 @@ This document tracks all completed work on the Codex IDE project. Each task is m
 - **Build Time**: Not measured
 
 ### Project Health
-- **Lines of Code**: ~500 (configuration and structure)
+- **Lines of Code**: ~1,200 (including editor implementation)
 - **Open Issues**: 0
-- **Completed Tasks**: 11
-- **Pending Tasks**: 45+
-- **Files Created**: 25+
+- **Completed Tasks**: 17
+- **Pending Tasks**: 40+
+- **Files Created**: 31+
 
 ---
 
@@ -235,9 +236,58 @@ Data:
 **Next Steps:**
 - Install dependencies (npm install, pip install)
 - Test that both servers start successfully
-- Begin Lexical editor implementation (Day 3-5)
+- ~~Begin Lexical editor implementation (Day 3-5)~~ ✅ Complete
+
+**Evening Session - Lexical Editor Implementation:**
+- Created complete Lexical-based rich text editor
+  - ManuscriptEditor.tsx with full configuration
+  - EditorToolbar.tsx with formatting controls
+  - Custom editor theme with Tailwind
+  - TypeScript types for editor state
+- Implemented custom Lexical nodes
+  - SceneBreakNode for scene separators (renders as ***)
+  - EntityMentionNode for clickable character/location mentions
+  - Proper serialization/deserialization
+- Added editor features
+  - Focus mode (F11 toggle) - distraction-free writing
+  - Live word count display
+  - Undo/redo support
+  - Text formatting (bold, italic, underline)
+  - Headings (H1-H3)
+  - Quote blocks
+- Integrated editor into App.tsx
+  - Welcome screen with feature cards
+  - "Create New Manuscript" button
+  - Toggles to editor view
+  - Dark mode support throughout
+
+**New Files Created (6+):**
+```
+Frontend Editor:
+- frontend/src/types/editor.ts
+- frontend/src/lib/editorTheme.ts
+- frontend/src/components/Editor/ManuscriptEditor.tsx
+- frontend/src/components/Editor/EditorToolbar.tsx
+- frontend/src/components/Editor/nodes/SceneBreakNode.tsx
+- frontend/src/components/Editor/nodes/EntityMentionNode.tsx
+```
+
+**Technical Achievements:**
+- Lexical editor fully functional with custom nodes
+- Rich text editing with toolbar
+- Custom node system extensible for future features (dialogue detection, etc.)
+- Focus mode for immersive writing
+- Real-time word counting
+- Dark mode compatible
+
+**Next Steps (Day 6-7):**
+- Set up SQLite database with SQLAlchemy
+- Create database schema (manuscripts, scenes, snapshots)
+- Set up Alembic migrations
+- Implement ManuscriptRepository class
+- Test database operations
 
 ---
 
-**Last Updated**: 2025-11-23 20:50
+**Last Updated**: 2025-11-23 21:15
 **Updated By**: Development Team

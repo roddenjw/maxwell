@@ -1,7 +1,46 @@
 import { useState } from 'react'
+import ManuscriptEditor from './components/Editor/ManuscriptEditor'
 
 function App() {
   const [darkMode, setDarkMode] = useState(false)
+  const [showEditor, setShowEditor] = useState(false)
+
+  if (showEditor) {
+    return (
+      <div className={darkMode ? 'dark' : ''}>
+        <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+          {/* Header */}
+          <header className="border-b border-gray-200 dark:border-gray-800 px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowEditor(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  title="Back to home"
+                >
+                  ← Back
+                </button>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
+                  Untitled Manuscript
+                </h1>
+              </div>
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm"
+              >
+                {darkMode ? '☀️' : '🌙'}
+              </button>
+            </div>
+          </header>
+
+          {/* Editor */}
+          <main>
+            <ManuscriptEditor mode="normal" />
+          </main>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={darkMode ? 'dark' : ''}>
@@ -66,14 +105,17 @@ function App() {
             </div>
 
             <div className="pt-8">
-              <button className="px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition-colors shadow-lg">
+              <button
+                onClick={() => setShowEditor(true)}
+                className="px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition-colors shadow-lg"
+              >
                 Create New Manuscript
               </button>
             </div>
 
             <div className="pt-12 border-t border-gray-200 dark:border-gray-800">
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Status: <span className="text-green-600 dark:text-green-400">● Backend Connected</span>
+                Status: <span className="text-green-600 dark:text-green-400">● Ready</span>
               </p>
             </div>
           </div>

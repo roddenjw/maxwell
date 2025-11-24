@@ -29,12 +29,47 @@
 @layer components {
   /* Editor styles */
   .editor-container {
-    @apply min-h-screen p-8 max-w-4xl mx-auto;
+    @apply relative;
+  }
+
+  .editor-container.focus-mode {
+    @apply bg-gray-50 dark:bg-gray-950;
+  }
+
+  .editor-wrapper {
+    @apply relative;
   }
 
   .editor-content {
     @apply prose prose-lg dark:prose-invert max-w-none;
     @apply focus:outline-none;
+    font-family: 'Merriweather', Georgia, serif;
+    line-height: 1.8;
+  }
+
+  .editor-content.focus-mode-content {
+    @apply px-16 py-24;
+    max-width: 42rem;
+    margin: 0 auto;
+  }
+
+  .editor-placeholder {
+    font-family: 'Merriweather', Georgia, serif;
+  }
+
+  .editor-paragraph {
+    @apply mb-4;
+  }
+
+  /* Lexical editor specific */
+  .editor-content p {
+    @apply mb-4;
+  }
+
+  .editor-content h1,
+  .editor-content h2,
+  .editor-content h3 {
+    @apply font-bold;
   }
 
   /* Scene break styles */
@@ -55,12 +90,17 @@
 
   /* Consistency error styles */
   .consistency-error {
-    @apply border-b-2 border-purple-500 border-wavy cursor-help;
+    @apply border-b-2 border-purple-500 cursor-help;
+    text-decoration: underline wavy purple;
   }
 
-  /* Custom wavy underline */
-  .border-wavy {
-    text-decoration: underline wavy;
+  /* Toolbar styles */
+  .toolbar {
+    @apply shadow-sm;
+  }
+
+  .toolbar-group {
+    @apply flex items-center;
   }
 }
 
