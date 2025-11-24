@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+    @apply font-sans antialiased;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100 dark:bg-gray-800;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 dark:bg-gray-600 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500 dark:bg-gray-500;
+  }
+}
+
+@layer components {
+  /* Editor styles */
+  .editor-container {
+    @apply min-h-screen p-8 max-w-4xl mx-auto;
+  }
+
+  .editor-content {
+    @apply prose prose-lg dark:prose-invert max-w-none;
+    @apply focus:outline-none;
+  }
+
+  /* Scene break styles */
+  .scene-break {
+    @apply my-8 flex items-center justify-center;
+  }
+
+  .scene-break::before {
+    content: '***';
+    @apply text-2xl text-gray-400 dark:text-gray-600;
+  }
+
+  /* Entity mention styles */
+  .entity-mention {
+    @apply cursor-pointer border-b-2 border-primary-500 border-dotted;
+    @apply hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors;
+  }
+
+  /* Consistency error styles */
+  .consistency-error {
+    @apply border-b-2 border-purple-500 border-wavy cursor-help;
+  }
+
+  /* Custom wavy underline */
+  .border-wavy {
+    text-decoration: underline wavy;
+  }
+}
+
+@layer utilities {
+  .typewriter-text {
+    overflow: hidden;
+    white-space: pre-wrap;
+    animation: typing 2s steps(40, end);
+  }
+
+  @keyframes typing {
+    from {
+      width: 0;
+    }
+    to {
+      width: 100%;
+    }
+  }
+}
