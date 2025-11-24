@@ -55,7 +55,7 @@
   }
 
   .editor-placeholder {
-    @apply text-faded-ink;
+    @apply absolute top-0 left-0 right-0 text-faded-ink;
     font-family: 'EB Garamond', Garamond, Georgia, serif;
   }
 

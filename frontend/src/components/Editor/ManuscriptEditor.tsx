@@ -37,6 +37,7 @@ export default function ManuscriptEditor({
 }: ManuscriptEditorProps) {
   const [wordCount, setWordCount] = useState(0);
   const [isFocusMode, setIsFocusMode] = useState(mode === 'focus');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
 
   // Configure Lexical editor
   const initialConfig = {
@@ -107,23 +108,30 @@ export default function ManuscriptEditor({
           )}
 
           {/* Main editor area */}
-          <div className="editor-wrapper">
+          <div className="editor-wrapper relative">
             <RichTextPlugin
               contentEditable={
                 <ContentEditable
                   className={`
                     editor-content
                     ${isFocusMode ? 'focus-mode-content' : ''}
-                    min-h-screen p-8
-                    prose prose-lg dark:prose-invert max-w-4xl mx-auto
+                    min-h-screen p-8 pt-20
+                    prose prose-lg max-w-4xl mx-auto
                     focus:outline-none
                   `}
                   aria-label="Manuscript editor"
                 />
               }
               placeholder={
-                <div className="editor-placeholder absolute top-8 left-8 text-gray-400 dark:text-gray-600 pointer-events-none">
-                  Start writing your story...
+                <div className="editor-placeholder pointer-events-none">
+                  <div className="max-w-4xl mx-auto px-8 pt-20">
+                    <p className="text-2xl text-faded-ink font-serif mb-3">
+                      Click here to begin writing...
+                    </p>
+                    <p className="text-sm text-faded-ink font-sans">
+                      Your work is automatically saved every 5 seconds
+                    </p>
+                  </div>
                 </div>
               }
               ErrorBoundary={LexicalErrorBoundary}
@@ -136,17 +144,49 @@ export default function ManuscriptEditor({
             <OnChangePlugin onChange={handleEditorChange} />
 
             {/* Auto-save plugin - saves to localStorage */}
-            {manuscriptId && <AutoSavePlugin manuscriptId={manuscriptId} />}
+            {manuscriptId && (
+              <AutoSavePlugin
+                manuscriptId={manuscriptId}
+                onSaveStatusChange={setSaveStatus}
+              />
+            )}
           </div>
 
-          {/* Word count indicator - Maxwell Style */}
+          {/* Status indicators - Maxwell Style */}
           {!isFocusMode && (
-            <div className="fixed bottom-4 right-4 bg-white border border-slate-ui px-4 py-2 shadow-book" style={{ borderRadius: '2px' }}>
-              <div className="flex items-center gap-2 text-sm font-sans">
-                <span className="text-faded-ink">Words:</span>
-                <span className="font-semibold text-midnight">
-                  {wordCount.toLocaleString()}
-                </span>
+            <div className="fixed bottom-4 right-4 flex flex-col gap-2 items-end">
+              {/* Save status indicator */}
+              <div className="bg-white border border-slate-ui px-4 py-2 shadow-book" style={{ borderRadius: '2px' }}>
+                <div className="flex items-center gap-2 text-sm font-sans">
+                  {saveStatus === 'saved' && (
+                    <>
+                      <span className="text-bronze">✓</span>
+                      <span className="text-faded-ink">All changes saved</span>
+                    </>
+                  )}
+                  {saveStatus === 'saving' && (
+                    <>
+                      <span className="text-bronze animate-pulse">●</span>
+                      <span className="text-faded-ink">Saving...</span>
+                    </>
+                  )}
+                  {saveStatus === 'unsaved' && (
+                    <>
+                      <span className="text-faded-ink">●</span>
+                      <span className="text-faded-ink">Unsaved changes</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Word count indicator */}
+              <div className="bg-white border border-slate-ui px-4 py-2 shadow-book" style={{ borderRadius: '2px' }}>
+                <div className="flex items-center gap-2 text-sm font-sans">
+                  <span className="text-faded-ink">Words:</span>
+                  <span className="font-semibold text-midnight">
+                    {wordCount.toLocaleString()}
+                  </span>
+                </div>
               </div>
             </div>
           )}
