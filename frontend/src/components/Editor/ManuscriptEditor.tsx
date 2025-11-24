@@ -20,6 +20,7 @@ import type { EditorMode } from '@/types/editor';
 import EditorToolbar from './EditorToolbar';
 import { SceneBreakNode } from './nodes/SceneBreakNode';
 import { EntityMentionNode } from './nodes/EntityMentionNode';
+import AutoSavePlugin from './plugins/AutoSavePlugin';
 
 interface ManuscriptEditorProps {
   manuscriptId?: string;
@@ -53,7 +54,8 @@ export default function ManuscriptEditor({
       SceneBreakNode,
       EntityMentionNode,
     ],
-    editorState: initialContent,
+    // Load saved content if available (JSON string)
+    editorState: initialContent || undefined,
   };
 
   // Handle editor state changes
@@ -133,8 +135,8 @@ export default function ManuscriptEditor({
             {/* OnChange plugin to track content changes */}
             <OnChangePlugin onChange={handleEditorChange} />
 
-            {/* Auto-save plugin will be added here */}
-            {/* <AutoSavePlugin manuscriptId={manuscriptId} /> */}
+            {/* Auto-save plugin - saves to localStorage */}
+            {manuscriptId && <AutoSavePlugin manuscriptId={manuscriptId} />}
           </div>
 
           {/* Word count indicator - Maxwell Style */}
