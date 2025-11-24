@@ -137,12 +137,12 @@ export default function ManuscriptEditor({
             {/* <AutoSavePlugin manuscriptId={manuscriptId} /> */}
           </div>
 
-          {/* Word count indicator - hidden in focus mode */}
+          {/* Word count indicator - Maxwell Style */}
           {!isFocusMode && (
-            <div className="fixed bottom-4 right-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 shadow-lg">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Words:</span>
-                <span className="font-semibold text-gray-900 dark:text-gray-100">
+            <div className="fixed bottom-4 right-4 bg-white border border-slate-ui px-4 py-2 shadow-book" style={{ borderRadius: '2px' }}>
+              <div className="flex items-center gap-2 text-sm font-sans">
+                <span className="text-faded-ink">Words:</span>
+                <span className="font-semibold text-midnight">
                   {wordCount.toLocaleString()}
                 </span>
               </div>
@@ -151,7 +151,7 @@ export default function ManuscriptEditor({
 
           {/* Focus mode indicator */}
           {isFocusMode && (
-            <div className="fixed top-4 right-4 text-sm text-gray-400 dark:text-gray-600">
+            <div className="fixed top-4 right-4 text-sm text-faded-ink font-sans">
               Press F11 to exit focus mode
             </div>
           )}

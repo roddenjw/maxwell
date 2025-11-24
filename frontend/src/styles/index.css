@@ -4,36 +4,35 @@
 
 @layer base {
   body {
-    @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100;
-    @apply font-sans antialiased;
+    @apply bg-vellum text-midnight font-sans antialiased;
   }
 
-  /* Custom scrollbar */
+  /* Custom scrollbar - Maxwell Style */
   ::-webkit-scrollbar {
     @apply w-2 h-2;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-gray-800;
+    @apply bg-slate-ui;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-400 dark:bg-gray-600 rounded-full;
+    @apply bg-bronze rounded-sm;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-500 dark:bg-gray-500;
+    @apply bg-bronze-dark;
   }
 }
 
 @layer components {
-  /* Editor styles */
+  /* Editor styles - Maxwell Design System */
   .editor-container {
-    @apply relative;
+    @apply relative bg-vellum;
   }
 
   .editor-container.focus-mode {
-    @apply bg-gray-50 dark:bg-gray-950;
+    @apply bg-vellum;
   }
 
   .editor-wrapper {
@@ -41,62 +40,78 @@
   }
 
   .editor-content {
-    @apply prose prose-lg dark:prose-invert max-w-none;
-    @apply focus:outline-none;
-    font-family: 'Merriweather', Georgia, serif;
+    @apply max-w-none focus:outline-none;
+    @apply text-midnight text-lg;
+    font-family: 'EB Garamond', Garamond, Georgia, serif;
     line-height: 1.8;
+    /* Bronze cursor */
+    caret-color: #B48E55;
   }
 
   .editor-content.focus-mode-content {
-    @apply px-16 py-24;
+    padding: 4rem;
     max-width: 42rem;
     margin: 0 auto;
   }
 
   .editor-placeholder {
-    font-family: 'Merriweather', Georgia, serif;
+    @apply text-faded-ink;
+    font-family: 'EB Garamond', Garamond, Georgia, serif;
   }
 
   .editor-paragraph {
     @apply mb-4;
   }
 
-  /* Lexical editor specific */
+  /* Lexical editor specific - Maxwell Typography */
   .editor-content p {
-    @apply mb-4;
+    @apply mb-4 text-midnight;
+    font-size: 1.125rem;
   }
 
   .editor-content h1,
   .editor-content h2,
   .editor-content h3 {
-    @apply font-bold;
+    @apply font-bold text-midnight font-serif;
   }
 
-  /* Scene break styles */
+  .editor-content h1 {
+    @apply text-4xl mt-8 mb-4;
+  }
+
+  .editor-content h2 {
+    @apply text-3xl mt-6 mb-3;
+  }
+
+  .editor-content h3 {
+    @apply text-2xl mt-4 mb-2;
+  }
+
+  /* Scene break styles - Maxwell */
   .scene-break {
     @apply my-8 flex items-center justify-center;
   }
 
   .scene-break::before {
     content: '***';
-    @apply text-2xl text-gray-400 dark:text-gray-600;
+    @apply text-2xl text-faded-ink;
   }
 
-  /* Entity mention styles */
+  /* Entity mention styles - Maxwell */
   .entity-mention {
-    @apply cursor-pointer border-b-2 border-primary-500 border-dotted;
-    @apply hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors;
+    @apply cursor-pointer border-b-2 border-bronze border-dotted;
+    @apply hover:bg-bronze hover:bg-opacity-10 transition-colors;
   }
 
-  /* Consistency error styles */
+  /* Consistency error styles - Maxwell */
   .consistency-error {
-    @apply border-b-2 border-purple-500 cursor-help;
-    text-decoration: underline wavy purple;
+    @apply border-b-2 border-redline cursor-help;
+    text-decoration: underline wavy #9F1239;
   }
 
-  /* Toolbar styles */
+  /* Toolbar styles - Maxwell */
   .toolbar {
-    @apply shadow-sm;
+    @apply shadow-sm bg-white border-b border-slate-ui;
   }
 
   .toolbar-group {

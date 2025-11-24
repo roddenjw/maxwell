@@ -2,125 +2,121 @@ import { useState } from 'react'
 import ManuscriptEditor from './components/Editor/ManuscriptEditor'
 
 function App() {
-  const [darkMode, setDarkMode] = useState(false)
   const [showEditor, setShowEditor] = useState(false)
 
   if (showEditor) {
     return (
-      <div className={darkMode ? 'dark' : ''}>
-        <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-          {/* Header */}
-          <header className="border-b border-gray-200 dark:border-gray-800 px-6 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setShowEditor(false)}
-                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  title="Back to home"
-                >
-                  ← Back
-                </button>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
-                  Untitled Manuscript
-                </h1>
-              </div>
+      <div className="min-h-screen bg-vellum text-midnight">
+        {/* Header - Maxwell Style */}
+        <header className="border-b border-slate-ui bg-white px-6 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
               <button
-                onClick={() => setDarkMode(!darkMode)}
-                className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm"
+                onClick={() => setShowEditor(false)}
+                className="text-faded-ink hover:text-midnight transition-colors font-sans text-sm"
+                title="Back to home"
               >
-                {darkMode ? '☀️' : '🌙'}
+                ← Back
               </button>
+              <h1 className="text-xl font-serif font-bold text-midnight">
+                Untitled Manuscript
+              </h1>
             </div>
-          </header>
+          </div>
+        </header>
 
-          {/* Editor */}
-          <main>
-            <ManuscriptEditor mode="normal" />
-          </main>
-        </div>
+        {/* Editor */}
+        <main>
+          <ManuscriptEditor mode="normal" />
+        </main>
       </div>
     )
   }
 
   return (
-    <div className={darkMode ? 'dark' : ''}>
-      <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-        {/* Header */}
-        <header className="border-b border-gray-200 dark:border-gray-800 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
-                Codex IDE
-              </h1>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                v0.1.0-alpha
-              </span>
+    <div className="min-h-screen bg-vellum text-midnight">
+      {/* Header - Maxwell Brand */}
+      <header className="border-b border-slate-ui bg-white px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-serif font-bold text-midnight tracking-tight">
+              MAXWELL
+            </h1>
+            <span className="text-sm text-faded-ink font-sans">
+              The Author's Study
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content - Classic Literary Design */}
+      <main className="container mx-auto px-6 py-16">
+        <div className="max-w-4xl mx-auto space-y-12">
+          {/* Hero Section */}
+          <div className="text-center space-y-6">
+            <h2 className="text-5xl font-serif font-bold text-midnight leading-tight">
+              A Distraction-Free Study<br />For The Serious Author
+            </h2>
+            <p className="text-xl text-faded-ink font-sans max-w-2xl mx-auto">
+              Write with the focus of a classic library. Your manuscript, versioned like a scholar's notebook. Your story bible, organized like an archivist's dream.
+            </p>
+          </div>
+
+          {/* Feature Cards - Clean & Professional */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16">
+            <div className="p-8 bg-white border border-slate-ui">
+              <div className="text-4xl mb-4 text-bronze">📝</div>
+              <h3 className="font-serif font-bold text-xl mb-3 text-midnight">
+                The Living Manuscript
+              </h3>
+              <p className="text-sm text-faded-ink font-sans leading-relaxed">
+                Write with confidence. Every keystroke automatically preserved. Navigate your revision history like turning pages in a leather-bound journal.
+              </p>
             </div>
+
+            <div className="p-8 bg-white border border-slate-ui">
+              <div className="text-4xl mb-4 text-bronze">📚</div>
+              <h3 className="font-serif font-bold text-xl mb-3 text-midnight">
+                The Story Bible
+              </h3>
+              <p className="text-sm text-faded-ink font-sans leading-relaxed">
+                Your codex of characters, locations, and lore. Automatically extracted as you write. Never lose track of your world's consistency.
+              </p>
+            </div>
+
+            <div className="p-8 bg-white border border-slate-ui">
+              <div className="text-4xl mb-4 text-bronze">✨</div>
+              <h3 className="font-serif font-bold text-xl mb-3 text-midnight">
+                The Muse
+              </h3>
+              <p className="text-sm text-faded-ink font-sans leading-relaxed">
+                Context-aware AI assistance when you need it. Expand outlines, enhance descriptions, maintain your unique voice.
+              </p>
+            </div>
+          </div>
+
+          {/* Primary CTA - The Bronze Stamp */}
+          <div className="pt-12 text-center">
             <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              onClick={() => setShowEditor(true)}
+              className="px-10 py-4 bg-bronze hover:bg-bronze-dark text-white font-sans font-medium uppercase tracking-button transition-colors shadow-book"
+              style={{ borderRadius: '2px' }}
             >
-              {darkMode ? '☀️ Light' : '🌙 Dark'}
+              Begin Writing
             </button>
+            <p className="mt-4 text-sm text-faded-ink font-sans">
+              No account required. Your work stays on your device.
+            </p>
           </div>
-        </header>
 
-        {/* Main Content */}
-        <main className="container mx-auto px-6 py-12">
-          <div className="max-w-3xl mx-auto text-center space-y-8">
-            <div className="space-y-4">
-              <h2 className="text-4xl font-bold">
-                Welcome to Codex IDE
-              </h2>
-              <p className="text-xl text-gray-600 dark:text-gray-400">
-                An AI-powered writing environment for fiction authors
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
-              {/* Feature Cards */}
-              <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-                <div className="text-3xl mb-3">📝</div>
-                <h3 className="font-semibold mb-2">Living Manuscript</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Write with confidence. Your work is automatically versioned and never lost.
-                </p>
-              </div>
-
-              <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-                <div className="text-3xl mb-3">📚</div>
-                <h3 className="font-semibold mb-2">Story Bible</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Your Codex tracks characters, locations, and relationships automatically.
-                </p>
-              </div>
-
-              <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-                <div className="text-3xl mb-3">✨</div>
-                <h3 className="font-semibold mb-2">AI Muse</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Get unstuck with context-aware writing assistance powered by AI.
-                </p>
-              </div>
-            </div>
-
-            <div className="pt-8">
-              <button
-                onClick={() => setShowEditor(true)}
-                className="px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition-colors shadow-lg"
-              >
-                Create New Manuscript
-              </button>
-            </div>
-
-            <div className="pt-12 border-t border-gray-200 dark:border-gray-800">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Status: <span className="text-green-600 dark:text-green-400">● Ready</span>
-              </p>
-            </div>
+          {/* Status Footer */}
+          <div className="pt-16 text-center border-t border-slate-ui">
+            <p className="text-sm text-faded-ink font-sans">
+              Status: <span className="text-bronze font-medium">● Ready to Write</span>
+            </p>
           </div>
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   )
 }

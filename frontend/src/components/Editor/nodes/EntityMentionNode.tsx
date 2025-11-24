@@ -139,21 +139,21 @@ function EntityMentionComponent({
   const getTypeColor = () => {
     switch (entityType) {
       case 'CHARACTER':
-        return 'border-primary-500';
+        return 'border-bronze';
       case 'LOCATION':
-        return 'border-green-500';
+        return 'border-green-600';
       case 'ITEM':
-        return 'border-yellow-500';
+        return 'border-yellow-700';
       case 'LORE':
-        return 'border-purple-500';
+        return 'border-purple-600';
       default:
-        return 'border-gray-500';
+        return 'border-faded-ink';
     }
   };
 
   return (
     <span
-      className={`entity-mention cursor-pointer border-b-2 border-dotted ${getTypeColor()} hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors`}
+      className={`entity-mention cursor-pointer border-b-2 border-dotted ${getTypeColor()} hover:bg-bronze hover:bg-opacity-10 transition-colors`}
       onClick={handleClick}
       data-lexical-decorator="true"
       data-node-key={nodeKey}

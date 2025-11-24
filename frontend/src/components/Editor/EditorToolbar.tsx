@@ -110,9 +110,10 @@ export default function EditorToolbar() {
       </div>
 
       {/* Block type */}
-      <div className="toolbar-group flex gap-1 border-r border-gray-300 dark:border-gray-700 pr-2 mr-2">
+      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
         <select
-          className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-sm"
+          className="px-2 py-1 bg-white border border-slate-ui text-midnight text-sm font-sans"
+          style={{ borderRadius: '2px' }}
           value={blockType}
           onChange={(e) => {
             const value = e.target.value;
@@ -135,7 +136,7 @@ export default function EditorToolbar() {
       </div>
 
       {/* Text formatting */}
-      <div className="toolbar-group flex gap-1 border-r border-gray-300 dark:border-gray-700 pr-2 mr-2">
+      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
         <ToolbarButton
           onClick={formatBold}
           active={isBold}
@@ -183,15 +184,15 @@ function ToolbarButton({ onClick, active = false, title, children }: ToolbarButt
       onClick={onClick}
       title={title}
       className={`
-        px-3 py-1.5 rounded
+        px-3 py-1.5 font-sans font-medium text-sm
         transition-colors
         ${
           active
-            ? 'bg-primary-100 dark:bg-primary-900 text-primary-900 dark:text-primary-100'
-            : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+            ? 'bg-bronze text-white'
+            : 'bg-slate-ui text-midnight hover:bg-bronze hover:bg-opacity-20'
         }
-        text-sm font-medium
       `}
+      style={{ borderRadius: '2px' }}
     >
       {children}
     </button>
