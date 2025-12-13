@@ -1,4 +1,4 @@
-# Codex IDE: Implementation Plan
+2sa# Codex IDE: Implementation Plan
 
 ## Table of Contents
 1. [Project Setup](#project-setup)
@@ -1045,173 +1045,237 @@ class Relationship(BaseModel):
 
 ---
 
-## Epic 3: The Muse
+## Epic 3: The Muse (LangChain-Powered Generation)
 
-### Epic 3.1: Hybrid LLM Router
-**Priority**: High | **Estimated Effort**: 3 days
+### Epic 3.1: LangChain Agent Foundation
+**Priority**: High | **Estimated Effort**: 4 days
 
-#### Task 3.1.1: Implement LLM Service Architecture
-**Effort**: 2 days
+#### Task 3.1.1: Install and Configure LangChain
+**Effort**: 0.5 days
 
-1. **Create base LLM interface**
-   ```python
-   # backend/app/services/llm/base.py
-
-   from abc import ABC, abstractmethod
-   from typing import AsyncIterator
-
-   class BaseLLM(ABC):
-       @abstractmethod
-       async def generate(
-           self,
-           prompt: str,
-           system_prompt: str,
-           max_tokens: int,
-           temperature: float
-       ) -> str:
-           pass
-
-       @abstractmethod
-       async def stream(
-           self,
-           prompt: str,
-           system_prompt: str
-       ) -> AsyncIterator[str]:
-           pass
+1. **Update backend dependencies**
+   ```bash
+   # backend/requirements.txt
+   langchain==0.1.0
+   langchain-anthropic==0.1.0
+   langchain-community==0.0.13
+   langchain-openai==0.0.5
+   llama-cpp-python==0.2.0  # For local models
    ```
 
-2. **Implement local LLM (Llama)**
-   ```python
-   # backend/app/services/llm/local_llm.py
-
-   from llama_cpp import Llama
-
-   class LocalLLM(BaseLLM):
-       def __init__(self, model_path: str):
-           self.llm = Llama(
-               model_path=model_path,
-               n_ctx=4096,
-               n_gpu_layers=-1  # Use GPU if available
-           )
-
-       async def generate(self, prompt: str, **kwargs) -> str:
-           response = self.llm(
-               prompt,
-               max_tokens=kwargs.get("max_tokens", 512),
-               temperature=kwargs.get("temperature", 0.7)
-           )
-           return response["choices"][0]["text"]
-
-       async def stream(self, prompt: str, **kwargs) -> AsyncIterator[str]:
-           for chunk in self.llm(prompt, stream=True, **kwargs):
-               yield chunk["choices"][0]["text"]
-   ```
-
-3. **Implement cloud LLM (Claude/OpenAI)**
-   ```python
-   # backend/app/services/llm/cloud_llm.py
-
-   import anthropic
-   from openai import AsyncOpenAI
-
-   class ClaudeLLM(BaseLLM):
-       def __init__(self, api_key: str):
-           self.client = anthropic.AsyncAnthropic(api_key=api_key)
-
-       async def generate(self, prompt: str, system_prompt: str, **kwargs) -> str:
-           message = await self.client.messages.create(
-               model="claude-3-5-sonnet-20241022",
-               max_tokens=kwargs.get("max_tokens", 2048),
-               system=system_prompt,
-               messages=[{"role": "user", "content": prompt}]
-           )
-           return message.content[0].text
-
-       async def stream(self, prompt: str, system_prompt: str) -> AsyncIterator[str]:
-           async with self.client.messages.stream(
-               model="claude-3-5-sonnet-20241022",
-               max_tokens=2048,
-               system=system_prompt,
-               messages=[{"role": "user", "content": prompt}]
-           ) as stream:
-               async for text in stream.text_stream:
-                   yield text
-   ```
-
-4. **Create LLM router**
-   ```python
-   # backend/app/services/llm/router.py
-
-   from enum import Enum
-
-   class TaskComplexity(Enum):
-       SIMPLE = "simple"      # Grammar, paraphrasing
-       MEDIUM = "medium"      # Scene continuation
-       COMPLEX = "complex"    # Plotting, character development
-
-   class LLMRouter:
-       def __init__(self):
-           self.local_llm = LocalLLM("models/llama-3-8b.gguf")
-           self.cloud_llm = ClaudeLLM(api_key=os.getenv("ANTHROPIC_API_KEY"))
-
-       def select_model(
-           self,
-           task_complexity: TaskComplexity,
-           user_preference: str = "auto"
-       ) -> BaseLLM:
-           if user_preference == "local_only":
-               return self.local_llm
-
-           if user_preference == "cloud_only":
-               return self.cloud_llm
-
-           # Auto selection
-           if task_complexity == TaskComplexity.SIMPLE:
-               return self.local_llm
-           else:
-               return self.cloud_llm if self._has_api_key() else self.local_llm
+2. **Configure environment variables**
+   ```bash
+   # .env
+   ANTHROPIC_API_KEY=sk-ant-...
+   OPENAI_API_KEY=sk-...
+   LOCAL_MODEL_PATH=./models/llama-3-8b-instruct.gguf
+   USE_LOCAL_MODEL=true  # Fallback preference
    ```
 
 **Acceptance Criteria**:
-- Can load local Llama model
-- Can connect to Claude/OpenAI APIs
-- Router selects appropriate model
-- Graceful fallback if cloud unavailable
+- Dependencies installed without conflicts
+- API keys loaded from environment
+- Local model path configured
 
 ---
 
-#### Task 3.1.2: Create Generation API Endpoints
-**Effort**: 1 day
+#### Task 3.1.2: Implement LangChain LLM Wrappers
+**Effort**: 1.5 days
 
-```python
-# backend/app/api/routes/generation.py
+1. **Create base LLM factory**
+   ```python
+   # backend/app/services/llm/llm_factory.py
 
-@router.post("/api/generate")
-async def generate_text(
-    prompt: str,
-    system_prompt: str = "",
-    task_complexity: TaskComplexity = TaskComplexity.MEDIUM,
-    stream: bool = True
-):
-    router = LLMRouter()
-    llm = router.select_model(task_complexity)
+   from langchain_anthropic import ChatAnthropic
+   from langchain_openai import ChatOpenAI
+   from langchain_community.llms import LlamaCpp
+   from typing import Union
 
-    if stream:
-        async def event_stream():
-            async for chunk in llm.stream(prompt, system_prompt):
-                yield f"data: {json.dumps({'text': chunk})}\n\n"
+   class LLMFactory:
+       """Factory for creating LangChain LLM instances"""
 
-        return StreamingResponse(event_stream(), media_type="text/event-stream")
-    else:
-        result = await llm.generate(prompt, system_prompt)
-        return {"text": result}
-```
+       @staticmethod
+       def create_cloud_llm(
+           provider: str = "anthropic",
+           model: str = None,
+           temperature: float = 0.7
+       ) -> Union[ChatAnthropic, ChatOpenAI]:
+           """Create cloud-based LLM"""
+           if provider == "anthropic":
+               return ChatAnthropic(
+                   model=model or "claude-3-5-sonnet-20241022",
+                   temperature=temperature,
+                   max_tokens=4096
+               )
+           elif provider == "openai":
+               return ChatOpenAI(
+                   model=model or "gpt-4-turbo-preview",
+                   temperature=temperature
+               )
+           else:
+               raise ValueError(f"Unknown provider: {provider}")
+
+       @staticmethod
+       def create_local_llm(
+           model_path: str = None,
+           temperature: float = 0.7
+       ) -> LlamaCpp:
+           """Create local LLM"""
+           path = model_path or os.getenv("LOCAL_MODEL_PATH")
+           return LlamaCpp(
+               model_path=path,
+               temperature=temperature,
+               n_ctx=4096,
+               n_gpu_layers=-1,  # Use GPU if available
+               streaming=True,
+               verbose=False
+           )
+
+       @staticmethod
+       def create_smart_llm(user_preference: str = "auto") -> Union[ChatAnthropic, LlamaCpp]:
+           """Smart selection based on availability and preferences"""
+           if user_preference == "local_only":
+               return LLMFactory.create_local_llm()
+
+           if user_preference == "cloud_only":
+               return LLMFactory.create_cloud_llm()
+
+           # Auto mode: try cloud, fallback to local
+           try:
+               if os.getenv("ANTHROPIC_API_KEY"):
+                   return LLMFactory.create_cloud_llm()
+           except Exception:
+               pass
+
+           return LLMFactory.create_local_llm()
+   ```
+
+2. **Create streaming response handler**
+   ```python
+   # backend/app/services/llm/streaming.py
+
+   from typing import AsyncIterator
+   import json
+
+   async def stream_llm_response(
+       llm_chain,
+       prompt: str
+   ) -> AsyncIterator[str]:
+       """Stream LLM responses as SSE"""
+       async for chunk in llm_chain.astream(prompt):
+           if isinstance(chunk, dict):
+               text = chunk.get("content", chunk.get("text", ""))
+           else:
+               text = str(chunk)
+
+           yield f"data: {json.dumps({'text': text})}\n\n"
+   ```
 
 **Acceptance Criteria**:
-- Streaming endpoint returns SSE events
-- Non-streaming endpoint returns complete text
-- Error handling for API failures
-- Rate limiting implemented
+- Factory creates Claude, GPT, and local LLMs
+- Smart fallback works when API keys missing
+- Streaming works for all LLM types
+
+---
+
+#### Task 3.1.3: Build LangChain Tools for Story Context
+**Effort**: 2 days
+
+1. **Create Codex retrieval tools**
+   ```python
+   # backend/app/services/llm/tools.py
+
+   from langchain.tools import Tool
+   from langchain.pydantic_v1 import BaseModel, Field
+
+   class EntityLookupInput(BaseModel):
+       """Input for entity lookup tool"""
+       entity_name: str = Field(description="Name of character, location, or item to look up")
+
+   class CodexTools:
+       """LangChain tools for accessing story knowledge"""
+
+       def __init__(self, manuscript_id: str, db_session):
+           self.manuscript_id = manuscript_id
+           self.db = db_session
+
+       def get_entity_info(self, entity_name: str) -> str:
+           """Retrieve entity details from Codex"""
+           entity = self.db.query(Entity).filter(
+               Entity.manuscript_id == self.manuscript_id,
+               or_(
+                   Entity.name.ilike(f"%{entity_name}%"),
+                   Entity.aliases.contains(entity_name)
+               )
+           ).first()
+
+           if not entity:
+               return f"No entity found named '{entity_name}'"
+
+           # Format entity info for LLM
+           info = f"{entity.name} ({entity.type}):\n"
+           for key, value in entity.attributes.items():
+               info += f"  - {key}: {value}\n"
+
+           if entity.appearance_history:
+               info += f"  - First appeared: Scene {entity.appearance_history[0]['scene_id']}\n"
+               info += f"  - Total appearances: {len(entity.appearance_history)}\n"
+
+           return info
+
+       def get_recent_scenes(self, count: int = 3) -> str:
+           """Get summaries of recent scenes for context"""
+           scenes = self.db.query(Scene).filter(
+               Scene.manuscript_id == self.manuscript_id
+           ).order_by(Scene.position.desc()).limit(count).all()
+
+           summaries = []
+           for scene in scenes:
+               # Extract first 200 chars as summary
+               summary = scene.content[:200] + "..." if len(scene.content) > 200 else scene.content
+               summaries.append(f"Scene {scene.position}: {summary}")
+
+           return "\n\n".join(summaries)
+
+       def search_similar_scenes(self, query: str, k: int = 3) -> str:
+           """Vector search for similar scenes"""
+           from app.services.embedding_service import EmbeddingService
+
+           embedding_service = EmbeddingService()
+           similar_scenes = embedding_service.find_similar_scenes(
+               query=query,
+               manuscript_id=self.manuscript_id,
+               top_k=k
+           )
+
+           return "\n\n".join([f"Similar scene {i+1}:\n{scene}" for i, scene in enumerate(similar_scenes)])
+
+       def build_tools(self) -> list[Tool]:
+           """Build LangChain Tool objects"""
+           return [
+               Tool(
+                   name="GetEntityInfo",
+                   func=self.get_entity_info,
+                   description="Look up detailed information about a character, location, or item from the story's Codex. Use this to ensure consistency."
+               ),
+               Tool(
+                   name="GetRecentScenes",
+                   func=self.get_recent_scenes,
+                   description="Retrieve the most recent scenes written. Use this to maintain narrative continuity."
+               ),
+               Tool(
+                   name="SearchSimilarScenes",
+                   func=self.search_similar_scenes,
+                   description="Find similar scenes from the manuscript using semantic search. Use this to match writing style and tone."
+               )
+           ]
+   ```
+
+**Acceptance Criteria**:
+- Tools can access Codex entities
+- Tools can retrieve recent scenes
+- Vector search works for style matching
+- Tools return formatted strings suitable for LLM consumption
 
 ---
 
@@ -1490,7 +1554,526 @@ def build_style_matching_prompt(previous_text: str) -> str:
 
 ---
 
-### Epic 3.4: Sensory "Paint" Tools
+### Epic 3.4: "The Coach" - Personalized Learning Agent
+**Priority**: High | **Estimated Effort**: 5 days
+
+> **NEW:** This epic implements a stateful LangChain agent that learns the writer's patterns, preferences, and weaknesses over time, providing increasingly personalized feedback.
+
+#### Task 3.4.1: Database Schema for Learning & Memory
+**Effort**: 1 day
+
+1. **Create coaching history table**
+   ```sql
+   -- backend/migrations/versions/003_add_coaching_tables.py
+
+   CREATE TABLE coaching_history (
+       id TEXT PRIMARY KEY,
+       user_id TEXT NOT NULL,
+       manuscript_id TEXT,
+       scene_text TEXT,
+       agent_feedback JSON,
+       user_reaction TEXT,  -- 'accepted', 'rejected', 'modified', 'ignored'
+       feedback_type TEXT,  -- 'suggestion', 'warning', 'praise', 'critique'
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       FOREIGN KEY (manuscript_id) REFERENCES manuscripts(id)
+   );
+
+   CREATE INDEX idx_coaching_user ON coaching_history(user_id);
+   CREATE INDEX idx_coaching_manuscript ON coaching_history(manuscript_id);
+   ```
+
+2. **Create writing profile table**
+   ```sql
+   CREATE TABLE writing_profile (
+       user_id TEXT PRIMARY KEY,
+       profile_data JSON,  -- Stores learned patterns
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+   );
+
+   -- Profile data structure (JSON):
+   {
+       "style_metrics": {
+           "avg_sentence_length": 15.2,
+           "sentence_length_variance": 8.5,
+           "avg_paragraph_length": 4.2,
+           "lexical_diversity": 0.68,
+           "flesch_reading_ease": 72.3
+       },
+       "strengths": [
+           "vivid_descriptions",
+           "natural_dialogue",
+           "strong_openings"
+       ],
+       "weaknesses": [
+           "info_dumping",
+           "passive_voice_overuse",
+           "telling_not_showing"
+       ],
+       "preferences": {
+           "pov": "third_person_limited",
+           "tense": "past",
+           "dialogue_style": "minimal_tags"
+       },
+       "overused_words": {
+           "just": 142,
+           "really": 89,
+           "very": 76
+       },
+       "favorite_techniques": [
+           "sensory_details",
+           "metaphor",
+           "short_punchy_sentences_for_action"
+       ]
+   }
+   ```
+
+3. **Create feedback patterns table**
+   ```sql
+   CREATE TABLE feedback_patterns (
+       id TEXT PRIMARY KEY,
+       user_id TEXT NOT NULL,
+       pattern_type TEXT,  -- 'overused_word', 'pacing_issue', 'consistency_error'
+       pattern_description TEXT,
+       frequency INTEGER DEFAULT 1,
+       last_occurred DATETIME,
+       FOREIGN KEY (user_id) REFERENCES writing_profile(user_id)
+   );
+   ```
+
+**Acceptance Criteria**:
+- Migration creates all tables
+- Profile data stores as structured JSON
+- Indices optimize user queries
+- Sample profile can be inserted and retrieved
+
+---
+
+#### Task 3.4.2: Implement Learning Coach Agent
+**Effort**: 2.5 days
+
+1. **Create WritingCoach class**
+   ```python
+   # backend/app/services/coach/writing_coach.py
+
+   from langchain.agents import AgentExecutor, create_openai_tools_agent
+   from langchain.memory import ConversationBufferMemory
+   from langchain_community.vectorstores import Chroma
+   from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+   from langchain_anthropic import ChatAnthropic
+
+   class WritingCoach:
+       """Stateful agent that learns writer's patterns over time"""
+
+       def __init__(self, user_id: str, manuscript_id: str, db_session):
+           self.user_id = user_id
+           self.manuscript_id = manuscript_id
+           self.db = db_session
+
+           # Load or create writing profile
+           self.profile = self._load_profile()
+
+           # Conversation memory (short-term)
+           self.conversation_memory = ConversationBufferMemory(
+               memory_key="chat_history",
+               return_messages=True,
+               output_key="output"
+           )
+
+           # Long-term memory (ChromaDB for semantic search)
+           self.long_term_memory = self._init_long_term_memory()
+
+           # LLM
+           self.llm = ChatAnthropic(
+               model="claude-3-5-sonnet-20241022",
+               temperature=0.7
+           )
+
+           # Tools
+           self.tools = self._build_tools()
+
+           # Create agent
+           self.agent = self._create_agent()
+
+           self.executor = AgentExecutor(
+               agent=self.agent,
+               tools=self.tools,
+               memory=self.conversation_memory,
+               verbose=True,
+               handle_parsing_errors=True
+           )
+
+       def _load_profile(self) -> dict:
+           """Load user's writing profile from database"""
+           profile_row = self.db.query(WritingProfile).filter_by(
+               user_id=self.user_id
+           ).first()
+
+           if profile_row:
+               return json.loads(profile_row.profile_data)
+           else:
+               # Initialize default profile
+               return {
+                   "style_metrics": {},
+                   "strengths": [],
+                   "weaknesses": [],
+                   "preferences": {},
+                   "overused_words": {},
+                   "favorite_techniques": []
+               }
+
+       def _init_long_term_memory(self):
+           """Initialize ChromaDB for long-term semantic memory"""
+           collection_name = f"coach_memory_{self.user_id}"
+           return Chroma(
+               collection_name=collection_name,
+               embedding_function=get_embeddings(),
+               persist_directory=f"./data/coach_memory/{self.user_id}"
+           )
+
+       def _build_tools(self) -> list:
+           """Build tools the agent can use"""
+           from app.services.llm.tools import CodexTools
+           from app.services.pacing_analyzer import analyze_pacing
+           from app.services.consistency_checker import check_consistency
+
+           codex_tools = CodexTools(self.manuscript_id, self.db)
+
+           return codex_tools.build_tools() + [
+               Tool(
+                   name="GetWriterProfile",
+                   func=lambda _: json.dumps(self.profile, indent=2),
+                   description="Retrieve the writer's learned patterns, strengths, weaknesses, and preferences. Use this to personalize all feedback."
+               ),
+               Tool(
+                   name="AnalyzePacing",
+                   func=lambda text: json.dumps(analyze_pacing(text)),
+                   description="Analyze pacing and tension in a text passage"
+               ),
+               Tool(
+                   name="CheckConsistency",
+                   func=lambda text: check_consistency(text, self.manuscript_id),
+                   description="Check for plot holes and contradictions"
+               ),
+               Tool(
+                   name="RecordObservation",
+                   func=self._record_observation,
+                   description="Store a new observation about the writer's patterns (e.g., 'tends to rush dialogue', 'overuses word X')"
+               ),
+               Tool(
+                   name="SearchPastFeedback",
+                   func=self._search_past_feedback,
+                   description="Search past coaching interactions for similar situations"
+               )
+           ]
+
+       def _create_agent(self):
+           """Create the LangChain agent with dynamic system prompt"""
+           prompt = ChatPromptTemplate.from_messages([
+               ("system", self._build_system_prompt()),
+               MessagesPlaceholder(variable_name="chat_history"),
+               ("human", "{input}"),
+               MessagesPlaceholder(variable_name="agent_scratchpad")
+           ])
+
+           return create_openai_tools_agent(
+               llm=self.llm,
+               tools=self.tools,
+               prompt=prompt
+           )
+
+       def _build_system_prompt(self) -> str:
+           """Dynamic system prompt based on learned profile"""
+           strengths_str = ", ".join(self.profile.get("strengths", [])) or "still learning"
+           weaknesses_str = ", ".join(self.profile.get("weaknesses", [])) or "still learning"
+
+           return f"""You are a personalized writing coach for User {self.user_id}.
+
+**Their Writing Profile:**
+- Known strengths: {strengths_str}
+- Areas to watch: {weaknesses_str}
+- Style preferences: {json.dumps(self.profile.get('preferences', {}), indent=2)}
+- Common overused words: {json.dumps(self.profile.get('overused_words', {}), indent=2)}
+
+**Your Role:**
+1. Provide PERSONALIZED feedback based on their specific patterns
+2. Catch their recurring mistakes (you have their history)
+3. Encourage their strengths when you see them
+4. Adapt suggestions to their preferred style
+5. Learn from their reactions (do they accept or reject your advice?)
+
+**How to Give Feedback:**
+- Be specific and constructive
+- Reference their past patterns when relevant ("I notice you tend to...")
+- Offer concrete examples, not generic advice
+- Balance criticism with encouragement
+- Use your tools to check facts and consistency
+
+Use GetWriterProfile to see their complete profile, then tailor all advice accordingly."""
+
+       async def analyze_scene(
+           self,
+           scene_text: str,
+           context: dict = None
+       ) -> dict:
+           """Main method: Analyze a scene and provide personalized feedback"""
+
+           # Build rich context
+           prompt = f"""Analyze this scene the writer just wrote:
+
+```
+{scene_text}
+```
+
+**Context:**
+{json.dumps(context or {}, indent=2)}
+
+Provide personalized feedback considering:
+1. Their known patterns and tendencies (check GetWriterProfile)
+2. Consistency with story's Codex (use GetEntityInfo)
+3. Pacing compared to recent scenes (use GetRecentScenes)
+4. Any overused phrases or patterns you've noticed
+5. Whether this shows their strengths or weaknesses
+
+Be specific and actionable. If you notice a new pattern, record it with RecordObservation."""
+
+           # Execute agent
+           response = await self.executor.ainvoke({"input": prompt})
+
+           # Store interaction for learning
+           await self._store_coaching_session(scene_text, response)
+
+           return response
+
+       def _record_observation(self, observation: str) -> str:
+           """Tool function: Record new observation about writer"""
+           # Parse observation and update profile
+           # This would use NLP to extract pattern type
+
+           self.db.execute("""
+               INSERT INTO feedback_patterns
+               (id, user_id, pattern_type, pattern_description, last_occurred)
+               VALUES (?, ?, ?, ?, ?)
+           """, (str(uuid.uuid4()), self.user_id, "observation",
+                 observation, datetime.now()))
+           self.db.commit()
+
+           return f"Recorded: {observation}"
+
+       def _search_past_feedback(self, query: str, k: int = 3) -> str:
+           """Tool function: Search past coaching sessions"""
+           results = self.long_term_memory.similarity_search(query, k=k)
+           return "\n\n".join([doc.page_content for doc in results])
+
+       async def _store_coaching_session(self, scene_text: str, response: dict):
+           """Store this session for future learning"""
+           feedback_text = response.get("output", "")
+
+           # Store in database
+           self.db.execute("""
+               INSERT INTO coaching_history
+               (id, user_id, manuscript_id, scene_text, agent_feedback, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)
+           """, (str(uuid.uuid4()), self.user_id, self.manuscript_id,
+                 scene_text[:1000],  # Store excerpt
+                 json.dumps(response),
+                 datetime.now()))
+           self.db.commit()
+
+           # Store in vector DB for semantic search
+           self.long_term_memory.add_texts(
+               texts=[f"Scene: {scene_text[:500]}\n\nFeedback: {feedback_text}"],
+               metadatas=[{"timestamp": datetime.now().isoformat()}]
+           )
+
+       async def update_profile_from_analysis(self, analysis_results: dict):
+           """Update profile based on automated analysis"""
+           # Update style metrics
+           self.profile["style_metrics"].update(analysis_results.get("metrics", {}))
+
+           # Update overused words
+           for word, count in analysis_results.get("overused_words", {}).items():
+               self.profile["overused_words"][word] = \
+                   self.profile["overused_words"].get(word, 0) + count
+
+           # Save to database
+           self.db.execute("""
+               UPDATE writing_profile
+               SET profile_data = ?, updated_at = ?
+               WHERE user_id = ?
+           """, (json.dumps(self.profile), datetime.now(), self.user_id))
+           self.db.commit()
+   ```
+
+**Acceptance Criteria**:
+- Agent initializes with user profile
+- Uses tools to access story context
+- Provides personalized feedback
+- Stores interactions for learning
+- Profile updates over time
+
+---
+
+#### Task 3.4.3: Build Feedback UI Components
+**Effort**: 1.5 days
+
+1. **Create CoachPanel component**
+   ```typescript
+   // frontend/src/components/Coach/CoachPanel.tsx
+
+   import { useState } from 'react';
+   import { useMutation } from '@tanstack/react-query';
+
+   export function CoachPanel({ manuscriptId, selectedText }: Props) {
+     const [feedback, setFeedback] = useState<CoachFeedback | null>(null);
+
+     const analyzeMutation = useMutation({
+       mutationFn: async (text: string) => {
+         const response = await fetch('/api/coach/analyze', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+             manuscript_id: manuscriptId,
+             scene_text: text
+           })
+         });
+         return response.json();
+       },
+       onSuccess: (data) => {
+         setFeedback(data);
+       }
+     });
+
+     const recordReaction = async (reaction: 'accepted' | 'rejected' | 'modified') => {
+       await fetch('/api/coach/feedback', {
+         method: 'POST',
+         body: JSON.stringify({
+           feedback_id: feedback.id,
+           reaction
+         })
+       });
+     };
+
+     return (
+       <div className="coach-panel bg-white border-l border-slate-ui p-6">
+         <h2 className="text-xl font-serif font-bold text-midnight mb-4">
+           Your Writing Coach
+         </h2>
+
+         {feedback && (
+           <div className="feedback-card mb-6">
+             <div className="mb-4">
+               <h3 className="font-sans font-semibold text-midnight mb-2">
+                 Analysis
+               </h3>
+               <div className="prose prose-sm">
+                 {feedback.analysis}
+               </div>
+             </div>
+
+             {feedback.suggestions.length > 0 && (
+               <div className="mb-4">
+                 <h3 className="font-sans font-semibold text-midnight mb-2">
+                   Suggestions
+                 </h3>
+                 <ul className="space-y-2">
+                   {feedback.suggestions.map((suggestion, idx) => (
+                     <li key={idx} className="flex items-start gap-2">
+                       <span className="text-bronze">•</span>
+                       <span className="text-sm text-faded-ink">{suggestion}</span>
+                     </li>
+                   ))}
+                 </ul>
+               </div>
+             )}
+
+             <div className="flex gap-2">
+               <button
+                 onClick={() => recordReaction('accepted')}
+                 className="px-3 py-1 bg-bronze text-white text-sm font-sans"
+                 style={{ borderRadius: '2px' }}
+               >
+                 Helpful
+               </button>
+               <button
+                 onClick={() => recordReaction('rejected')}
+                 className="px-3 py-1 bg-slate-ui text-midnight text-sm font-sans"
+                 style={{ borderRadius: '2px' }}
+               >
+                 Not Helpful
+               </button>
+             </div>
+           </div>
+         )}
+
+         <button
+           onClick={() => analyzeMutation.mutate(selectedText)}
+           disabled={!selectedText || analyzeMutation.isPending}
+           className="w-full px-4 py-2 bg-bronze text-white font-sans font-medium disabled:opacity-50"
+           style={{ borderRadius: '2px' }}
+         >
+           {analyzeMutation.isPending ? 'Analyzing...' : 'Get Feedback on Selected Text'}
+         </button>
+       </div>
+     );
+   }
+   ```
+
+2. **Create API endpoints**
+   ```python
+   # backend/app/api/routes/coach.py
+
+   @router.post("/api/coach/analyze")
+   async def analyze_with_coach(
+       request: CoachAnalysisRequest,
+       db: Session = Depends(get_db),
+       current_user: User = Depends(get_current_user)
+   ):
+       """Get personalized feedback from writing coach"""
+       coach = WritingCoach(
+           user_id=current_user.id,
+           manuscript_id=request.manuscript_id,
+           db_session=db
+       )
+
+       feedback = await coach.analyze_scene(
+           scene_text=request.scene_text,
+           context=request.context
+       )
+
+       return {
+           "id": str(uuid.uuid4()),
+           "analysis": feedback["output"],
+           "suggestions": extract_suggestions(feedback["output"]),
+           "timestamp": datetime.now().isoformat()
+       }
+
+   @router.post("/api/coach/feedback")
+   async def record_feedback_reaction(
+       request: FeedbackReactionRequest,
+       db: Session = Depends(get_db)
+   ):
+       """Record user's reaction to coach feedback"""
+       db.execute("""
+           UPDATE coaching_history
+           SET user_reaction = ?
+           WHERE id = ?
+       """, (request.reaction, request.feedback_id))
+       db.commit()
+
+       return {"success": True}
+   ```
+
+**Acceptance Criteria**:
+- Coach panel renders in sidebar
+- Can analyze selected text
+- Feedback displays clearly
+- User can rate helpfulness
+- Reactions stored for learning
+
+---
+
+### Epic 3.5: Sensory "Paint" Tools
 **Priority**: Low | **Estimated Effort**: 2 days
 
 #### Task 3.4.1: Create Floating Toolbar
@@ -2041,16 +2624,23 @@ jobs:
 | Project Setup | 3.5 | Critical | None |
 | Epic 1: Living Manuscript | 9 | Critical | Setup |
 | Epic 2: The Codex | 10 | High | Setup, Epic 1 |
-| Epic 3: The Muse | 12 | High | Setup, Epic 2 |
+| **Epic 3: The Muse (LangChain)** | **17** | High | Setup, Epic 2 |
+| &nbsp;&nbsp;3.1: LangChain Foundation | 4 | High | Epic 2 |
+| &nbsp;&nbsp;3.2: GraphRAG | 4 | High | Epic 3.1 |
+| &nbsp;&nbsp;3.3: Beat Expansion | 3 | Medium | Epic 3.1 |
+| &nbsp;&nbsp;3.4: The Coach (Learning Agent) | 5 | High | Epic 3.1, 3.2 |
+| &nbsp;&nbsp;3.5: Sensory Paint Tools | 1 | Low | Epic 3.1 |
 | Epic 4: Structural Analysis | 6 | Medium | Epic 1, Epic 2 |
 | Testing & QA | 5 | High | All Epics |
 | Deployment | 3 | High | All Epics |
-| **Total** | **48.5 days** | | |
+| **Total** | **53.5 days** | | |
+
+> **Updated for LangChain:** Epic 3 has been enhanced with stateful agent architecture, adding 5 days for personalized learning coach.
 
 ### Team Allocation (1-2 Developers)
 
 **Phase 1 (Weeks 1-3): Core Experience**
-- Week 1: Project setup + Lexical editor
+- Week 1: Project setup + Lexical editor ✅ (COMPLETE)
 - Week 2: Auto-save + versioning backend
 - Week 3: Time Machine UI + variant system
 
@@ -2059,17 +2649,42 @@ jobs:
 - Week 5: Codex UI + suggestion queue
 - Week 6: Relationship graph + visualizer
 
-**Phase 3 (Weeks 7-10): Generative Layer**
-- Week 7: LLM router + local model integration
-- Week 8: GraphRAG + embedding system
+**Phase 3 (Weeks 7-11): Generative Layer with LangChain**
+- Week 7: LangChain setup + LLM wrappers + Codex tools
+- Week 8: GraphRAG implementation + embedding system
 - Week 9: Beat expansion + style matching
-- Week 10: Sensory paint tools
+- Week 10: The Coach - Database schema + agent implementation
+- Week 11: The Coach UI + feedback learning loop
 
-**Phase 4 (Weeks 11-12): Polish & Distribution**
-- Week 11: Pacing graph + consistency linter + testing
-- Week 12: Electron packaging + deployment pipeline
+**Phase 4 (Weeks 12-13): Polish & Distribution**
+- Week 12: Pacing graph + consistency linter + testing
+- Week 13: Electron packaging + deployment pipeline
 
-**Total: 12 weeks (3 months) for MVP**
+**Total: 13 weeks (~3 months) for MVP with Learning Coach**
+
+### LangChain Integration Benefits
+
+**What This Adds:**
+1. **Stateful Memory**: Agent remembers past interactions and learns patterns
+2. **Tool Use**: Agent can query Codex, check consistency, analyze pacing autonomously
+3. **Personalization**: Feedback gets better over time as it learns your style
+4. **Reasoning**: Agent chains tools together to provide deeper analysis
+
+**Dependencies Added:**
+```bash
+# New Python packages
+langchain==0.1.0
+langchain-anthropic==0.1.0
+langchain-community==0.0.13
+langchain-openai==0.0.5
+llama-cpp-python==0.2.0
+```
+
+**Database Additions:**
+- `coaching_history` - Stores all coaching interactions
+- `writing_profile` - Stores learned user patterns (JSON)
+- `feedback_patterns` - Tracks recurring issues
+- ChromaDB collections per user for long-term semantic memory
 
 ---
 
@@ -2082,6 +2697,10 @@ jobs:
 | Git performance issues with large manuscripts | Medium | Low | Implement Git LFS, pagination |
 | Lexical learning curve | Low | Medium | Extensive documentation, examples |
 | ChromaDB/KuzuDB stability | Medium | Low | Plan migration path to mature alternatives |
+| **LangChain agent reliability** | **High** | **Medium** | **Implement error handling, fallback to simpler prompts if tools fail, verbose logging** |
+| **Agent token costs (cloud LLM)** | **Medium** | **High** | **Smart routing to local models, cache common queries, user spending limits** |
+| **Long-term memory degradation** | **Low** | **Medium** | **Periodic profile validation, allow manual correction of learned patterns** |
+| **Privacy concerns (cloud API)** | **High** | **Low** | **Offer local-only mode, transparent data handling, opt-in cloud features** |
 
 ---
 

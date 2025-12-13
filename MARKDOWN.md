@@ -17,7 +17,7 @@ _Use these exact hex codes to maintain the "Classic Literary" aesthetic._
 - **Clean Slate (Secondary/Sidebar):** `#E2E8F0`
   - _Usage:_ Sidebars, settings menus, and neutral areas.
 - **Pure White (Input Backgrounds):** `#FFFFFF`
-  - _Usage:_ Only for active input fields or "cards" that need to pop off the Vellum background.
+  - _Usage:_ Only for active input fields or "cards" that need to pop off the Vellum background
 
 ### Text & Accents (The Ink)
 
