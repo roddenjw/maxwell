@@ -2,9 +2,25 @@
 Services for backend functionality
 """
 
-from app.services.embedding_service import embedding_service, EmbeddingService
-from app.services.graph_service import graph_service, GraphService
+# Import version_service (no external dependencies beyond pygit2)
 from app.services.version_service import version_service, VersionService
+
+# Optional imports for ML services (require chromadb, kuzu which need Python < 3.13)
+try:
+    from app.services.embedding_service import embedding_service, EmbeddingService
+    EMBEDDING_AVAILABLE = True
+except ImportError:
+    embedding_service = None
+    EmbeddingService = None
+    EMBEDDING_AVAILABLE = False
+
+try:
+    from app.services.graph_service import graph_service, GraphService
+    GRAPH_AVAILABLE = True
+except ImportError:
+    graph_service = None
+    GraphService = None
+    GRAPH_AVAILABLE = False
 
 __all__ = [
     "embedding_service",
@@ -13,4 +29,6 @@ __all__ = [
     "GraphService",
     "version_service",
     "VersionService",
+    "EMBEDDING_AVAILABLE",
+    "GRAPH_AVAILABLE",
 ]

@@ -59,14 +59,13 @@ class VersionService:
         index.write()
 
         tree_id = index.write_tree()
-        tree = repo.get(tree_id)
 
         repo.create_commit(
             "HEAD",
             self.signature,
             self.signature,
             "Initialize manuscript repository",
-            tree,
+            tree_id,
             []
         )
 
@@ -123,7 +122,6 @@ class VersionService:
 
         # Create tree
         tree_id = index.write_tree()
-        tree = repo.get(tree_id)
 
         # Get parent commit
         try:
@@ -139,7 +137,7 @@ class VersionService:
             self.signature,
             self.signature,
             commit_message,
-            tree,
+            tree_id,
             parents
         )
 

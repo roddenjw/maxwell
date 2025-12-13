@@ -10,8 +10,14 @@ from contextlib import asynccontextmanager
 import uvicorn
 
 from app.database import init_db
-from app.services import embedding_service, graph_service, version_service
-from app.api.routes import versioning
+from app.services import (
+    embedding_service,
+    graph_service,
+    version_service,
+    EMBEDDING_AVAILABLE,
+    GRAPH_AVAILABLE
+)
+from app.api.routes import versioning, manuscripts
 
 
 @asynccontextmanager
@@ -25,11 +31,15 @@ async def lifespan(app: FastAPI):
     init_db()
 
     # Initialize services
-    print("🔌 Initializing ChromaDB...")
-    # ChromaDB initializes on first use
+    if EMBEDDING_AVAILABLE:
+        print("🔌 ChromaDB available")
+    else:
+        print("⚠️  ChromaDB not available (requires Python < 3.13)")
 
-    print("🕸️  Initializing KuzuDB...")
-    # KuzuDB initializes on first use
+    if GRAPH_AVAILABLE:
+        print("🕸️  KuzuDB available")
+    else:
+        print("⚠️  KuzuDB not available (requires Python < 3.13)")
 
     print("✅ Backend ready!")
 
@@ -58,6 +68,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(versioning.router)
+app.include_router(manuscripts.router)
 
 
 @app.get("/")
@@ -94,8 +105,8 @@ async def api_status():
         "services": {
             "database": True,  # SQLite + Alembic initialized
             "nlp": False,  # spaCy pending
-            "vector_store": True,  # ChromaDB initialized
-            "graph_db": True,  # KuzuDB initialized
+            "vector_store": EMBEDDING_AVAILABLE,  # ChromaDB (needs Python < 3.13)
+            "graph_db": GRAPH_AVAILABLE,  # KuzuDB (needs Python < 3.13)
             "git": True  # ✅ pygit2 ready
         }
     }
