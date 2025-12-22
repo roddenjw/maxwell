@@ -5,6 +5,9 @@ Services for backend functionality
 # Import version_service (no external dependencies beyond pygit2)
 from app.services.version_service import version_service, VersionService
 
+# Import codex_service (no external dependencies beyond SQLAlchemy)
+from app.services.codex_service import codex_service, CodexService
+
 # Optional imports for ML services (require chromadb, kuzu which need Python < 3.13)
 try:
     from app.services.embedding_service import embedding_service, EmbeddingService
@@ -23,6 +26,8 @@ except ImportError:
     GRAPH_AVAILABLE = False
 
 __all__ = [
+    "codex_service",
+    "CodexService",
     "embedding_service",
     "EmbeddingService",
     "graph_service",

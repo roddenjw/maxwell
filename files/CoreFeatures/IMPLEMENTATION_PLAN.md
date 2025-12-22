@@ -2615,9 +2615,388 @@ jobs:
 
 ---
 
+## Epic 5: Timeline Orchestrator
+
+### Epic 5.1: Database Schema for Timeline Tracking
+**Priority**: High | **Estimated Effort**: 1 day
+
+#### Task 5.1.1: Create Prisma Models for Timeline Data
+**Effort**: 1 day
+
+1. **Add Timeline Models to schema.prisma**
+   ```prisma
+   // See files/fileTimelineOrchestrator/01-DATABASE-SCHEMA.md for complete schema
+
+   model TimelineEvent {
+     id              String    @id @default(uuid())
+     projectId       String
+     name            String
+     description     String?
+     storyDate       DateTime?
+     eventType       String
+     characterIds    String[]
+     locationId      String?
+     prerequisiteIds String[]
+     narrativeImportance Float  @default(0.5)
+     notes           String?
+   }
+
+   model Location {
+     id               String    @id @default(uuid())
+     projectId        String
+     name             String
+     description      String?
+     travelDistanceKm Float?
+     knownTravelMethods String[]
+   }
+
+   model TravelLeg {
+     id              String    @id @default(uuid())
+     projectId       String
+     characterId     String
+     fromLocationId  String
+     toLocationId    String
+     departDate      DateTime
+     arrivalDate     DateTime?
+     travelMethod    String
+     estimatedDays   Int?
+     notes           String?
+   }
+
+   model TimelineIssue {
+     id                  String    @id @default(uuid())
+     projectId           String
+     issueType           String
+     severity            String
+     affectedEventIds    String[]
+     affectedCharacterId String?
+     description         String
+     suggestion          String
+     teachingPoint       String?
+     isResolved          Boolean   @default(false)
+     resolutionNotes     String?
+   }
+
+   model TravelSpeedProfile {
+     id            String  @id @default(uuid())
+     projectId     String
+     walking       Float   @default(40)
+     horse         Float   @default(80)
+     carriage      Float   @default(60)
+     sailing       Float   @default(150)
+     flying        Float   @default(200)
+     teleportation Float   @default(999999)
+     custom1Name   String?
+     custom1Speed  Float?
+     custom2Name   String?
+     custom2Speed  Float?
+     rules         String?
+   }
+
+   model LocationDistance {
+     id             String  @id @default(uuid())
+     projectId      String
+     fromLocationId String
+     toLocationId   String
+     distanceKm     Float
+     notes          String?
+     @@unique([projectId, fromLocationId, toLocationId])
+   }
+   ```
+
+2. **Update Existing Models**
+   - Add timeline relations to Project model
+   - Add travelLegs relation to Character model
+   - Run database migration
+   - Generate Prisma client types
+
+**Acceptance Criteria**:
+- All 6 new models created successfully
+- Migration runs without errors
+- Relations properly defined
+- Can insert test data
+
+---
+
+### Epic 5.2: Timeline Orchestrator Service
+**Priority**: High | **Estimated Effort**: 4 days
+
+#### Task 5.2.1: Implement Core Validation Service
+**Effort**: 2.5 days
+
+```typescript
+// backend/src/services/analysis/TimelineOrchestratorService.ts
+// See files/fileTimelineOrchestrator/02-BACKEND-SERVICE.md for complete implementation
+
+export class TimelineOrchestratorService {
+  // Main validation function
+  async validateTimeline(projectId: string): Promise<TimelineValidationResult>
+
+  // 5 Validators
+  private checkImpossibleTravel()      // CRITICAL: Character travels faster than physically possible
+  private checkDependencyViolations()  // CRITICAL: Prerequisites happen after events
+  private checkCharacterPresence()     // MAJOR/MINOR: Characters with 0 or 1 event
+  private checkTimingGaps()            // MINOR: Large gaps >30 days between events
+  private checkParadoxes()             // CRITICAL: Circular dependencies (A→B→C→A)
+}
+```
+
+**Key Features**:
+1. **Impossible Travel Detection**
+   - Validates character can physically reach locations in time
+   - Calculates distance ÷ travel speed = minimum days needed
+   - Compares to actual days between events
+   - Teaching: "Fantasy readers track distance subconsciously..."
+
+2. **Dependency Validation**
+   - Detects prerequisite events that happen AFTER dependent events
+   - Detects missing prerequisite events
+   - Teaching: "Causality is sacred - cause before effect"
+
+3. **Character Development Tracking**
+   - Flags characters with zero timeline events
+   - Flags characters with only one event (underdeveloped)
+   - Teaching: "Characters need 2+ events to feel real"
+
+4. **Pacing Analysis**
+   - Detects large time gaps between events
+   - Helps writers understand pacing
+   - Teaching: "Readers notice gaps - explain them"
+
+5. **Paradox Detection**
+   - Uses depth-first search for circular dependencies
+   - Detects logical impossibilities
+   - Teaching: "This breaks story logic"
+
+**Acceptance Criteria**:
+- All 5 validators implemented and tested
+- Each issue includes description, suggestion, teaching point
+- Service handles 1000+ events without performance issues
+- Issues stored in database for tracking
+
+---
+
+#### Task 5.2.2: Build API Routes
+**Effort**: 1.5 days
+
+```typescript
+// See files/fileTimelineOrchestrator/03-API-ROUTES.md for complete routes
+
+// Timeline Event Routes
+POST   /api/timeline/events             // Create event
+GET    /api/timeline/events             // List all events
+PUT    /api/timeline/events/:id         // Update event
+DELETE /api/timeline/events/:id         // Delete event
+
+// Location Routes
+POST   /api/timeline/locations          // Create location
+GET    /api/timeline/locations          // List locations
+PUT    /api/timeline/locations/:id      // Update location
+
+// Travel Routes
+POST   /api/timeline/travel-legs        // Create travel record
+GET    /api/timeline/travel-legs        // List travel legs
+
+// Validation Route
+POST   /api/timeline/validate           // Run full timeline validation
+
+// Travel Speed Configuration
+GET    /api/timeline/travel-speeds      // Get speed profile
+PUT    /api/timeline/travel-speeds      // Update speed profile
+
+// Location Distance Matrix
+POST   /api/timeline/location-distances // Set distance between locations
+
+// Comprehensive Data Retrieval
+GET    /api/timeline/comprehensive      // Get all timeline data at once
+```
+
+**Acceptance Criteria**:
+- All 9 endpoints implemented
+- Consistent JSON response format
+- Proper error handling
+- Input validation with Pydantic/Joi
+- API documentation generated
+
+---
+
+### Epic 5.3: Timeline Visualization Components
+**Priority**: High | **Estimated Effort**: 3 days
+
+#### Task 5.3.1: Build Timeline Visualizer
+**Effort**: 2 days
+
+```typescript
+// Frontend Components Structure
+
+components/Timeline/
+├── TimelineOrchestrator.tsx          // Main container
+│   ├── Manages state and data fetching
+│   ├── Controls view modes (timeline/issues/teaching)
+│   └── Provides filtering (by character, by type)
+│
+├── TimelineVisualization.tsx         // Visual timeline display
+│   ├── Vertical timeline axis
+│   ├── Event cards in chronological order
+│   ├── Character badges with consistent colors
+│   └── Issue indicators (red borders for critical)
+│
+├── TimelineEventCard.tsx             // Individual event display
+│   ├── Event name and date
+│   ├── Characters involved
+│   ├── Location icon
+│   ├── Inline issue warnings
+│   └── Expandable details
+│
+├── TimelineIssuesPanel.tsx           // Issues list sidebar
+│   ├── Grouped by severity (critical/major/minor)
+│   ├── Color-coded badges
+│   ├── Mark resolved functionality
+│   └── Teaching point expandable
+│
+├── TimelineTeachingPanel.tsx         // Learning moments
+│   ├── Extracts teaching points from issues
+│   ├── Categorizes by type
+│   └── Shows patterns across timeline
+│
+└── TimelineControls.tsx              // Filters and actions
+    ├── Character filter dropdown
+    ├── Event type filter
+    ├── Validate button
+    └── Summary statistics
+```
+
+**Visual Design**:
+- Maxwell Design System integration
+- Bronze accents for critical issues
+- Vellum background
+- Garamond typography for event names
+- Responsive layout (desktop/tablet)
+
+**Acceptance Criteria**:
+- Timeline displays events chronologically
+- Issues appear inline with events
+- Character filter works
+- Teaching points visible and helpful
+- Mark resolved functionality works
+
+---
+
+#### Task 5.3.2: Build Management Forms
+**Effort**: 1 day
+
+1. **Event Form Component**
+   - Create/edit timeline events
+   - Date picker for story dates
+   - Character multi-select
+   - Location selector
+   - Prerequisite event selector
+   - Notes field
+
+2. **Location Form Component**
+   - Create/edit locations
+   - Description field
+   - Travel methods multi-select
+   - Distance matrix editor
+
+3. **Travel Leg Form Component**
+   - Character selector
+   - From/to location selectors
+   - Date range picker
+   - Travel method selector
+   - Notes field
+
+**Acceptance Criteria**:
+- All forms functional
+- Validation prevents invalid data
+- Clear error messages
+- Auto-save drafts
+
+---
+
+### Epic 5.4: Teaching System Integration
+**Priority**: Medium | **Estimated Effort**: 1 day
+
+#### Task 5.4.1: Create Teaching Content Library
+**Effort**: 0.5 days
+
+```typescript
+// Teaching points for each issue type
+
+export const TEACHING_LIBRARY = {
+  impossible_travel: {
+    title: "Travel Time & Distance",
+    explanation: "Fantasy readers subconsciously track travel time and distance...",
+    examples: [
+      "Game of Thrones: Characters take weeks to travel between cities",
+      "Lord of the Rings: Journey from Rivendell to Mordor takes months"
+    ],
+    resources: [
+      "Brandon Sanderson on World Building",
+      "K.M. Weiland's Structuring Your Novel"
+    ]
+  },
+
+  dependency_violation: {
+    title: "Causality & Story Logic",
+    explanation: "Cause must precede effect. This is a rule readers enforce subconsciously...",
+    examples: [...],
+    resources: [...]
+  },
+
+  // ... other issue types
+};
+```
+
+**Acceptance Criteria**:
+- Teaching content for all 5 validators
+- Examples from published works
+- Clear, actionable advice
+- Non-prescriptive (offers options, not commands)
+
+---
+
+#### Task 5.4.2: Integrate with Coach Agent
+**Effort**: 0.5 days
+
+- Connect Timeline Orchestrator to existing Coach agent (Epic 3.4)
+- Coach can reference timeline issues in feedback
+- Coach learns from writer's timeline patterns
+- Cross-validate timeline issues with prose issues
+
+**Acceptance Criteria**:
+- Coach mentions timeline issues when relevant
+- Timeline patterns tracked in writer profile
+- Integrated feedback experience
+
+---
+
 ## Task Estimation
 
 ### Summary by Epic
+
+| Epic | Total Effort (Days) | Priority | Dependencies |
+|------|---------------------|----------|--------------|
+| Project Setup | 3.5 | Critical | None |
+| Epic 1: Living Manuscript | 9 | Critical | Setup |
+| Epic 2: The Codex | 10 | High | Setup, Epic 1 |
+| **Epic 3: The Muse (LangChain)** | **17** | High | Setup, Epic 2 |
+| &nbsp;&nbsp;3.1: LangChain Foundation | 4 | High | Epic 2 |
+| &nbsp;&nbsp;3.2: GraphRAG | 4 | High | Epic 3.1 |
+| &nbsp;&nbsp;3.3: Beat Expansion | 3 | Medium | Epic 3.1 |
+| &nbsp;&nbsp;3.4: The Coach (Learning Agent) | 5 | High | Epic 3.1, 3.2 |
+| &nbsp;&nbsp;3.5: Sensory Paint Tools | 1 | Low | Epic 3.1 |
+| Epic 4: Structural Analysis | 6 | Medium | Epic 1, Epic 2 |
+| **Epic 5: Timeline Orchestrator** | **9** | High | Epic 1, Epic 2 |
+| &nbsp;&nbsp;5.1: Database Schema | 1 | High | Epic 1 |
+| &nbsp;&nbsp;5.2: Backend Service & API | 4 | High | Epic 5.1 |
+| &nbsp;&nbsp;5.3: Frontend Components | 3 | High | Epic 5.2 |
+| &nbsp;&nbsp;5.4: Teaching Integration | 1 | Medium | Epic 3.4, Epic 5.3 |
+| Testing & QA | 5 | High | All Epics |
+| Deployment | 3 | High | All Epics |
+| **Total** | **62.5 days** | | |
+
+> **Updated with Timeline Orchestrator:** Added Epic 5 (9 days) for timeline validation and teaching system targeting fantasy/sci-fi writers with multi-POV narratives.
 
 | Epic | Total Effort (Days) | Priority | Dependencies |
 |------|---------------------|----------|--------------|
@@ -2649,18 +3028,23 @@ jobs:
 - Week 5: Codex UI + suggestion queue
 - Week 6: Relationship graph + visualizer
 
-**Phase 3 (Weeks 7-11): Generative Layer with LangChain**
-- Week 7: LangChain setup + LLM wrappers + Codex tools
-- Week 8: GraphRAG implementation + embedding system
-- Week 9: Beat expansion + style matching
-- Week 10: The Coach - Database schema + agent implementation
-- Week 11: The Coach UI + feedback learning loop
+**Phase 2A (Weeks 7-8): Timeline Orchestrator** ⭐ NEW
+- Week 7: Database schema + TimelineOrchestratorService implementation
+- Week 8: API routes + Frontend timeline visualization components
 
-**Phase 4 (Weeks 12-13): Polish & Distribution**
-- Week 12: Pacing graph + consistency linter + testing
-- Week 13: Electron packaging + deployment pipeline
+**Phase 3 (Weeks 9-14): Generative Layer with LangChain**
+- Week 9: LangChain setup + LLM wrappers + Codex tools
+- Week 10: GraphRAG implementation + embedding system
+- Week 11: Beat expansion + style matching
+- Week 12: The Coach - Database schema + agent implementation
+- Week 13: The Coach UI + feedback learning loop
+- Week 14: Timeline-Coach integration + teaching system
 
-**Total: 13 weeks (~3 months) for MVP with Learning Coach**
+**Phase 4 (Weeks 15-16): Polish & Distribution**
+- Week 15: Pacing graph + consistency linter + testing
+- Week 16: Electron packaging + deployment pipeline
+
+**Total: 16 weeks (~4 months) for MVP with Learning Coach + Timeline Orchestrator**
 
 ### LangChain Integration Benefits
 

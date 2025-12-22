@@ -239,6 +239,26 @@ components/
 │   └── StructureWizard.tsx        // Save the Cat templates
 ```
 
+#### 6. Timeline Orchestrator Module
+```typescript
+components/
+├── Timeline/
+│   ├── TimelineOrchestrator.tsx   // Main container component
+│   ├── TimelineVisualization.tsx  // Vertical timeline display
+│   ├── TimelineEventCard.tsx      // Individual event with metadata
+│   ├── TimelineIssuesPanel.tsx    // Issues sidebar (critical/major/minor)
+│   ├── TimelineTeachingPanel.tsx  // Teaching moments & patterns
+│   ├── TimelineControls.tsx       // Filters, validate button, stats
+│   ├── forms/
+│   │   ├── EventForm.tsx          // Create/edit timeline events
+│   │   ├── LocationForm.tsx       // Create/edit locations
+│   │   ├── TravelLegForm.tsx      // Record character movements
+│   │   └── SpeedProfileForm.tsx   // Configure world travel speeds
+│   └── utils/
+│       ├── dateHelpers.ts         // Story date calculations
+│       └── travelCalculations.ts  // Distance/speed validations
+```
+
 ### Backend Services
 
 #### 1. API Layer (`/app/api/`)
@@ -257,13 +277,21 @@ api/
 #### 2. Service Layer (`/app/services/`)
 ```python
 services/
-├── manuscript_service.py  // Business logic for manuscripts
-├── version_service.py     // Git operations wrapper
-├── nlp_service.py         // spaCy pipeline, NER
-├── codex_service.py       // Graph operations, entity extraction
-├── embedding_service.py   // Vector generation for RAG
-├── llm_service.py         // LLM routing, prompt engineering
-└── consistency_service.py // Fact-checking against codex
+├── manuscript_service.py        // Business logic for manuscripts
+├── version_service.py           // Git operations wrapper
+├── nlp_service.py               // spaCy pipeline, NER
+├── codex_service.py             // Graph operations, entity extraction
+├── embedding_service.py         // Vector generation for RAG
+├── llm_service.py               // LLM routing, prompt engineering
+├── consistency_service.py       // Fact-checking against codex
+└── analysis/
+    └── timeline_orchestrator_service.py  // Timeline validation & teaching
+        ├── validateTimeline()             // Main validation entry point
+        ├── checkImpossibleTravel()        // Distance/speed validation
+        ├── checkDependencyViolations()    // Causality checking
+        ├── checkCharacterPresence()       // Character arc tracking
+        ├── checkTimingGaps()              // Pacing analysis
+        └── checkParadoxes()               // Circular dependency detection
 ```
 
 #### 3. Domain Models (`/app/models/`)
@@ -372,6 +400,103 @@ CREATE TABLE variants (
     content TEXT,
     is_main BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Timeline Orchestrator Tables
+
+```sql
+-- Timeline Events: Story events with dates and dependencies
+CREATE TABLE timeline_events (
+    id TEXT PRIMARY KEY,
+    project_id TEXT REFERENCES manuscripts(id),
+    name TEXT NOT NULL,
+    description TEXT,
+    story_date TIMESTAMP,
+    event_type TEXT, -- character_action, world_event, revelation, travel, meeting
+    character_ids TEXT, -- JSON array
+    location_id TEXT REFERENCES locations(id),
+    prerequisite_ids TEXT, -- JSON array
+    narrative_importance REAL DEFAULT 0.5,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Locations: Physical places in the story world
+CREATE TABLE locations (
+    id TEXT PRIMARY KEY,
+    project_id TEXT REFERENCES manuscripts(id),
+    name TEXT NOT NULL,
+    description TEXT,
+    travel_distance_km REAL,
+    known_travel_methods TEXT, -- JSON array ["horse", "magic_portal"]
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Travel Legs: Character movement records
+CREATE TABLE travel_legs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT REFERENCES manuscripts(id),
+    character_id TEXT NOT NULL,
+    from_location_id TEXT REFERENCES locations(id),
+    to_location_id TEXT REFERENCES locations(id),
+    depart_date TIMESTAMP NOT NULL,
+    arrival_date TIMESTAMP,
+    travel_method TEXT, -- horse, carriage, sailing, flying, teleportation
+    estimated_days INTEGER,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Timeline Issues: Detected problems in timeline
+CREATE TABLE timeline_issues (
+    id TEXT PRIMARY KEY,
+    project_id TEXT REFERENCES manuscripts(id),
+    issue_type TEXT NOT NULL, -- impossible_travel, dependency_violation, etc.
+    severity TEXT NOT NULL, -- critical, major, minor
+    affected_event_ids TEXT, -- JSON array
+    affected_character_id TEXT,
+    description TEXT NOT NULL,
+    suggestion TEXT NOT NULL,
+    teaching_point TEXT,
+    is_resolved BOOLEAN DEFAULT FALSE,
+    resolution_notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Travel Speed Profiles: World-specific travel rules
+CREATE TABLE travel_speed_profiles (
+    id TEXT PRIMARY KEY,
+    project_id TEXT REFERENCES manuscripts(id),
+    walking REAL DEFAULT 40, -- km/day
+    horse REAL DEFAULT 80,
+    carriage REAL DEFAULT 60,
+    sailing REAL DEFAULT 150,
+    flying REAL DEFAULT 200,
+    teleportation REAL DEFAULT 999999,
+    custom1_name TEXT,
+    custom1_speed REAL,
+    custom2_name TEXT,
+    custom2_speed REAL,
+    rules TEXT, -- Notes on travel rules
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Location Distances: Pre-calculated distances between locations
+CREATE TABLE location_distances (
+    id TEXT PRIMARY KEY,
+    project_id TEXT REFERENCES manuscripts(id),
+    from_location_id TEXT REFERENCES locations(id),
+    to_location_id TEXT REFERENCES locations(id),
+    distance_km REAL NOT NULL,
+    notes TEXT, -- Mountain pass, longer but safer
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(project_id, from_location_id, to_location_id)
 );
 ```
 
@@ -504,6 +629,43 @@ POST   /api/generate/continue              // Continue from cursor
 POST   /api/analyze/extract-entities       // Run NLP extraction
 GET    /api/analyze/pacing/{manuscript_id} // Get pacing data
 GET    /api/analyze/consistency            // Run consistency check
+```
+
+#### Timeline Orchestrator
+```
+// Timeline Events
+POST   /api/timeline/events                // Create timeline event
+GET    /api/timeline/events                // List all events (with filters)
+GET    /api/timeline/events/:id            // Get event details
+PUT    /api/timeline/events/:id            // Update event
+DELETE /api/timeline/events/:id            // Delete event
+
+// Locations
+POST   /api/timeline/locations             // Create location
+GET    /api/timeline/locations             // List locations
+GET    /api/timeline/locations/:id         // Get location
+PUT    /api/timeline/locations/:id         // Update location
+DELETE /api/timeline/locations/:id         // Delete location
+
+// Travel Tracking
+POST   /api/timeline/travel-legs           // Record character travel
+GET    /api/timeline/travel-legs           // List travel legs
+GET    /api/timeline/travel-legs/:id       // Get travel details
+PUT    /api/timeline/travel-legs/:id       // Update travel
+DELETE /api/timeline/travel-legs/:id       // Delete travel
+
+// Validation
+POST   /api/timeline/validate              // Run full timeline validation
+GET    /api/timeline/issues                // Get all issues
+PATCH  /api/timeline/issues/:id            // Mark issue resolved
+
+// Configuration
+GET    /api/timeline/travel-speeds         // Get travel speed profile
+PUT    /api/timeline/travel-speeds         // Update travel speeds
+POST   /api/timeline/location-distances    // Set distance between locations
+
+// Comprehensive Data
+GET    /api/timeline/comprehensive         // Get all timeline data at once
 ```
 
 ### WebSocket Endpoints

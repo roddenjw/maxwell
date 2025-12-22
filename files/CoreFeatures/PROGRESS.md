@@ -104,11 +104,87 @@ This document tracks all completed work on the Codex IDE project. Each task is m
 
 ## Phase 2: The Knowledge Layer (Weeks 4-6)
 
+**Goal**: Entity extraction, Codex management, relationship tracking
+
 **Status**: Not Started
 
 ---
 
-## Phase 3: The Generative Layer (Weeks 7-10)
+## Phase 2A: Timeline Orchestrator (Weeks 7-8)
+
+**Goal**: Timeline validation and teaching system for multi-POV narratives
+
+**Status**: Not Started
+
+### Week 7: Database & Service Implementation
+
+#### Task 2A.1: Timeline Database Schema
+| Task | Started | Completed | Status | Notes |
+|------|---------|-----------|--------|-------|
+| Add 6 Timeline models to Prisma schema | | | ⏳ Pending | TimelineEvent, Location, TravelLeg, etc. |
+| Update Project model with relations | | | ⏳ Pending | |
+| Update Character model with travelLegs | | | ⏳ Pending | |
+| Run Prisma migrations | | | ⏳ Pending | |
+| Generate Prisma client types | | | ⏳ Pending | |
+| Verify database tables created | | | ⏳ Pending | |
+
+#### Task 2A.2: TimelineOrchestratorService Implementation
+| Task | Started | Completed | Status | Notes |
+|------|---------|-----------|--------|-------|
+| Create TimelineOrchestratorService class | | | ⏳ Pending | Main validation service |
+| Implement checkImpossibleTravel() | | | ⏳ Pending | Validator 1: Distance/speed validation |
+| Implement checkDependencyViolations() | | | ⏳ Pending | Validator 2: Causality checking |
+| Implement checkCharacterPresence() | | | ⏳ Pending | Validator 3: Character arc tracking |
+| Implement checkTimingGaps() | | | ⏳ Pending | Validator 4: Pacing analysis |
+| Implement checkParadoxes() | | | ⏳ Pending | Validator 5: Circular dependencies |
+| Add teaching points to each validator | | | ⏳ Pending | |
+| Write unit tests for service | | | ⏳ Pending | |
+
+### Week 8: API Routes & Frontend Components
+
+#### Task 2A.3: Timeline API Routes
+| Task | Started | Completed | Status | Notes |
+|------|---------|-----------|--------|-------|
+| Create timeline router | | | ⏳ Pending | /api/timeline/* |
+| Implement event CRUD endpoints | | | ⏳ Pending | POST/GET/PUT/DELETE /events |
+| Implement location CRUD endpoints | | | ⏳ Pending | POST/GET/PUT/DELETE /locations |
+| Implement travel leg CRUD endpoints | | | ⏳ Pending | POST/GET/PUT/DELETE /travel-legs |
+| Implement validation endpoint | | | ⏳ Pending | POST /validate |
+| Implement speed profile endpoints | | | ⏳ Pending | GET/PUT /travel-speeds |
+| Implement location distance endpoints | | | ⏳ Pending | POST /location-distances |
+| Implement comprehensive data endpoint | | | ⏳ Pending | GET /comprehensive |
+| Add input validation | | | ⏳ Pending | Pydantic models |
+| Add error handling | | | ⏳ Pending | |
+| Test all endpoints with Postman | | | ⏳ Pending | |
+
+#### Task 2A.4: Timeline Frontend Components
+| Task | Started | Completed | Status | Notes |
+|------|---------|-----------|--------|-------|
+| Create TimelineOrchestrator.tsx | | | ⏳ Pending | Main container component |
+| Create TimelineVisualization.tsx | | | ⏳ Pending | Vertical timeline display |
+| Create TimelineEventCard.tsx | | | ⏳ Pending | Individual event cards |
+| Create TimelineIssuesPanel.tsx | | | ⏳ Pending | Issues sidebar |
+| Create TimelineTeachingPanel.tsx | | | ⏳ Pending | Teaching moments display |
+| Create TimelineControls.tsx | | | ⏳ Pending | Filters & actions |
+| Create EventForm.tsx | | | ⏳ Pending | Create/edit events |
+| Create LocationForm.tsx | | | ⏳ Pending | Create/edit locations |
+| Create TravelLegForm.tsx | | | ⏳ Pending | Record character travel |
+| Create SpeedProfileForm.tsx | | | ⏳ Pending | Configure travel speeds |
+| Apply Maxwell Design System | | | ⏳ Pending | Bronze accents, Garamond typography |
+| Implement character filtering | | | ⏳ Pending | |
+| Implement mark resolved functionality | | | ⏳ Pending | |
+| Add responsive layout | | | ⏳ Pending | Desktop/tablet support |
+
+#### Task 2A.5: Teaching System Integration
+| Task | Started | Completed | Status | Notes |
+|------|---------|-----------|--------|-------|
+| Create teaching content library | | | ⏳ Pending | Teaching points for all 5 validators |
+| Integrate with Coach agent | | | ⏳ Pending | Cross-reference timeline issues |
+| Add examples from published works | | | ⏳ Pending | Game of Thrones, LOTR, etc. |
+
+---
+
+## Phase 3: The Generative Layer (Weeks 9-14)
 
 **Status**: Not Started
 
@@ -136,14 +212,23 @@ This document tracks all completed work on the Codex IDE project. Each task is m
 ### Performance
 - **Editor Input Latency**: Not measured (Target: <50ms)
 - **Auto-Save Trigger**: ✅ Implemented - 5s debounce
+- **Timeline Validation**: Not implemented (Target: <500ms for 1000+ events)
 - **Build Time**: Not measured
 
 ### Project Health
 - **Lines of Code**: ~2,000 (including editor + manuscript management)
 - **Open Issues**: 0
 - **Completed Tasks**: 22
-- **Pending Tasks**: 35+
+- **Pending Tasks**: 80+ (including Timeline Orchestrator)
 - **Files Created**: 35+
+- **New Features Added**: Timeline Orchestrator (Phase 2A)
+
+### Feature Status
+- ✅ **Phase 1**: Editor + Manuscript Management (Complete)
+- ⏳ **Phase 2**: Knowledge Layer (Pending)
+- ⏳ **Phase 2A**: Timeline Orchestrator (Pending - 2 weeks, 45+ tasks)
+- ⏳ **Phase 3**: Generative Layer (Pending)
+- ⏳ **Phase 4**: Polish & Distribution (Pending)
 
 ---
 
@@ -370,5 +455,53 @@ Updated: frontend/src/components/Editor/ManuscriptEditor.tsx
 
 ---
 
-**Last Updated**: 2025-11-23 21:30
+### 2025-12-15
+
+**Timeline Orchestrator Integration:**
+- Added Epic 5: Timeline Orchestrator to IMPLEMENTATION_PLAN.md
+  - 9 days total effort (1 day schema, 4 days service/API, 3 days components, 1 day teaching)
+  - 6 new database models (TimelineEvent, Location, TravelLeg, TimelineIssue, TravelSpeedProfile, LocationDistance)
+  - 5 validators (impossible travel, dependencies, character presence, timing gaps, paradoxes)
+  - 9 API endpoints for timeline management
+  - 10+ frontend components for timeline visualization
+- Updated ARCHITECTURE.md with Timeline Orchestrator
+  - Added database schema for 6 new tables
+  - Added component architecture (TimelineOrchestrator module)
+  - Added backend service architecture (TimelineOrchestratorService)
+  - Added API routes documentation
+- Updated PROGRESS.md with Phase 2A tasks
+  - Week 7: Database & Service (8 tasks)
+  - Week 8: API Routes & Frontend (45+ tasks)
+  - Added Timeline Orchestrator to project metrics
+- Updated project timeline
+  - Extended from 13 weeks to 16 weeks
+  - Added Phase 2A (Weeks 7-8) for Timeline Orchestrator
+  - Shifted subsequent phases by 2 weeks
+
+**Integration Points:**
+- Timeline Orchestrator integrates with:
+  - Epic 2 (The Codex): Characters and locations shared
+  - Epic 3.4 (The Coach): Coach can reference timeline issues
+  - Epic 4 (Structural Analysis): Pacing analysis complements timeline gaps
+- Teaching-first design aligns with overall Maxwell philosophy
+- Maxwell Design System will be applied to all Timeline components
+
+**Documentation Added:**
+- files/fileTimelineOrchestrator/TIMELINE-ORCHESTRATOR-SPEC.md (809 lines)
+- files/fileTimelineOrchestrator/01-DATABASE-SCHEMA.md (405 lines)
+- files/fileTimelineOrchestrator/02-BACKEND-SERVICE.md (744 lines)
+- files/fileTimelineOrchestrator/03-API-ROUTES.md (reference file)
+- files/fileTimelineOrchestrator/QUICK-REFERENCE.md (493 lines)
+- files/fileTimelineOrchestrator/TEACHING_FEATURES.md
+- files/fileTimelineOrchestrator/ORCHESTRATOR_README.md (479 lines)
+
+**Next Steps:**
+1. Begin Phase 2A implementation after completing Phase 2 (Knowledge Layer)
+2. Review Timeline Orchestrator documentation before starting
+3. Consider creating a demo/prototype for early user feedback
+4. Plan integration testing between Timeline Orchestrator and Coach agent
+
+---
+
+**Last Updated**: 2025-12-15 (Timeline Orchestrator Integration)
 **Updated By**: Development Team

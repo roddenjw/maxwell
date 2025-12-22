@@ -1,22 +1,32 @@
 /**
  * AutoSavePlugin - Automatically saves manuscript content to store
  * Debounced to avoid excessive saves (5 second delay)
+ * Optionally creates version snapshots every 5 minutes
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $getRoot, EditorState } from 'lexical';
 import { useManuscriptStore } from '@/stores/manuscriptStore';
+import { versioningApi } from '@/lib/api';
 
 interface AutoSavePluginProps {
   manuscriptId: string;
   onSaveStatusChange?: (status: 'saved' | 'saving' | 'unsaved') => void;
+  enableSnapshots?: boolean; // Create version snapshots
+  snapshotInterval?: number; // Minutes between auto-snapshots (default: 5)
 }
 
-export default function AutoSavePlugin({ manuscriptId, onSaveStatusChange }: AutoSavePluginProps) {
+export default function AutoSavePlugin({
+  manuscriptId,
+  onSaveStatusChange,
+  enableSnapshots = false,
+  snapshotInterval = 5,
+}: AutoSavePluginProps) {
   const [editor] = useLexicalComposerContext();
   const { updateManuscript } = useManuscriptStore();
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
+  const lastSnapshotTimeRef = useRef<number>(Date.now());
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
 
   useEffect(() => {
@@ -53,7 +63,7 @@ export default function AutoSavePlugin({ manuscriptId, onSaveStatusChange }: Aut
     };
   }, [editor, manuscriptId]);
 
-  const saveManuscript = (editorState: EditorState) => {
+  const saveManuscript = async (editorState: EditorState) => {
     // Serialize editor state to JSON
     const serializedState = JSON.stringify(editorState.toJSON());
 
@@ -70,6 +80,29 @@ export default function AutoSavePlugin({ manuscriptId, onSaveStatusChange }: Aut
       content: serializedState,
       wordCount: wordCount,
     });
+
+    // Create snapshot if enabled and enough time has passed
+    if (enableSnapshots) {
+      const now = Date.now();
+      const timeSinceLastSnapshot = now - lastSnapshotTimeRef.current;
+      const intervalMs = snapshotInterval * 60 * 1000; // Convert minutes to milliseconds
+
+      if (timeSinceLastSnapshot >= intervalMs) {
+        try {
+          await versioningApi.createSnapshot({
+            manuscript_id: manuscriptId,
+            content: serializedState,
+            trigger_type: 'AUTO',
+            label: 'Auto-save snapshot',
+            word_count: wordCount,
+          });
+          lastSnapshotTimeRef.current = now;
+          console.log(`Created auto-snapshot for manuscript ${manuscriptId}`);
+        } catch (error) {
+          console.error('Failed to create snapshot:', error);
+        }
+      }
+    }
 
     // Mark as saved
     setSaveStatus('saved');

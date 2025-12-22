@@ -11,13 +11,15 @@ import uvicorn
 
 from app.database import init_db
 from app.services import (
+    codex_service,
     embedding_service,
     graph_service,
     version_service,
     EMBEDDING_AVAILABLE,
     GRAPH_AVAILABLE
 )
-from app.api.routes import versioning, manuscripts
+from app.services.nlp_service import nlp_service
+from app.api.routes import versioning, manuscripts, codex
 
 
 @asynccontextmanager
@@ -31,6 +33,11 @@ async def lifespan(app: FastAPI):
     init_db()
 
     # Initialize services
+    if nlp_service.is_available():
+        print("🧠 NLP service available (spaCy en_core_web_lg)")
+    else:
+        print("⚠️  NLP service not available (install spaCy and download en_core_web_lg)")
+
     if EMBEDDING_AVAILABLE:
         print("🔌 ChromaDB available")
     else:
@@ -69,6 +76,7 @@ app.add_middleware(
 # Include routers
 app.include_router(versioning.router)
 app.include_router(manuscripts.router)
+app.include_router(codex.router)
 
 
 @app.get("/")
@@ -98,13 +106,13 @@ async def api_status():
         "features": {
             "manuscripts": True,  # Database models ready
             "versioning": True,  # ✅ Git service ready
-            "codex": True,  # Entity models ready
+            "codex": True,  # ✅ Entity CRUD ready
             "ai_generation": False,  # LangChain pending
-            "analysis": False  # NLP services pending
+            "analysis": nlp_service.is_available()  # ✅ spaCy NLP
         },
         "services": {
             "database": True,  # SQLite + Alembic initialized
-            "nlp": False,  # spaCy pending
+            "nlp": nlp_service.is_available(),  # ✅ spaCy (if model downloaded)
             "vector_store": EMBEDDING_AVAILABLE,  # ChromaDB (needs Python < 3.13)
             "graph_db": GRAPH_AVAILABLE,  # KuzuDB (needs Python < 3.13)
             "git": True  # ✅ pygit2 ready

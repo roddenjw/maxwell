@@ -16,9 +16,16 @@ import { $setBlocksType } from '@lexical/selection';
 import { $createHeadingNode, $createQuoteNode, HeadingTagType } from '@lexical/rich-text';
 import { $createParagraphNode, $insertNodes } from 'lexical';
 import { $createSceneBreakNode } from './nodes/SceneBreakNode';
+import { codexApi } from '@/lib/api';
+import { useCodexStore } from '@/stores/codexStore';
 
-export default function EditorToolbar() {
+interface EditorToolbarProps {
+  manuscriptId?: string;
+}
+
+export default function EditorToolbar({ manuscriptId }: EditorToolbarProps = {}) {
   const [editor] = useLexicalComposerContext();
+  const { setAnalyzing, setSidebarOpen, setActiveTab } = useCodexStore();
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
   const [isUnderline, setIsUnderline] = useState(false);
@@ -97,6 +104,50 @@ export default function EditorToolbar() {
     });
   };
 
+  const handleAnalyze = async () => {
+    if (!manuscriptId) {
+      alert('No manuscript selected');
+      return;
+    }
+
+    try {
+      // Extract text from editor
+      const editorState = editor.getEditorState();
+      let text = '';
+
+      editorState.read(() => {
+        const root = editorState._nodeMap;
+        root.forEach((node) => {
+          if ('__text' in node) {
+            text += node.__text + ' ';
+          }
+        });
+      });
+
+      if (!text.trim()) {
+        alert('No text to analyze. Start writing first!');
+        return;
+      }
+
+      setAnalyzing(true);
+
+      // Call analyze API
+      await codexApi.analyzeText({
+        manuscript_id: manuscriptId,
+        text: text.trim(),
+      });
+
+      // Show success and open Codex sidebar to Intel tab
+      alert('✅ Analysis started! Check the Intel tab for detected entities.');
+      setSidebarOpen(true);
+      setActiveTab('intel');
+    } catch (err) {
+      alert('Failed to analyze: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   return (
     <div className="toolbar flex items-center gap-1 p-2 flex-wrap">
       {/* Undo/Redo */}
@@ -161,11 +212,20 @@ export default function EditorToolbar() {
       </div>
 
       {/* Scene break button */}
-      <div className="toolbar-group flex gap-1">
+      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
         <ToolbarButton onClick={insertSceneBreak} title="Insert Scene Break">
           * * *
         </ToolbarButton>
       </div>
+
+      {/* Codex Analyze button */}
+      {manuscriptId && (
+        <div className="toolbar-group flex gap-1">
+          <ToolbarButton onClick={handleAnalyze} title="Analyze text for entities (NLP)">
+            🔍 Analyze
+          </ToolbarButton>
+        </div>
+      )}
     </div>
   );
 }

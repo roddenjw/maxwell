@@ -21,6 +21,7 @@ import EditorToolbar from './EditorToolbar';
 import { SceneBreakNode } from './nodes/SceneBreakNode';
 import { EntityMentionNode } from './nodes/EntityMentionNode';
 import AutoSavePlugin from './plugins/AutoSavePlugin';
+import { versioningApi } from '@/lib/api';
 
 interface ManuscriptEditorProps {
   manuscriptId?: string;
@@ -38,6 +39,7 @@ export default function ManuscriptEditor({
   const [wordCount, setWordCount] = useState(0);
   const [isFocusMode, setIsFocusMode] = useState(mode === 'focus');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [latestEditorState, setLatestEditorState] = useState<EditorState | null>(null);
 
   // Configure Lexical editor
   const initialConfig = {
@@ -61,6 +63,9 @@ export default function ManuscriptEditor({
 
   // Handle editor state changes
   const handleEditorChange = (editorState: EditorState) => {
+    // Store latest state for snapshot creation
+    setLatestEditorState(editorState);
+
     // Calculate word count
     editorState.read(() => {
       const text = editorState.read(() => {
@@ -82,9 +87,41 @@ export default function ManuscriptEditor({
     onChange?.(editorState);
   };
 
+  // Create manual snapshot
+  const createManualSnapshot = async () => {
+    if (!manuscriptId || !latestEditorState) return;
+
+    try {
+      const label = prompt('Enter a label for this snapshot:');
+      if (!label) return;
+
+      const serializedState = JSON.stringify(latestEditorState.toJSON());
+
+      await versioningApi.createSnapshot({
+        manuscript_id: manuscriptId,
+        content: serializedState,
+        trigger_type: 'MANUAL',
+        label,
+        word_count: wordCount,
+      });
+
+      alert('✅ Snapshot created!');
+    } catch (error) {
+      console.error('Failed to create snapshot:', error);
+      alert('Failed to create snapshot: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Create snapshot: Cmd+S (Mac) or Ctrl+S (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        createManualSnapshot();
+        return;
+      }
+
       // Focus mode toggle: F11 or Ctrl+Shift+F
       if (e.key === 'F11' || (e.ctrlKey && e.shiftKey && e.key === 'f')) {
         e.preventDefault();
@@ -94,7 +131,7 @@ export default function ManuscriptEditor({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [manuscriptId, latestEditorState, wordCount]);
 
   return (
     <div className={`editor-container ${isFocusMode ? 'focus-mode' : ''}`}>
@@ -103,7 +140,7 @@ export default function ManuscriptEditor({
           {/* Toolbar - hidden in focus mode */}
           {!isFocusMode && (
             <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-              <EditorToolbar />
+              <EditorToolbar manuscriptId={manuscriptId} />
             </div>
           )}
 
@@ -143,11 +180,13 @@ export default function ManuscriptEditor({
             {/* OnChange plugin to track content changes */}
             <OnChangePlugin onChange={handleEditorChange} />
 
-            {/* Auto-save plugin - saves to localStorage */}
+            {/* Auto-save plugin - saves to localStorage and creates snapshots */}
             {manuscriptId && (
               <AutoSavePlugin
                 manuscriptId={manuscriptId}
                 onSaveStatusChange={setSaveStatus}
+                enableSnapshots={true}
+                snapshotInterval={5}
               />
             )}
           </div>

@@ -71,6 +71,49 @@ class VersionService:
 
         return repo
 
+    def _extract_text_from_lexical_json(self, content: str) -> str:
+        """
+        Extract plain text from Lexical editor state JSON
+
+        Args:
+            content: Lexical JSON string
+
+        Returns:
+            Plain text content
+        """
+        try:
+            # Parse the Lexical JSON
+            state = json.loads(content)
+
+            def extract_text_recursive(node):
+                """Recursively extract text from Lexical nodes"""
+                text_parts = []
+
+                # If this node has text, add it
+                if isinstance(node, dict) and "text" in node:
+                    text_parts.append(node["text"])
+
+                # If this node has children, recurse
+                if isinstance(node, dict) and "children" in node:
+                    for child in node["children"]:
+                        text_parts.append(extract_text_recursive(child))
+
+                # Join with spaces, preserving paragraph breaks
+                if isinstance(node, dict) and node.get("type") == "paragraph":
+                    return "\n".join(text_parts) + "\n"
+
+                return " ".join(text_parts)
+
+            # Extract from root
+            if "root" in state:
+                return extract_text_recursive(state["root"]).strip()
+
+            return content  # Fallback to raw content
+
+        except (json.JSONDecodeError, KeyError, TypeError):
+            # If parsing fails, return content as-is
+            return content
+
     def create_snapshot(
         self,
         manuscript_id: str,
@@ -97,9 +140,14 @@ class VersionService:
         repo = self.init_repository(manuscript_id)
         repo_path = self.get_repo_path(manuscript_id)
 
-        # Write content to file
+        # Write content to file (Lexical JSON state)
         content_path = repo_path / "manuscript.json"
         content_path.write_text(content, encoding="utf-8")
+
+        # Extract and write plain text version for readable diffs
+        plain_text = self._extract_text_from_lexical_json(content)
+        text_path = repo_path / "manuscript.txt"
+        text_path.write_text(plain_text, encoding="utf-8")
 
         # Write metadata
         metadata = {
@@ -117,6 +165,7 @@ class VersionService:
         index = repo.index
         index.read()
         index.add("manuscript.json")
+        index.add("manuscript.txt")
         index.add("metadata.json")
         index.write()
 
@@ -317,8 +366,13 @@ class VersionService:
                 "files_changed": diff.stats.files_changed,
                 "insertions": diff.stats.insertions,
                 "deletions": diff.stats.deletions,
-                "patches": []
+                "patches": [],
+                "diff_html": ""
             }
+
+            # Generate HTML diff
+            html_lines = []
+            txt_diff_found = False
 
             for patch in diff:
                 changes["patches"].append({
@@ -328,6 +382,67 @@ class VersionService:
                     "patch": patch.text
                 })
 
+                # Convert patch to HTML - use manuscript.txt for readable diffs
+                if patch.delta.new_file.path == "manuscript.txt":
+                    txt_diff_found = True
+                    for line in patch.text.split('\n'):
+                        # Skip all git technical headers and markers
+                        if (line.startswith('diff --git') or
+                            line.startswith('index ') or
+                            line.startswith('---') or
+                            line.startswith('+++') or
+                            line.startswith('@@') or
+                            line.strip() == r'\ No newline at end of file'):
+                            continue
+
+                        # Process actual content lines
+                        if line.startswith('+'):
+                            html_lines.append(f'<ins>{line[1:]}</ins>')
+                        elif line.startswith('-'):
+                            html_lines.append(f'<del>{line[1:]}</del>')
+                        elif line.strip():  # Unchanged lines
+                            html_lines.append(line)
+
+            # Fallback: If no .txt diff found, extract text from JSON diffs
+            if not txt_diff_found:
+                # Try to extract and compare text from manuscript.json
+                try:
+                    # Get the actual content from both commits
+                    old_tree = old_commit.tree
+                    new_tree = new_commit.tree
+
+                    old_json_content = ""
+                    new_json_content = ""
+
+                    # Read old content
+                    try:
+                        old_entry = old_tree['manuscript.json']
+                        old_blob = repo.get(old_entry.id)
+                        old_json_content = old_blob.data.decode('utf-8')
+                    except (KeyError, AttributeError):
+                        pass
+
+                    # Read new content
+                    try:
+                        new_entry = new_tree['manuscript.json']
+                        new_blob = repo.get(new_entry.id)
+                        new_json_content = new_blob.data.decode('utf-8')
+                    except (KeyError, AttributeError):
+                        pass
+
+                    # Extract text from both
+                    old_text = self._extract_text_from_lexical_json(old_json_content)
+                    new_text = self._extract_text_from_lexical_json(new_json_content)
+
+                    # Simple line-by-line comparison
+                    if old_text != new_text:
+                        html_lines.append(f'<del>{old_text}</del>')
+                        html_lines.append(f'<ins>{new_text}</ins>')
+                except Exception as e:
+                    # If fallback fails, show a message
+                    html_lines.append(f'<p>Unable to generate readable diff. Please create new snapshots to see text changes.</p>')
+
+            changes["diff_html"] = '\n'.join(html_lines)
             return changes
 
         finally:
