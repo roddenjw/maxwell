@@ -29,6 +29,7 @@ export default function EntityCard({
         ${isSelected ? 'border-bronze shadow-md' : 'border-slate-ui hover:border-bronze/50 hover:shadow-sm'}
       `}
       style={{ borderRadius: '2px' }}
+      title={`Click to view ${entity.name} details`}
     >
       {/* Entity Header */}
       <div className="p-3">
@@ -82,7 +83,7 @@ export default function EntityCard({
 
         {/* Appearance Count */}
         {entity.appearance_history && entity.appearance_history.length > 0 && (
-          <div className="mt-2 text-xs text-faded-ink font-sans">
+          <div className="mt-2 text-xs text-faded-ink font-sans" title="Number of times this entity appears in the manuscript">
             {entity.appearance_history.length} appearance{entity.appearance_history.length !== 1 ? 's' : ''}
           </div>
         )}

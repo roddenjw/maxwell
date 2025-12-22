@@ -9,12 +9,14 @@ interface SuggestionCardProps {
   suggestion: EntitySuggestion;
   onApprove: () => void;
   onReject: () => void;
+  isProcessing?: boolean;
 }
 
 export default function SuggestionCard({
   suggestion,
   onApprove,
   onReject,
+  isProcessing = false,
 }: SuggestionCardProps) {
   const typeColor = getEntityTypeColor(suggestion.type);
   const typeIcon = getEntityTypeIcon(suggestion.type);
@@ -61,17 +63,21 @@ export default function SuggestionCard({
       <div className="flex gap-2">
         <button
           onClick={onApprove}
-          className="flex-1 bg-bronze text-white px-3 py-1.5 text-sm font-sans hover:bg-bronze/90 transition-colors"
+          disabled={isProcessing}
+          className="flex-1 bg-bronze text-white px-3 py-1.5 text-sm font-sans hover:bg-bronze/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
           style={{ borderRadius: '2px' }}
         >
-          ✓ Approve
+          {isProcessing && <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+          {isProcessing ? 'Approving...' : '✓ Approve'}
         </button>
         <button
           onClick={onReject}
-          className="flex-1 bg-slate-ui text-midnight px-3 py-1.5 text-sm font-sans hover:bg-slate-ui/80 transition-colors"
+          disabled={isProcessing}
+          className="flex-1 bg-slate-ui text-midnight px-3 py-1.5 text-sm font-sans hover:bg-slate-ui/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
           style={{ borderRadius: '2px' }}
         >
-          × Reject
+          {isProcessing && <div className="w-3 h-3 border-2 border-midnight border-t-transparent rounded-full animate-spin"></div>}
+          {isProcessing ? 'Rejecting...' : '× Reject'}
         </button>
       </div>
     </div>

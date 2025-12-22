@@ -410,29 +410,58 @@ async def _process_analysis(manuscript_id: str, text: str):
 
         # Create suggestions for detected entities
         for entity in results["entities"]:
-            codex_service.create_suggestion(
-                manuscript_id=manuscript_id,
-                name=entity["name"],
-                entity_type=entity["type"],
-                context=entity["context"]
-            )
+            try:
+                codex_service.create_suggestion(
+                    manuscript_id=manuscript_id,
+                    name=entity["name"],
+                    entity_type=entity["type"],
+                    context=entity["context"]
+                )
+            except Exception as e:
+                # Skip duplicate suggestions
+                print(f"Skipping suggestion for {entity['name']}: {e}")
+                continue
 
         # Create relationships for known entities
-        # Build entity name -> id mapping
-        entity_id_map = {entity.name: entity.id for entity in existing_entities}
+        # Build entity name -> id mapping (include aliases)
+        entity_id_map = {}
+        for entity in existing_entities:
+            entity_id_map[entity.name.lower()] = entity.id
+            for alias in entity.aliases:
+                entity_id_map[alias.lower()] = entity.id
 
+        # Get existing relationships to avoid duplicates
+        existing_relationships = codex_service.get_relationships(manuscript_id)
+        existing_rel_set = set()
+        for rel in existing_relationships:
+            # Store both directions to handle bidirectional relationships
+            existing_rel_set.add((rel.source_entity_id, rel.target_entity_id, rel.relationship_type))
+            existing_rel_set.add((rel.target_entity_id, rel.source_entity_id, rel.relationship_type))
+
+        # Create new relationships
         for rel in results["relationships"]:
-            source_id = entity_id_map.get(rel["source_name"])
-            target_id = entity_id_map.get(rel["target_name"])
+            source_id = entity_id_map.get(rel["source_name"].lower())
+            target_id = entity_id_map.get(rel["target_name"].lower())
 
-            if source_id and target_id:
-                codex_service.create_relationship(
-                    source_entity_id=source_id,
-                    target_entity_id=target_id,
-                    relationship_type=rel["type"],
-                    strength=rel["strength"],
-                    context=[{"description": rel["context"]}]
-                )
+            if source_id and target_id and source_id != target_id:
+                # Check if relationship already exists
+                rel_key = (source_id, target_id, rel["type"])
+                if rel_key not in existing_rel_set:
+                    try:
+                        codex_service.create_relationship(
+                            source_entity_id=source_id,
+                            target_entity_id=target_id,
+                            relationship_type=rel["type"],
+                            strength=rel["strength"],
+                            context=[{"description": rel["context"]}]
+                        )
+                        # Add to set to avoid duplicates within this analysis
+                        existing_rel_set.add(rel_key)
+                        existing_rel_set.add((target_id, source_id, rel["type"]))
+                    except Exception as e:
+                        # Skip duplicate relationships
+                        print(f"Skipping relationship {rel['source_name']} -> {rel['target_name']}: {e}")
+                        continue
 
     except Exception as e:
         # Log error (in production, use proper logging)

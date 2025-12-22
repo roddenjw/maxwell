@@ -159,6 +159,7 @@ export default function RelationshipGraph({ manuscriptId }: RelationshipGraphPro
           <button
             onClick={loadRelationships}
             className="text-sm font-sans text-bronze hover:underline"
+            title="Reload relationships from server"
           >
             Refresh
           </button>

@@ -16,6 +16,7 @@ export default function SuggestionQueue({ manuscriptId }: SuggestionQueueProps) 
   const { suggestions, setSuggestions, removeSuggestion, addEntity } = useCodexStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   // Load suggestions on mount
   useEffect(() => {
@@ -37,6 +38,9 @@ export default function SuggestionQueue({ manuscriptId }: SuggestionQueueProps) 
 
   const handleApprove = async (suggestion: EntitySuggestion) => {
     try {
+      setProcessingId(suggestion.id);
+      setError(null);
+
       const entity = await codexApi.approveSuggestion({
         suggestion_id: suggestion.id,
       });
@@ -47,18 +51,25 @@ export default function SuggestionQueue({ manuscriptId }: SuggestionQueueProps) 
       // Remove from suggestions
       removeSuggestion(suggestion.id);
     } catch (err) {
-      alert('Failed to approve: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      setError('Failed to approve: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setProcessingId(null);
     }
   };
 
   const handleReject = async (suggestion: EntitySuggestion) => {
     try {
+      setProcessingId(suggestion.id);
+      setError(null);
+
       await codexApi.rejectSuggestion(suggestion.id);
 
       // Remove from suggestions
       removeSuggestion(suggestion.id);
     } catch (err) {
-      alert('Failed to reject: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      setError('Failed to reject: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -66,7 +77,8 @@ export default function SuggestionQueue({ manuscriptId }: SuggestionQueueProps) 
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
+      <div className="flex flex-col items-center justify-center p-8 gap-3">
+        <div className="w-8 h-8 border-4 border-bronze border-t-transparent rounded-full animate-spin"></div>
         <p className="text-faded-ink font-sans text-sm">Loading suggestions...</p>
       </div>
     );
@@ -118,6 +130,13 @@ export default function SuggestionQueue({ manuscriptId }: SuggestionQueueProps) 
         </button>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-redline/10 border-l-4 border-redline p-2 text-xs font-sans text-redline">
+          {error}
+        </div>
+      )}
+
       {/* Suggestion Cards */}
       <div className="space-y-3">
         {pendingSuggestions.map((suggestion) => (
@@ -126,6 +145,7 @@ export default function SuggestionQueue({ manuscriptId }: SuggestionQueueProps) 
             suggestion={suggestion}
             onApprove={() => handleApprove(suggestion)}
             onReject={() => handleReject(suggestion)}
+            isProcessing={processingId === suggestion.id}
           />
         ))}
       </div>

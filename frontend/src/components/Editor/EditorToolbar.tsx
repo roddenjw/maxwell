@@ -221,7 +221,10 @@ export default function EditorToolbar({ manuscriptId }: EditorToolbarProps = {})
       {/* Codex Analyze button */}
       {manuscriptId && (
         <div className="toolbar-group flex gap-1">
-          <ToolbarButton onClick={handleAnalyze} title="Analyze text for entities (NLP)">
+          <ToolbarButton
+            onClick={handleAnalyze}
+            title="Analyze manuscript text to detect characters, locations, items, and lore using NLP"
+          >
             🔍 Analyze
           </ToolbarButton>
         </div>

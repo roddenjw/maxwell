@@ -28,6 +28,7 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<EntityType | 'ALL'>('ALL');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   // Create form state
   const [newEntityName, setNewEntityName] = useState('');
@@ -53,11 +54,14 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
 
   const handleCreateEntity = async () => {
     if (!newEntityName.trim()) {
-      alert('Entity name is required');
+      setError('Entity name is required');
       return;
     }
 
     try {
+      setCreating(true);
+      setError(null);
+
       const entity = await codexApi.createEntity({
         manuscript_id: manuscriptId,
         type: newEntityType,
@@ -75,7 +79,9 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
       // Select new entity
       setSelectedEntity(entity.id);
     } catch (err) {
-      alert('Failed to create entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      setError('Failed to create entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -109,7 +115,8 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
+      <div className="flex flex-col items-center justify-center p-8 gap-3">
+        <div className="w-8 h-8 border-4 border-bronze border-t-transparent rounded-full animate-spin"></div>
         <p className="text-faded-ink font-sans text-sm">Loading entities...</p>
       </div>
     );
@@ -157,8 +164,14 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
 
       {/* Create Form */}
       {showCreateForm && (
-        <div className="p-4 bg-white border-b border-slate-ui">
+        <div className="p-4 bg-white border-b border-slate-ui transition-opacity duration-300 ease-in-out">
           <h3 className="font-garamond font-semibold text-midnight mb-3">New Entity</h3>
+
+          {error && (
+            <div className="mb-3 bg-redline/10 border-l-4 border-redline p-2 text-xs font-sans text-redline">
+              {error}
+            </div>
+          )}
 
           <div className="space-y-3">
             <div>
@@ -168,11 +181,15 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
               <input
                 type="text"
                 value={newEntityName}
-                onChange={(e) => setNewEntityName(e.target.value)}
+                onChange={(e) => {
+                  setNewEntityName(e.target.value);
+                  setError(null);
+                }}
                 placeholder="Enter entity name..."
                 className="w-full bg-white border border-slate-ui px-3 py-2 text-sm font-sans"
                 style={{ borderRadius: '2px' }}
                 autoFocus
+                disabled={creating}
               />
             </div>
 
@@ -185,6 +202,7 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
                 onChange={(e) => setNewEntityType(e.target.value as EntityType)}
                 className="w-full bg-white border border-slate-ui px-3 py-2 text-sm font-sans"
                 style={{ borderRadius: '2px' }}
+                disabled={creating}
               >
                 <option value={EntityType.CHARACTER}>Character</option>
                 <option value={EntityType.LOCATION}>Location</option>
@@ -196,17 +214,21 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
             <div className="flex gap-2">
               <button
                 onClick={handleCreateEntity}
-                className="flex-1 bg-bronze text-white px-3 py-2 text-sm font-sans hover:bg-bronze/90"
+                disabled={creating}
+                className="flex-1 bg-bronze text-white px-3 py-2 text-sm font-sans hover:bg-bronze/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 style={{ borderRadius: '2px' }}
               >
-                Create
+                {creating && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                {creating ? 'Creating...' : 'Create'}
               </button>
               <button
                 onClick={() => {
                   setShowCreateForm(false);
                   setNewEntityName('');
+                  setError(null);
                 }}
-                className="flex-1 bg-slate-ui text-midnight px-3 py-2 text-sm font-sans hover:bg-slate-ui/80"
+                disabled={creating}
+                className="flex-1 bg-slate-ui text-midnight px-3 py-2 text-sm font-sans hover:bg-slate-ui/80 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ borderRadius: '2px' }}
               >
                 Cancel
