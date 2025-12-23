@@ -27,8 +27,10 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<EntityType | 'ALL'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set());
 
   // Create form state
   const [newEntityName, setNewEntityName] = useState('');
@@ -103,10 +105,58 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
     }
   };
 
-  // Filter entities
-  const filteredEntities = entities.filter((entity) =>
-    filterType === 'ALL' ? true : entity.type === filterType
-  );
+  // Filter entities by type and search
+  const filteredEntities = entities.filter((entity) => {
+    // Type filter
+    const matchesType = filterType === 'ALL' || entity.type === filterType;
+
+    // Search filter
+    const matchesSearch = !searchQuery ||
+      entity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entity.aliases.some(alias => alias.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    return matchesType && matchesSearch;
+  });
+
+  // Bulk operations
+  const handleToggleSelect = (entityId: string) => {
+    const newSelected = new Set(selectedEntityIds);
+    if (newSelected.has(entityId)) {
+      newSelected.delete(entityId);
+    } else {
+      newSelected.add(entityId);
+    }
+    setSelectedEntityIds(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedEntityIds.size === filteredEntities.length) {
+      setSelectedEntityIds(new Set());
+    } else {
+      setSelectedEntityIds(new Set(filteredEntities.map(e => e.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedEntityIds.size === 0) return;
+
+    if (!confirm(`Delete ${selectedEntityIds.size} selected entities? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      // Delete all selected entities
+      await Promise.all(
+        Array.from(selectedEntityIds).map(id => codexApi.deleteEntity(id))
+      );
+
+      // Remove from store
+      selectedEntityIds.forEach(id => removeEntity(id));
+      setSelectedEntityIds(new Set());
+    } catch (err) {
+      alert('Failed to delete entities: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  };
 
   // Get selected entity
   const selectedEntity = selectedEntityId
@@ -238,8 +288,67 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
         </div>
       )}
 
+      {/* Search Bar */}
+      <div className="p-4 border-b border-slate-ui bg-white">
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search entities by name or alias..."
+            className="w-full bg-white border border-slate-ui px-3 py-2 pl-9 text-sm font-sans"
+            style={{ borderRadius: '2px' }}
+          />
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-faded-ink"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </div>
+      </div>
+
+      {/* Bulk Operations Bar */}
+      {selectedEntityIds.size > 0 && (
+        <div className="p-3 bg-bronze/10 border-b border-bronze/30 flex items-center justify-between">
+          <span className="text-sm font-sans text-midnight">
+            {selectedEntityIds.size} selected
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={handleBulkDelete}
+              className="px-3 py-1 bg-redline text-white text-sm font-sans hover:bg-redline/90"
+              style={{ borderRadius: '2px' }}
+            >
+              Delete Selected
+            </button>
+            <button
+              onClick={() => setSelectedEntityIds(new Set())}
+              className="px-3 py-1 bg-slate-ui text-midnight text-sm font-sans hover:bg-slate-ui/80"
+              style={{ borderRadius: '2px' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filter Tabs */}
-      <div className="flex border-b border-slate-ui overflow-x-auto">
+      <div className="flex border-b border-slate-ui overflow-x-auto bg-white">
+        <button
+          onClick={handleSelectAll}
+          className="px-3 py-2 text-sm font-sans text-faded-ink hover:text-midnight border-r border-slate-ui"
+          title={selectedEntityIds.size === filteredEntities.length ? "Deselect all" : "Select all"}
+        >
+          {selectedEntityIds.size === filteredEntities.length && filteredEntities.length > 0 ? '☑' : '☐'}
+        </button>
         {['ALL', ...Object.values(EntityType)].map((type) => (
           <button
             key={type}
@@ -278,13 +387,23 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
         ) : (
           <div className="space-y-3">
             {filteredEntities.map((entity) => (
-              <EntityCard
-                key={entity.id}
-                entity={entity}
-                isSelected={selectedEntityId === entity.id}
-                onSelect={() => setSelectedEntity(entity.id)}
-                onDelete={() => handleDeleteEntity(entity.id)}
-              />
+              <div key={entity.id} className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedEntityIds.has(entity.id)}
+                  onChange={() => handleToggleSelect(entity.id)}
+                  className="mt-4 w-4 h-4 text-bronze cursor-pointer"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <div className="flex-1">
+                  <EntityCard
+                    entity={entity}
+                    isSelected={selectedEntityId === entity.id}
+                    onSelect={() => setSelectedEntity(entity.id)}
+                    onDelete={() => handleDeleteEntity(entity.id)}
+                  />
+                </div>
+              </div>
             ))}
           </div>
         )}

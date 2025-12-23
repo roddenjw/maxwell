@@ -160,7 +160,7 @@ export interface AnalyzeTextRequest {
 
 // UI State Types
 
-export type CodexTab = "entities" | "intel" | "links";
+export type CodexTab = "entities" | "intel" | "links" | "timeline" | "timeline-issues" | "timeline-graph";
 
 export interface CodexUIState {
   activeTab: CodexTab;

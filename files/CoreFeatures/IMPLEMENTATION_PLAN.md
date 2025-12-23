@@ -2615,7 +2615,7 @@ jobs:
 
 ---
 
-## Epic 5: Timeline Orchestrator
+## Epic 5:  Orchestrator
 
 ### Epic 5.1: Database Schema for Timeline Tracking
 **Priority**: High | **Estimated Effort**: 1 day

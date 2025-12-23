@@ -110,6 +110,7 @@ class CodexService:
         self,
         entity_id: str,
         name: Optional[str] = None,
+        entity_type: Optional[str] = None,
         aliases: Optional[List[str]] = None,
         attributes: Optional[Dict[str, Any]] = None
     ) -> Optional[Entity]:
@@ -134,6 +135,8 @@ class CodexService:
 
             if name is not None:
                 entity.name = name
+            if entity_type is not None:
+                entity.type = entity_type
             if aliases is not None:
                 entity.aliases = aliases
             if attributes is not None:

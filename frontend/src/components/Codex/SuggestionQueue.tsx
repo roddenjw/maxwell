@@ -13,7 +13,7 @@ interface SuggestionQueueProps {
 }
 
 export default function SuggestionQueue({ manuscriptId }: SuggestionQueueProps) {
-  const { suggestions, setSuggestions, removeSuggestion, addEntity } = useCodexStore();
+  const { suggestions, setSuggestions, removeSuggestion, addEntity, entities, updateEntity } = useCodexStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -68,6 +68,41 @@ export default function SuggestionQueue({ manuscriptId }: SuggestionQueueProps) 
       removeSuggestion(suggestion.id);
     } catch (err) {
       setError('Failed to reject: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleAddAsAlias = async (suggestion: EntitySuggestion, entityId: string) => {
+    try {
+      setProcessingId(suggestion.id);
+      setError(null);
+
+      // Get the entity
+      const entity = entities.find((e) => e.id === entityId);
+      if (!entity) {
+        setError('Entity not found');
+        return;
+      }
+
+      // Add suggestion name as alias if not already present
+      const newAliases = [...entity.aliases];
+      if (!newAliases.includes(suggestion.name) && entity.name !== suggestion.name) {
+        newAliases.push(suggestion.name);
+      }
+
+      // Update entity with new alias
+      const updated = await codexApi.updateEntity(entityId, {
+        aliases: newAliases,
+      });
+
+      updateEntity(entityId, updated);
+
+      // Reject the suggestion (it's now an alias)
+      await codexApi.rejectSuggestion(suggestion.id);
+      removeSuggestion(suggestion.id);
+    } catch (err) {
+      setError('Failed to merge: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setProcessingId(null);
     }
@@ -143,7 +178,9 @@ export default function SuggestionQueue({ manuscriptId }: SuggestionQueueProps) 
           <SuggestionCard
             key={suggestion.id}
             suggestion={suggestion}
+            entities={entities}
             onApprove={() => handleApprove(suggestion)}
+            onAddAsAlias={(entityId) => handleAddAsAlias(suggestion, entityId)}
             onReject={() => handleReject(suggestion)}
             isProcessing={processingId === suggestion.id}
           />

@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import type { Entity } from '@/types/codex';
-import { getEntityTypeColor, getEntityTypeIcon } from '@/types/codex';
+import { EntityType, getEntityTypeColor, getEntityTypeIcon } from '@/types/codex';
 
 interface EntityDetailProps {
   entity: Entity;
@@ -19,6 +19,7 @@ export default function EntityDetail({
 }: EntityDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(entity.name);
+  const [editedType, setEditedType] = useState(entity.type);
   const [editedAliases, setEditedAliases] = useState(entity.aliases.join(', '));
   const [editedAttributes, setEditedAttributes] = useState(() => {
     // Convert attributes to editable format
@@ -29,8 +30,8 @@ export default function EntityDetail({
     };
   });
 
-  const typeColor = getEntityTypeColor(entity.type);
-  const typeIcon = getEntityTypeIcon(entity.type);
+  const typeColor = getEntityTypeColor(isEditing ? editedType : entity.type);
+  const typeIcon = getEntityTypeIcon(isEditing ? editedType : entity.type);
 
   const handleSave = () => {
     // Parse aliases
@@ -47,6 +48,7 @@ export default function EntityDetail({
 
     onUpdate({
       name: editedName,
+      type: editedType,
       aliases,
       attributes,
     });
@@ -57,6 +59,7 @@ export default function EntityDetail({
   const handleCancel = () => {
     // Reset to original values
     setEditedName(entity.name);
+    setEditedType(entity.type);
     setEditedAliases(entity.aliases.join(', '));
     setEditedAttributes({
       description: entity.attributes?.description || '',
@@ -85,15 +88,29 @@ export default function EntityDetail({
                 {entity.name}
               </h2>
             )}
-            <span
-              className="inline-block mt-1 px-2 py-0.5 text-xs font-sans text-white"
-              style={{
-                backgroundColor: typeColor,
-                borderRadius: '2px',
-              }}
-            >
-              {entity.type}
-            </span>
+            {isEditing ? (
+              <select
+                value={editedType}
+                onChange={(e) => setEditedType(e.target.value as EntityType)}
+                className="mt-1 bg-white border border-slate-ui px-2 py-1 text-xs font-sans"
+                style={{ borderRadius: '2px' }}
+              >
+                <option value={EntityType.CHARACTER}>Character</option>
+                <option value={EntityType.LOCATION}>Location</option>
+                <option value={EntityType.ITEM}>Item</option>
+                <option value={EntityType.LORE}>Lore</option>
+              </select>
+            ) : (
+              <span
+                className="inline-block mt-1 px-2 py-0.5 text-xs font-sans text-white"
+                style={{
+                  backgroundColor: typeColor,
+                  borderRadius: '2px',
+                }}
+              >
+                {entity.type}
+              </span>
+            )}
           </div>
         </div>
 
@@ -199,6 +216,91 @@ export default function EntityDetail({
             </p>
           )}
         </div>
+
+        {/* Auto-Extracted Information */}
+        {!isEditing && (
+          <>
+            {/* Appearance */}
+            {entity.attributes?.appearance && entity.attributes.appearance.length > 0 && (
+              <div className="bg-white border border-slate-ui p-3" style={{ borderRadius: '2px' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">👤</span>
+                  <label className="text-xs font-sans text-faded-ink uppercase">
+                    Appearance <span className="text-bronze">(Auto-detected)</span>
+                  </label>
+                </div>
+                <ul className="space-y-1.5">
+                  {entity.attributes.appearance.map((item: string, index: number) => (
+                    <li key={index} className="text-sm font-serif text-midnight pl-6 relative">
+                      <span className="absolute left-0 top-0">•</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Personality */}
+            {entity.attributes?.personality && entity.attributes.personality.length > 0 && (
+              <div className="bg-white border border-slate-ui p-3" style={{ borderRadius: '2px' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">💭</span>
+                  <label className="text-xs font-sans text-faded-ink uppercase">
+                    Personality <span className="text-bronze">(Auto-detected)</span>
+                  </label>
+                </div>
+                <ul className="space-y-1.5">
+                  {entity.attributes.personality.map((item: string, index: number) => (
+                    <li key={index} className="text-sm font-serif text-midnight pl-6 relative">
+                      <span className="absolute left-0 top-0">•</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Background */}
+            {entity.attributes?.background && entity.attributes.background.length > 0 && (
+              <div className="bg-white border border-slate-ui p-3" style={{ borderRadius: '2px' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">📜</span>
+                  <label className="text-xs font-sans text-faded-ink uppercase">
+                    Background <span className="text-bronze">(Auto-detected)</span>
+                  </label>
+                </div>
+                <ul className="space-y-1.5">
+                  {entity.attributes.background.map((item: string, index: number) => (
+                    <li key={index} className="text-sm font-serif text-midnight pl-6 relative">
+                      <span className="absolute left-0 top-0">•</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Actions */}
+            {entity.attributes?.actions && entity.attributes.actions.length > 0 && (
+              <div className="bg-white border border-slate-ui p-3" style={{ borderRadius: '2px' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">⚡</span>
+                  <label className="text-xs font-sans text-faded-ink uppercase">
+                    Actions <span className="text-bronze">(Auto-detected)</span>
+                  </label>
+                </div>
+                <ul className="space-y-1.5">
+                  {entity.attributes.actions.map((item: string, index: number) => (
+                    <li key={index} className="text-sm font-serif text-midnight pl-6 relative">
+                      <span className="absolute left-0 top-0">•</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
 
         {/* Appearance History */}
         {entity.appearance_history && entity.appearance_history.length > 0 && (

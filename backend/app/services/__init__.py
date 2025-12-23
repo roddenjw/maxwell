@@ -8,6 +8,9 @@ from app.services.version_service import version_service, VersionService
 # Import codex_service (no external dependencies beyond SQLAlchemy)
 from app.services.codex_service import codex_service, CodexService
 
+# Import timeline_service (no external dependencies beyond SQLAlchemy)
+from app.services.timeline_service import timeline_service, TimelineService
+
 # Optional imports for ML services (require chromadb, kuzu which need Python < 3.13)
 try:
     from app.services.embedding_service import embedding_service, EmbeddingService
@@ -28,6 +31,8 @@ except ImportError:
 __all__ = [
     "codex_service",
     "CodexService",
+    "timeline_service",
+    "TimelineService",
     "embedding_service",
     "EmbeddingService",
     "graph_service",

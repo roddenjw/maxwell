@@ -19,7 +19,7 @@ from app.services import (
     GRAPH_AVAILABLE
 )
 from app.services.nlp_service import nlp_service
-from app.api.routes import versioning, manuscripts, codex
+from app.api.routes import versioning, manuscripts, codex, timeline
 
 
 @asynccontextmanager
@@ -67,7 +67,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_origins=["http://localhost:5173", "http://localhost:5174"],  # Vite dev server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -77,6 +77,7 @@ app.add_middleware(
 app.include_router(versioning.router)
 app.include_router(manuscripts.router)
 app.include_router(codex.router)
+app.include_router(timeline.router)
 
 
 @app.get("/")
@@ -107,6 +108,7 @@ async def api_status():
             "manuscripts": True,  # Database models ready
             "versioning": True,  # ✅ Git service ready
             "codex": True,  # ✅ Entity CRUD ready
+            "timeline": True,  # ✅ Timeline orchestrator ready
             "ai_generation": False,  # LangChain pending
             "analysis": nlp_service.is_available()  # ✅ spaCy NLP
         },

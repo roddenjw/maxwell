@@ -5,9 +5,11 @@
 
 import type { CodexTab } from '@/types/codex';
 import { useCodexStore } from '@/stores/codexStore';
+import { useTimelineStore } from '@/stores/timelineStore';
 import EntityList from './EntityList';
 import SuggestionQueue from './SuggestionQueue';
 import RelationshipGraph from './RelationshipGraph';
+import { EventList, InconsistencyList, TimelineGraph } from '../Timeline';
 
 interface CodexSidebarProps {
   manuscriptId: string;
@@ -26,12 +28,18 @@ export default function CodexSidebar({
     getPendingSuggestionsCount,
   } = useCodexStore();
 
+  const { inconsistencies } = useTimelineStore();
+
   const pendingCount = getPendingSuggestionsCount();
+  const inconsistencyCount = inconsistencies.length;
 
   const tabs: { id: CodexTab; label: string; icon: string; badge?: number }[] = [
     { id: 'entities', label: 'Entities', icon: '📝' },
     { id: 'intel', label: 'Intel', icon: '🔍', badge: pendingCount },
     { id: 'links', label: 'Links', icon: '🕸️' },
+    { id: 'timeline', label: 'Events', icon: '🎬' },
+    { id: 'timeline-issues', label: 'Issues', icon: '⚠️', badge: inconsistencyCount },
+    { id: 'timeline-graph', label: 'Timeline', icon: '📅' },
   ];
 
   if (!isOpen) {
@@ -74,18 +82,36 @@ export default function CodexSidebar({
     );
   }
 
+  const handleExport = async (format: 'markdown' | 'json') => {
+    try {
+      const url = `/api/codex/export/${manuscriptId}?format=${format}`;
+      window.open(`http://localhost:8000${url}`, '_blank');
+    } catch (err) {
+      alert('Failed to export: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  };
+
   return (
     <div className="w-96 border-l border-slate-ui bg-vellum flex flex-col h-full">
       {/* Header */}
       <div className="border-b border-slate-ui bg-white p-4 flex items-center justify-between">
         <h2 className="text-xl font-garamond font-bold text-midnight">The Codex</h2>
-        <button
-          onClick={onToggle}
-          className="text-faded-ink hover:text-midnight transition-colors text-2xl leading-none"
-          title="Close Codex"
-        >
-          ×
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleExport('markdown')}
+            className="text-sm font-sans text-bronze hover:underline"
+            title="Export Codex as Markdown"
+          >
+            📥 Export
+          </button>
+          <button
+            onClick={onToggle}
+            className="text-faded-ink hover:text-midnight transition-colors text-2xl leading-none"
+            title="Close Codex"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -118,6 +144,9 @@ export default function CodexSidebar({
         {activeTab === 'entities' && <EntityList manuscriptId={manuscriptId} />}
         {activeTab === 'intel' && <SuggestionQueue manuscriptId={manuscriptId} />}
         {activeTab === 'links' && <RelationshipGraph manuscriptId={manuscriptId} />}
+        {activeTab === 'timeline' && <EventList manuscriptId={manuscriptId} />}
+        {activeTab === 'timeline-issues' && <InconsistencyList manuscriptId={manuscriptId} />}
+        {activeTab === 'timeline-graph' && <TimelineGraph manuscriptId={manuscriptId} />}
       </div>
     </div>
   );

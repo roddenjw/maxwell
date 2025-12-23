@@ -14,6 +14,16 @@ import type {
   AnalyzeTextRequest,
 } from '@/types/codex';
 
+import type {
+  TimelineEvent,
+  TimelineInconsistency,
+  CharacterLocation,
+  TimelineStats,
+  CreateEventRequest,
+  UpdateEventRequest,
+  AnalyzeTimelineRequest,
+} from '@/types/timeline';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 /**
@@ -395,6 +405,139 @@ export const codexApi = {
 };
 
 /**
+ * Timeline API
+ */
+export const timelineApi = {
+  /**
+   * List timeline events for a manuscript
+   */
+  async listEvents(manuscriptId: string, filters?: {
+    event_type?: string;
+    character_id?: string;
+    location_id?: string;
+  }): Promise<TimelineEvent[]> {
+    const params = new URLSearchParams();
+    if (filters?.event_type) params.append('event_type', filters.event_type);
+    if (filters?.character_id) params.append('character_id', filters.character_id);
+    if (filters?.location_id) params.append('location_id', filters.location_id);
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiFetch(`/timeline/events/${manuscriptId}${query}`);
+  },
+
+  /**
+   * Get a single event
+   */
+  async getEvent(eventId: string): Promise<TimelineEvent> {
+    return apiFetch(`/timeline/events/single/${eventId}`);
+  },
+
+  /**
+   * Create a new event
+   */
+  async createEvent(data: CreateEventRequest): Promise<TimelineEvent> {
+    return apiFetch('/timeline/events', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Update an event
+   */
+  async updateEvent(eventId: string, data: UpdateEventRequest): Promise<TimelineEvent> {
+    return apiFetch(`/timeline/events/${eventId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Delete an event
+   */
+  async deleteEvent(eventId: string): Promise<{ success: boolean; message: string }> {
+    return apiFetch(`/timeline/events/${eventId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Reorder events
+   */
+  async reorderEvents(eventIds: string[]): Promise<{ success: boolean; message: string }> {
+    return apiFetch('/timeline/events/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ event_ids: eventIds }),
+    });
+  },
+
+  /**
+   * Analyze text for timeline events
+   */
+  async analyzeTimeline(data: AnalyzeTimelineRequest): Promise<{ success: boolean; message: string; manuscript_id: string }> {
+    return apiFetch('/timeline/analyze', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Track character location at event
+   */
+  async trackCharacterLocation(data: {
+    character_id: string;
+    event_id: string;
+    location_id: string;
+    manuscript_id: string;
+  }): Promise<{ success: boolean; data: CharacterLocation }> {
+    return apiFetch('/timeline/character-locations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Get character locations
+   */
+  async getCharacterLocations(characterId: string, manuscriptId: string): Promise<{ success: boolean; data: CharacterLocation[] }> {
+    return apiFetch(`/timeline/character-locations/${characterId}?manuscript_id=${manuscriptId}`);
+  },
+
+  /**
+   * Detect timeline inconsistencies
+   */
+  async detectInconsistencies(manuscriptId: string): Promise<{ success: boolean; data: TimelineInconsistency[] }> {
+    return apiFetch(`/timeline/inconsistencies/detect/${manuscriptId}`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * List timeline inconsistencies
+   */
+  async listInconsistencies(manuscriptId: string, severity?: string): Promise<TimelineInconsistency[]> {
+    const query = severity ? `?severity=${severity}` : '';
+    return apiFetch(`/timeline/inconsistencies/${manuscriptId}${query}`);
+  },
+
+  /**
+   * Resolve an inconsistency
+   */
+  async resolveInconsistency(inconsistencyId: string): Promise<{ success: boolean; message: string }> {
+    return apiFetch(`/timeline/inconsistencies/${inconsistencyId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Get timeline statistics
+   */
+  async getStats(manuscriptId: string): Promise<{ success: boolean; data: TimelineStats }> {
+    return apiFetch(`/timeline/stats/${manuscriptId}`);
+  },
+};
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
@@ -406,5 +549,6 @@ export default {
   manuscript: manuscriptApi,
   versioning: versioningApi,
   codex: codexApi,
+  timeline: timelineApi,
   healthCheck,
 };

@@ -3,13 +3,16 @@ import ManuscriptEditor from './components/Editor/ManuscriptEditor'
 import ManuscriptLibrary from './components/ManuscriptLibrary'
 import { TimeMachine } from './components/TimeMachine'
 import { CodexSidebar } from './components/Codex'
+import TimelineSidebar from './components/Timeline/TimelineSidebar'
 import { useManuscriptStore } from './stores/manuscriptStore'
 import { useCodexStore } from './stores/codexStore'
+import { useTimelineStore } from './stores/timelineStore'
 
 function App() {
   const { currentManuscriptId, setCurrentManuscript, getCurrentManuscript, updateManuscript } = useManuscriptStore()
   const currentManuscript = getCurrentManuscript()
   const { isSidebarOpen, toggleSidebar } = useCodexStore()
+  const { isTimelineOpen, setTimelineOpen } = useTimelineStore()
   const [showTimeMachine, setShowTimeMachine] = useState(false)
   const [editorKey, setEditorKey] = useState(0) // Force editor re-mount on restore
 
@@ -64,6 +67,15 @@ function App() {
                 Time Machine
               </button>
 
+              {/* Timeline Toggle Button */}
+              <button
+                onClick={() => setTimelineOpen(!isTimelineOpen)}
+                className="flex items-center gap-2 px-4 py-2 bg-bronze text-white font-sans text-sm rounded hover:bg-bronze/90 transition-colors"
+                title="Toggle Timeline"
+              >
+                📅 Timeline
+              </button>
+
               {/* Codex Toggle Button */}
               <button
                 onClick={toggleSidebar}
@@ -76,8 +88,15 @@ function App() {
           </div>
         </header>
 
-        {/* Main Content Area with Editor and Sidebar */}
+        {/* Main Content Area with Editor and Sidebars */}
         <main className="flex-1 flex overflow-hidden">
+          {/* Timeline Sidebar (Left) */}
+          <TimelineSidebar
+            manuscriptId={currentManuscript.id}
+            isOpen={isTimelineOpen}
+            onToggle={() => setTimelineOpen(!isTimelineOpen)}
+          />
+
           {/* Editor */}
           <div className="flex-1 overflow-auto">
             <ManuscriptEditor
@@ -88,7 +107,7 @@ function App() {
             />
           </div>
 
-          {/* Codex Sidebar */}
+          {/* Codex Sidebar (Right) */}
           <CodexSidebar
             manuscriptId={currentManuscript.id}
             isOpen={isSidebarOpen}
