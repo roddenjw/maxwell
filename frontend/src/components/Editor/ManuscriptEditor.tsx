@@ -21,25 +21,36 @@ import EditorToolbar from './EditorToolbar';
 import { SceneBreakNode } from './nodes/SceneBreakNode';
 import { EntityMentionNode } from './nodes/EntityMentionNode';
 import AutoSavePlugin from './plugins/AutoSavePlugin';
+import EntityMentionsPlugin from './plugins/EntityMentionsPlugin';
+import RealtimeNLPPlugin from './plugins/RealtimeNLPPlugin';
 import { versioningApi } from '@/lib/api';
 
 interface ManuscriptEditorProps {
   manuscriptId?: string;
+  chapterId?: string;
   initialContent?: string;
   mode?: EditorMode;
   onChange?: (editorState: EditorState) => void;
+  onSaveStatusChange?: (status: 'saved' | 'saving' | 'unsaved') => void;
 }
 
 export default function ManuscriptEditor({
   manuscriptId,
+  chapterId,
   initialContent,
   mode = 'normal',
   onChange,
+  onSaveStatusChange,
 }: ManuscriptEditorProps) {
   const [wordCount, setWordCount] = useState(0);
   const [isFocusMode, setIsFocusMode] = useState(mode === 'focus');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [latestEditorState, setLatestEditorState] = useState<EditorState | null>(null);
+
+  // Notify parent of save status changes
+  useEffect(() => {
+    onSaveStatusChange?.(saveStatus);
+  }, [saveStatus, onSaveStatusChange]);
 
   // Configure Lexical editor
   const initialConfig = {
@@ -184,11 +195,18 @@ export default function ManuscriptEditor({
             {manuscriptId && (
               <AutoSavePlugin
                 manuscriptId={manuscriptId}
+                chapterId={chapterId}
                 onSaveStatusChange={setSaveStatus}
                 enableSnapshots={true}
                 snapshotInterval={5}
               />
             )}
+
+            {/* Entity mentions plugin - @mention autocomplete */}
+            {manuscriptId && <EntityMentionsPlugin manuscriptId={manuscriptId} />}
+
+            {/* Realtime NLP plugin - live entity detection via WebSocket */}
+            {manuscriptId && <RealtimeNLPPlugin manuscriptId={manuscriptId} />}
           </div>
 
           {/* Status indicators - Maxwell Style */}

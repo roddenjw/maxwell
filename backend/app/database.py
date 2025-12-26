@@ -21,16 +21,35 @@ DATABASE_URL = os.getenv(
 # Create engine
 # For SQLite, we use check_same_thread=False to allow multi-threading
 # StaticPool is used for in-memory databases during testing
+# Connection pooling settings to prevent resource exhaustion
 if DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(
-        DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool if ":memory:" in DATABASE_URL else None,
-        echo=os.getenv("SQL_ECHO", "false").lower() == "true"
-    )
+    if ":memory:" in DATABASE_URL:
+        # In-memory database uses StaticPool
+        engine = create_engine(
+            DATABASE_URL,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+            echo=os.getenv("SQL_ECHO", "false").lower() == "true"
+        )
+    else:
+        # File-based SQLite with connection limits
+        engine = create_engine(
+            DATABASE_URL,
+            connect_args={"check_same_thread": False},
+            pool_size=5,  # Max 5 persistent connections
+            max_overflow=10,  # Max 10 additional connections when needed
+            pool_pre_ping=True,  # Verify connections before using
+            pool_recycle=3600,  # Recycle connections after 1 hour
+            echo=os.getenv("SQL_ECHO", "false").lower() == "true"
+        )
 else:
+    # PostgreSQL/MySQL with connection pooling
     engine = create_engine(
         DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        pool_recycle=3600,
         echo=os.getenv("SQL_ECHO", "false").lower() == "true"
     )
 
