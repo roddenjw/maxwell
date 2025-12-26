@@ -7,12 +7,11 @@
  * - Emotional tone indicators
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { getEventTypeColor, getEventTypeIcon } from '@/types/timeline';
 import { timelineApi } from '@/lib/api';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useCodexStore } from '@/stores/codexStore';
-import type { TimelineEvent } from '@/types/timeline';
 
 interface EnhancedTimelineGraphProps {
   manuscriptId: string;
@@ -89,14 +88,6 @@ export default function EnhancedTimelineGraph({ manuscriptId }: EnhancedTimeline
   const charactersInTimeline = Array.from(
     new Set(sortedEvents.flatMap(e => e.character_ids))
   ).map(charId => entities.find(e => e.id === charId)).filter(Boolean);
-
-  // Group events by location
-  const eventsByLocation = sortedEvents.reduce((acc, event) => {
-    const locId = event.location_id || 'unknown';
-    if (!acc[locId]) acc[locId] = [];
-    acc[locId].push(event);
-    return acc;
-  }, {} as Record<string, TimelineEvent[]>);
 
   // Get emotional tone color
   const getToneColor = (tone?: string) => {

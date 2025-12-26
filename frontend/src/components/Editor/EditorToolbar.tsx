@@ -11,12 +11,14 @@ import {
   FORMAT_TEXT_COMMAND,
   REDO_COMMAND,
   UNDO_COMMAND,
+  FORMAT_ELEMENT_COMMAND,
 } from 'lexical';
 import { $setBlocksType } from '@lexical/selection';
 import { $createHeadingNode, $createQuoteNode, HeadingTagType } from '@lexical/rich-text';
 import { $createParagraphNode, $insertNodes } from 'lexical';
+import { INSERT_UNORDERED_LIST_COMMAND, INSERT_ORDERED_LIST_COMMAND } from '@lexical/list';
 import { $createSceneBreakNode } from './nodes/SceneBreakNode';
-import { codexApi } from '@/lib/api';
+import { codexApi, timelineApi } from '@/lib/api';
 import { useCodexStore } from '@/stores/codexStore';
 
 interface EditorToolbarProps {
@@ -30,6 +32,9 @@ export default function EditorToolbar({ manuscriptId }: EditorToolbarProps = {})
   const [isItalic, setIsItalic] = useState(false);
   const [isUnderline, setIsUnderline] = useState(false);
   const [blockType, setBlockType] = useState('paragraph');
+  const [fontFamily, setFontFamily] = useState('EB Garamond');
+  const [fontSize, setFontSize] = useState('16px');
+  const [textAlign, setTextAlign] = useState('left');
 
   // Update toolbar state based on selection
   const updateToolbar = useCallback(() => {
@@ -104,6 +109,21 @@ export default function EditorToolbar({ manuscriptId }: EditorToolbarProps = {})
     });
   };
 
+  // List formatting
+  const formatBulletList = () => {
+    editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined);
+  };
+
+  const formatNumberedList = () => {
+    editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
+  };
+
+  // Text alignment
+  const formatTextAlign = (alignment: 'left' | 'center' | 'right' | 'justify') => {
+    editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, alignment);
+    setTextAlign(alignment);
+  };
+
   const handleAnalyze = async () => {
     if (!manuscriptId) {
       alert('No manuscript selected');
@@ -131,14 +151,20 @@ export default function EditorToolbar({ manuscriptId }: EditorToolbarProps = {})
 
       setAnalyzing(true);
 
-      // Call analyze API
-      await codexApi.analyzeText({
-        manuscript_id: manuscriptId,
-        text: text.trim(),
-      });
+      // Call both analyze APIs in parallel
+      await Promise.all([
+        codexApi.analyzeText({
+          manuscript_id: manuscriptId,
+          text: text.trim(),
+        }),
+        timelineApi.analyzeTimeline({
+          manuscript_id: manuscriptId,
+          text: text.trim(),
+        }),
+      ]);
 
       // Show success and open Codex sidebar to Intel tab
-      alert('✅ Analysis started! Check the Intel tab for detected entities.');
+      alert('✅ Analysis complete! Check the Intel tab for entities and the Timeline tab for events.');
       setSidebarOpen(true);
       setActiveTab('intel');
     } catch (err) {
@@ -208,6 +234,85 @@ export default function EditorToolbar({ manuscriptId }: EditorToolbarProps = {})
           title="Underline (Ctrl+U)"
         >
           <span className="underline">U</span>
+        </ToolbarButton>
+      </div>
+
+      {/* Font family */}
+      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
+        <select
+          className="px-2 py-1 bg-white border border-slate-ui text-midnight text-sm font-sans"
+          style={{ borderRadius: '2px' }}
+          value={fontFamily}
+          onChange={(e) => setFontFamily(e.target.value)}
+        >
+          <option value="EB Garamond">EB Garamond</option>
+          <option value="Georgia">Georgia</option>
+          <option value="Inter">Inter</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Arial">Arial</option>
+        </select>
+      </div>
+
+      {/* Font size */}
+      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
+        <select
+          className="px-2 py-1 bg-white border border-slate-ui text-midnight text-sm font-sans"
+          style={{ borderRadius: '2px' }}
+          value={fontSize}
+          onChange={(e) => setFontSize(e.target.value)}
+        >
+          <option value="12px">12px</option>
+          <option value="14px">14px</option>
+          <option value="16px">16px</option>
+          <option value="18px">18px</option>
+          <option value="20px">20px</option>
+          <option value="24px">24px</option>
+          <option value="28px">28px</option>
+          <option value="32px">32px</option>
+          <option value="36px">36px</option>
+          <option value="48px">48px</option>
+        </select>
+      </div>
+
+      {/* Text alignment */}
+      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
+        <ToolbarButton
+          onClick={() => formatTextAlign('left')}
+          active={textAlign === 'left'}
+          title="Align Left"
+        >
+          ≡
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => formatTextAlign('center')}
+          active={textAlign === 'center'}
+          title="Align Center"
+        >
+          ≡
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => formatTextAlign('right')}
+          active={textAlign === 'right'}
+          title="Align Right"
+        >
+          ≡
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => formatTextAlign('justify')}
+          active={textAlign === 'justify'}
+          title="Justify"
+        >
+          ≡
+        </ToolbarButton>
+      </div>
+
+      {/* Lists */}
+      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
+        <ToolbarButton onClick={formatBulletList} title="Bullet List">
+          • List
+        </ToolbarButton>
+        <ToolbarButton onClick={formatNumberedList} title="Numbered List">
+          1. List
         </ToolbarButton>
       </div>
 

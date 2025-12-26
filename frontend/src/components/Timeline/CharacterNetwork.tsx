@@ -7,7 +7,6 @@ import { useState, useEffect } from 'react';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useCodexStore } from '@/stores/codexStore';
 import { timelineApi } from '@/lib/api';
-import type { Entity } from '@/types/codex';
 
 interface CharacterNetworkProps {
   manuscriptId: string;
@@ -149,7 +148,6 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
       .filter(e => e.source === charId || e.target === charId)
       .map(e => {
         const otherId = e.source === charId ? e.target : e.source;
-        const otherNode = getNode(otherId);
         return {
           character: entities.find(en => en.id === otherId),
           interactions: e.weight

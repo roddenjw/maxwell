@@ -32,11 +32,43 @@ class Manuscript(Base):
 
     # Relationships
     scenes = relationship("Scene", back_populates="manuscript", cascade="all, delete-orphan")
+    chapters = relationship("Chapter", back_populates="manuscript", cascade="all, delete-orphan")
     entities = relationship("Entity", back_populates="manuscript", cascade="all, delete-orphan")
     snapshots = relationship("Snapshot", back_populates="manuscript", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Manuscript(id={self.id}, title='{self.title}')>"
+
+
+class Chapter(Base):
+    """Chapter or folder in hierarchical document structure (Scrivener-like)"""
+    __tablename__ = "chapters"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=False)
+    parent_id = Column(String, ForeignKey("chapters.id"), nullable=True)  # For nested folders
+
+    # Chapter metadata
+    title = Column(String, nullable=False, default="Untitled")
+    is_folder = Column(Integer, default=0)  # 0 = document, 1 = folder
+    order_index = Column(Integer, nullable=False, default=0)  # Order within parent
+
+    # Content (only for documents, not folders)
+    lexical_state = Column(Text, default="")  # Lexical editor JSON state
+    content = Column(Text, default="")  # Plain text version for search/analysis
+
+    # Metadata
+    word_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    manuscript = relationship("Manuscript", back_populates="chapters")
+    parent = relationship("Chapter", remote_side=[id], backref="children")
+
+    def __repr__(self):
+        type_str = "Folder" if self.is_folder else "Chapter"
+        return f"<Chapter(id={self.id}, title='{self.title}', type={type_str})>"
 
 
 class Scene(Base):
@@ -45,6 +77,7 @@ class Scene(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=False)
+    chapter_id = Column(String, ForeignKey("chapters.id"), nullable=True)  # Link to chapter
 
     # Scene content
     content = Column(Text, nullable=False)
@@ -67,6 +100,7 @@ class Scene(Base):
 
     # Relationships
     manuscript = relationship("Manuscript", back_populates="scenes")
+    chapter = relationship("Chapter", foreign_keys=[chapter_id])
     setting = relationship("Entity", foreign_keys=[setting_id])
     variants = relationship("SceneVariant", back_populates="scene", cascade="all, delete-orphan")
 

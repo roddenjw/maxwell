@@ -56,14 +56,17 @@ export default function TimelineHeatmap({ manuscriptId }: TimelineHeatmapProps) 
 
     switch (heatmapMode) {
       case 'emotion':
-        // Use sentiment intensity
-        return event.event_metadata?.intensity || 0;
+        // Use tone to derive intensity
+        const tone = event.event_metadata?.tone?.toLowerCase();
+        const intensityMap: Record<string, number> = {
+          'triumphant': 1.0, 'joyful': 0.9, 'dramatic': 0.8, 'tragic': 0.9,
+          'mysterious': 0.6, 'hopeful': 0.5, 'tense': 0.7, 'peaceful': 0.3
+        };
+        return tone ? (intensityMap[tone] || 0.5) : 0.5;
 
       case 'density':
-        // Word count normalized
-        const wordCount = event.event_metadata?.word_count || 0;
-        const maxWords = Math.max(...sortedEvents.map(e => e.event_metadata?.word_count || 0));
-        return maxWords > 0 ? wordCount / maxWords : 0;
+        // Use number of characters as density proxy
+        return Math.min(event.character_ids.length / 3, 1.0);
 
       case 'character':
         // Number of characters

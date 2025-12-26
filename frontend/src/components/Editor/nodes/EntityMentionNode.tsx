@@ -11,8 +11,9 @@ import {
   type SerializedLexicalNode,
   type Spread,
 } from 'lexical';
+import type { EntityType } from '@/types/codex';
 
-export type EntityType = 'CHARACTER' | 'LOCATION' | 'ITEM' | 'LORE';
+export type { EntityType };
 
 export type SerializedEntityMentionNode = Spread<
   {
@@ -117,6 +118,8 @@ export function $isEntityMentionNode(
   return node instanceof EntityMentionNode;
 }
 
+import { useCodexStore } from '@/stores/codexStore';
+
 // React component that renders the entity mention
 interface EntityMentionComponentProps {
   nodeKey: NodeKey;
@@ -131,9 +134,13 @@ function EntityMentionComponent({
   entityName,
   entityType,
 }: EntityMentionComponentProps) {
+  const { setSidebarOpen, setActiveTab, setSelectedEntity } = useCodexStore();
+
   const handleClick = () => {
-    // TODO: Open entity details panel
-    console.log('Entity clicked:', { entityId, entityName, entityType });
+    // Open Codex sidebar and navigate to this entity
+    setSelectedEntity(entityId);
+    setActiveTab('entities');
+    setSidebarOpen(true);
   };
 
   const getTypeColor = () => {

@@ -85,6 +85,33 @@ export interface SceneVariant {
 }
 
 /**
+ * Chapter types
+ */
+export interface Chapter {
+  id: string;
+  manuscript_id: string;
+  parent_id: string | null;
+  title: string;
+  is_folder: boolean;
+  order_index: number;
+  lexical_state: string;
+  content: string;
+  word_count: number;
+  created_at: string;
+  updated_at: string;
+  children?: Chapter[];
+}
+
+export interface ChapterTree {
+  id: string;
+  title: string;
+  is_folder: boolean;
+  order_index: number;
+  word_count: number;
+  children: ChapterTree[];
+}
+
+/**
  * Generic fetch wrapper with error handling
  */
 async function apiFetch<T>(
@@ -506,7 +533,7 @@ export const timelineApi = {
   /**
    * Detect timeline inconsistencies
    */
-  async detectInconsistencies(manuscriptId: string): Promise<{ success: boolean; data: TimelineInconsistency[] }> {
+  async detectInconsistencies(manuscriptId: string): Promise<TimelineInconsistency[]> {
     return apiFetch(`/timeline/inconsistencies/detect/${manuscriptId}`, {
       method: 'POST',
     });
@@ -538,6 +565,80 @@ export const timelineApi = {
 };
 
 /**
+ * Chapters API (Hierarchical document structure)
+ */
+export const chaptersApi = {
+  /**
+   * Create a new chapter or folder
+   */
+  async createChapter(data: {
+    manuscript_id: string;
+    title: string;
+    is_folder?: boolean;
+    parent_id?: string;
+    order_index?: number;
+    lexical_state?: string;
+    content?: string;
+  }): Promise<Chapter> {
+    return apiFetch<Chapter>('/chapters', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * List chapters for a manuscript
+   */
+  async listChapters(manuscriptId: string, parentId?: string): Promise<Chapter[]> {
+    const params = parentId ? `?parent_id=${parentId}` : '';
+    return apiFetch<Chapter[]>(`/chapters/manuscript/${manuscriptId}${params}`);
+  },
+
+  /**
+   * Get chapter tree structure
+   */
+  async getChapterTree(manuscriptId: string): Promise<ChapterTree[]> {
+    return apiFetch<ChapterTree[]>(`/chapters/manuscript/${manuscriptId}/tree`);
+  },
+
+  /**
+   * Get a single chapter
+   */
+  async getChapter(chapterId: string): Promise<Chapter> {
+    return apiFetch<Chapter>(`/chapters/${chapterId}`);
+  },
+
+  /**
+   * Update a chapter
+   */
+  async updateChapter(chapterId: string, data: Partial<Chapter>): Promise<Chapter> {
+    return apiFetch<Chapter>(`/chapters/${chapterId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Delete a chapter
+   */
+  async deleteChapter(chapterId: string): Promise<void> {
+    return apiFetch<void>(`/chapters/${chapterId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Reorder chapters
+   */
+  async reorderChapters(chapterIds: string[]): Promise<void> {
+    return apiFetch<void>('/chapters/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ chapter_ids: chapterIds }),
+    });
+  },
+};
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
@@ -550,5 +651,6 @@ export default {
   versioning: versioningApi,
   codex: codexApi,
   timeline: timelineApi,
+  chapters: chaptersApi,
   healthCheck,
 };

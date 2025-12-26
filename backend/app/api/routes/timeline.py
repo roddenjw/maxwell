@@ -94,7 +94,7 @@ class InconsistencyResponse(BaseModel):
 
 # ==================== Event CRUD Endpoints ====================
 
-@router.post("/events", response_model=EventResponse)
+@router.post("/events")
 async def create_event(request: EventCreateRequest):
     """Create a new timeline event"""
     try:
@@ -108,12 +108,16 @@ async def create_event(request: EventCreateRequest):
             character_ids=request.character_ids,
             metadata=request.metadata
         )
-        return EventResponse.from_orm(event)
+        event_data = EventResponse.from_orm(event)
+        return {
+            "success": True,
+            "data": event_data.dict()
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/events/{manuscript_id}", response_model=List[EventResponse])
+@router.get("/events/{manuscript_id}")
 async def list_events(
     manuscript_id: str,
     event_type: Optional[str] = None,
@@ -128,21 +132,27 @@ async def list_events(
             character_id=character_id,
             location_id=location_id
         )
-        return [EventResponse.from_orm(event) for event in events]
+        return {
+            "success": True,
+            "data": [EventResponse.from_orm(event).dict() for event in events]
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/events/single/{event_id}", response_model=EventResponse)
+@router.get("/events/single/{event_id}")
 async def get_event(event_id: str):
     """Get a single event by ID"""
     event = timeline_service.get_event(event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    return EventResponse.from_orm(event)
+    return {
+        "success": True,
+        "data": EventResponse.from_orm(event).dict()
+    }
 
 
-@router.put("/events/{event_id}", response_model=EventResponse)
+@router.put("/events/{event_id}")
 async def update_event(event_id: str, request: EventUpdateRequest):
     """Update an existing event"""
     try:
@@ -158,7 +168,10 @@ async def update_event(event_id: str, request: EventUpdateRequest):
         )
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
-        return EventResponse.from_orm(event)
+        return {
+            "success": True,
+            "data": EventResponse.from_orm(event).dict()
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -362,12 +375,15 @@ async def detect_inconsistencies(manuscript_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/inconsistencies/{manuscript_id}", response_model=List[InconsistencyResponse])
+@router.get("/inconsistencies/{manuscript_id}")
 async def list_inconsistencies(manuscript_id: str, severity: Optional[str] = None):
     """Get all timeline inconsistencies for a manuscript"""
     try:
         inconsistencies = timeline_service.get_inconsistencies(manuscript_id, severity)
-        return [InconsistencyResponse.from_orm(inc) for inc in inconsistencies]
+        return {
+            "success": True,
+            "data": [InconsistencyResponse.from_orm(inc).dict() for inc in inconsistencies]
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

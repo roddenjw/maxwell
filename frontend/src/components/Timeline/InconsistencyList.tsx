@@ -40,7 +40,7 @@ export default function InconsistencyList({ manuscriptId }: InconsistencyListPro
       setDetecting(true);
       setError(null);
       const result = await timelineApi.detectInconsistencies(manuscriptId);
-      setInconsistencies(result.data);
+      setInconsistencies(result);
     } catch (err) {
       setError('Failed to detect inconsistencies: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {

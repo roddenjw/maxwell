@@ -75,12 +75,43 @@ export default function EmotionalArc({ manuscriptId }: EmotionalArcProps) {
     return padding.top + chartHeight - (normalized * chartHeight);
   };
 
+  // Get sentiment from tone metadata or default to neutral
+  const getSentiment = (event: any): number => {
+    // Use sentiment if available
+    if (event.event_metadata?.sentiment !== undefined) {
+      return event.event_metadata.sentiment;
+    }
+
+    // Otherwise derive from tone
+    const tone = event.event_metadata?.tone?.toLowerCase();
+    if (!tone) return 0;
+
+    // Map tones to sentiment values (-1 to 1)
+    const toneMap: Record<string, number> = {
+      'happy': 0.7,
+      'joyful': 0.8,
+      'hopeful': 0.5,
+      'triumphant': 0.9,
+      'peaceful': 0.4,
+      'mysterious': 0.1,
+      'dramatic': 0.2,
+      'tense': -0.3,
+      'anxious': -0.4,
+      'sad': -0.6,
+      'tragic': -0.8,
+      'fearful': -0.5,
+      'angry': -0.4,
+    };
+
+    return toneMap[tone] || 0;
+  };
+
   // Generate path for line chart
   const generatePath = () => {
     if (filteredEvents.length === 0) return '';
 
     const points = filteredEvents.map((event, index) => {
-      const sentiment = event.event_metadata?.sentiment || 0;
+      const sentiment = getSentiment(event);
       const x = xScale(index);
       const y = yScale(sentiment);
       return `${x},${y}`;
@@ -97,6 +128,19 @@ export default function EmotionalArc({ manuscriptId }: EmotionalArcProps) {
     if (sentiment > -0.6) return '#f59e0b'; // amber
     return '#ef4444'; // red
   };
+
+  // Get sentiment label
+  const getSentimentLabel = (sentiment: number): string => {
+    if (sentiment > 0.6) return 'Very Positive';
+    if (sentiment > 0.3) return 'Positive';
+    if (sentiment > 0) return 'Slightly Positive';
+    if (sentiment > -0.3) return 'Neutral';
+    if (sentiment > -0.6) return 'Slightly Negative';
+    return 'Negative';
+  };
+
+  // State for tooltip
+  const [hoveredEvent, setHoveredEvent] = useState<number | null>(null);
 
   return (
     <div className="h-full flex flex-col">
@@ -223,27 +267,28 @@ export default function EmotionalArc({ manuscriptId }: EmotionalArcProps) {
 
             {/* Data points */}
             {filteredEvents.map((event, index) => {
-              const sentiment = event.event_metadata?.sentiment || 0;
+              const sentiment = getSentiment(event);
               const x = xScale(index);
               const y = yScale(sentiment);
               const isCharacterEvent = selectedCharacter && event.character_ids.includes(selectedCharacter);
               const radius = isCharacterEvent ? 6 : 4;
 
               return (
-                <g key={event.id} className="cursor-pointer">
+                <g
+                  key={event.id}
+                  className="cursor-pointer"
+                  onMouseEnter={() => setHoveredEvent(index)}
+                  onMouseLeave={() => setHoveredEvent(null)}
+                >
                   <circle
                     cx={x}
                     cy={y}
-                    r={radius}
+                    r={hoveredEvent === index ? radius + 2 : radius}
                     fill={getSentimentColor(sentiment)}
                     stroke="white"
                     strokeWidth={2}
+                    className="transition-all"
                   />
-                  <title>
-                    Event {event.order_index + 1}: {event.description.slice(0, 50)}
-                    {'\n'}Sentiment: {sentiment.toFixed(2)}
-                    {'\n'}Tone: {event.event_metadata?.tone || 'N/A'}
-                  </title>
                 </g>
               );
             })}
@@ -271,6 +316,49 @@ export default function EmotionalArc({ manuscriptId }: EmotionalArcProps) {
               Emotional Sentiment
             </text>
           </svg>
+
+          {/* Hover Tooltip */}
+          {hoveredEvent !== null && filteredEvents[hoveredEvent] && (
+            <div className="mt-4 p-4 bg-bronze/10 border border-bronze" style={{ borderRadius: '2px' }}>
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-3 h-3 rounded-full mt-1" style={{ backgroundColor: getSentimentColor(getSentiment(filteredEvents[hoveredEvent])) }} />
+                <div className="flex-1">
+                  <p className="text-xs font-sans text-faded-ink mb-1">
+                    Event {filteredEvents[hoveredEvent].order_index + 1}
+                    {filteredEvents[hoveredEvent].timestamp && ` • ${filteredEvents[hoveredEvent].timestamp}`}
+                  </p>
+                  <p className="text-sm font-serif text-midnight mb-2">
+                    {filteredEvents[hoveredEvent].description}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-faded-ink font-sans">Tone: </span>
+                      <span className="text-midnight font-semibold">
+                        {filteredEvents[hoveredEvent].event_metadata?.tone || 'Neutral'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-faded-ink font-sans">Sentiment: </span>
+                      <span className="text-midnight font-semibold">
+                        {getSentimentLabel(getSentiment(filteredEvents[hoveredEvent]))}
+                      </span>
+                    </div>
+                    {filteredEvents[hoveredEvent].character_ids.length > 0 && (
+                      <div className="col-span-2">
+                        <span className="text-faded-ink font-sans">Characters: </span>
+                        <span className="text-midnight">
+                          {filteredEvents[hoveredEvent].character_ids
+                            .map(id => entities.find(e => e.id === id)?.name)
+                            .filter(Boolean)
+                            .join(', ')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Legend */}
           <div className="mt-6 p-4 bg-white border border-slate-ui" style={{ borderRadius: '2px' }}>
