@@ -9,12 +9,14 @@ import { EntityType, getEntityTypeColor, getEntityTypeIcon } from '@/types/codex
 interface EntityDetailProps {
   entity: Entity;
   onUpdate: (updates: Partial<Entity>) => void;
+  onDelete?: (entityId: string) => void;
   onClose: () => void;
 }
 
 export default function EntityDetail({
   entity,
   onUpdate,
+  onDelete,
   onClose,
 }: EntityDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -66,6 +68,13 @@ export default function EntityDetail({
       notes: entity.attributes?.notes || '',
     });
     setIsEditing(false);
+  };
+
+  const handleDelete = () => {
+    if (confirm(`Delete "${entity.name}"? This cannot be undone.`)) {
+      onDelete?.(entity.id);
+      onClose();
+    }
   };
 
   return (
@@ -133,13 +142,25 @@ export default function EntityDetail({
               </button>
             </>
           ) : (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="bg-bronze text-white px-3 py-1.5 text-sm font-sans hover:bg-bronze/90"
-              style={{ borderRadius: '2px' }}
-            >
-              Edit
-            </button>
+            <>
+              <button
+                onClick={() => setIsEditing(true)}
+                className="bg-bronze text-white px-3 py-1.5 text-sm font-sans hover:bg-bronze/90"
+                style={{ borderRadius: '2px' }}
+              >
+                Edit
+              </button>
+              {onDelete && (
+                <button
+                  onClick={handleDelete}
+                  className="bg-red-600 text-white px-3 py-1.5 text-sm font-sans hover:bg-red-700"
+                  style={{ borderRadius: '2px' }}
+                  title="Delete entity"
+                >
+                  Delete
+                </button>
+              )}
+            </>
           )}
           <button
             onClick={onClose}

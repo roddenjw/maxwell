@@ -158,6 +158,79 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
     }
   };
 
+  const handleMergeEntities = async () => {
+    if (selectedEntityIds.size < 2) {
+      alert('Select at least 2 entities to merge');
+      return;
+    }
+
+    const selectedEntities = entities.filter(e => selectedEntityIds.has(e.id));
+
+    // Ask user which entity should be the primary one
+    const entityNames = selectedEntities.map((e, i) => `${i + 1}. ${e.name} (${e.type})`).join('\n');
+    const choice = prompt(
+      `Merge ${selectedEntityIds.size} entities into which one?\n\n${entityNames}\n\nEnter the number (1-${selectedEntityIds.size}):`
+    );
+
+    if (!choice) return;
+
+    const choiceNum = parseInt(choice, 10);
+    if (isNaN(choiceNum) || choiceNum < 1 || choiceNum > selectedEntityIds.size) {
+      alert('Invalid choice');
+      return;
+    }
+
+    const primaryEntity = selectedEntities[choiceNum - 1];
+    const otherEntities = selectedEntities.filter(e => e.id !== primaryEntity.id);
+
+    try {
+      // Merge aliases and attributes
+      const mergedAliases = new Set([
+        ...primaryEntity.aliases,
+        ...otherEntities.flatMap(e => [e.name, ...e.aliases])
+      ]);
+
+      const mergedAttributes = {
+        ...primaryEntity.attributes,
+        appearance: [
+          ...(primaryEntity.attributes?.appearance || []),
+          ...otherEntities.flatMap(e => e.attributes?.appearance || [])
+        ],
+        personality: [
+          ...(primaryEntity.attributes?.personality || []),
+          ...otherEntities.flatMap(e => e.attributes?.personality || [])
+        ],
+        background: [
+          ...(primaryEntity.attributes?.background || []),
+          ...otherEntities.flatMap(e => e.attributes?.background || [])
+        ],
+        actions: [
+          ...(primaryEntity.attributes?.actions || []),
+          ...otherEntities.flatMap(e => e.attributes?.actions || [])
+        ],
+      };
+
+      // Update primary entity with merged data
+      await handleUpdateEntity(primaryEntity.id, {
+        aliases: Array.from(mergedAliases).filter(a => a !== primaryEntity.name),
+        attributes: mergedAttributes
+      });
+
+      // Delete other entities
+      await Promise.all(
+        otherEntities.map(e => codexApi.deleteEntity(e.id))
+      );
+
+      // Remove from store
+      otherEntities.forEach(e => removeEntity(e.id));
+      setSelectedEntityIds(new Set());
+
+      alert(`Merged ${selectedEntityIds.size} entities into "${primaryEntity.name}"`);
+    } catch (err) {
+      alert('Failed to merge entities: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  };
+
   // Get selected entity
   const selectedEntity = selectedEntityId
     ? entities.find((e) => e.id === selectedEntityId)
@@ -194,6 +267,7 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
       <EntityDetail
         entity={selectedEntity}
         onUpdate={(updates) => handleUpdateEntity(selectedEntity.id, updates)}
+        onDelete={handleDeleteEntity}
         onClose={() => setSelectedEntity(null)}
       />
     );
@@ -322,6 +396,16 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
             {selectedEntityIds.size} selected
           </span>
           <div className="flex gap-2">
+            {selectedEntityIds.size >= 2 && (
+              <button
+                onClick={handleMergeEntities}
+                className="px-3 py-1 bg-bronze text-white text-sm font-sans hover:bg-bronze/90"
+                style={{ borderRadius: '2px' }}
+                title="Merge selected entities into one"
+              >
+                Merge
+              </button>
+            )}
             <button
               onClick={handleBulkDelete}
               className="px-3 py-1 bg-redline text-white text-sm font-sans hover:bg-redline/90"

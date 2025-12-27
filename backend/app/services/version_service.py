@@ -117,37 +117,81 @@ class VersionService:
     def create_snapshot(
         self,
         manuscript_id: str,
-        content: str,
         trigger_type: str,
         label: str = "",
         description: str = "",
-        word_count: int = 0
+        word_count: int = 0,
+        content: str = None  # Deprecated - kept for backward compatibility
     ) -> Snapshot:
         """
-        Create a snapshot (Git commit) of the manuscript
+        Create a snapshot (Git commit) of ALL chapters in the manuscript
 
         Args:
             manuscript_id: ID of the manuscript
-            content: Current manuscript content (Lexical JSON string)
             trigger_type: MANUAL, AUTO, CHAPTER_COMPLETE, PRE_GENERATION, SESSION_END
             label: Optional user-provided label
             description: Optional description
-            word_count: Word count at time of snapshot
+            word_count: Total word count at time of snapshot
+            content: DEPRECATED - snapshots now capture all chapters
 
         Returns:
             Snapshot model instance
         """
+        from app.models.manuscript import Chapter
+
         repo = self.init_repository(manuscript_id)
         repo_path = self.get_repo_path(manuscript_id)
 
-        # Write content to file (Lexical JSON state)
-        content_path = repo_path / "manuscript.json"
-        content_path.write_text(content, encoding="utf-8")
+        # Create chapters directory
+        chapters_dir = repo_path / "chapters"
+        chapters_dir.mkdir(exist_ok=True)
 
-        # Extract and write plain text version for readable diffs
-        plain_text = self._extract_text_from_lexical_json(content)
-        text_path = repo_path / "manuscript.txt"
-        text_path.write_text(plain_text, encoding="utf-8")
+        # Fetch all chapters from database
+        db = SessionLocal()
+        try:
+            chapters = db.query(Chapter).filter(
+                Chapter.manuscript_id == manuscript_id
+            ).all()
+
+            total_word_count = 0
+            chapter_tree = []
+
+            # Save each chapter as a separate file
+            for chapter in chapters:
+                chapter_data = {
+                    "id": chapter.id,
+                    "title": chapter.title,
+                    "is_folder": chapter.is_folder,
+                    "parent_id": chapter.parent_id,
+                    "order_index": chapter.order_index,
+                    "lexical_state": chapter.lexical_state,
+                    "content": chapter.content,
+                    "word_count": chapter.word_count,
+                }
+
+                # Save chapter JSON
+                chapter_path = chapters_dir / f"{chapter.id}.json"
+                chapter_path.write_text(json.dumps(chapter_data, indent=2), encoding="utf-8")
+
+                # Also save plain text version for diffs
+                if chapter.content and not chapter.is_folder:
+                    text_path = chapters_dir / f"{chapter.id}.txt"
+                    text_path.write_text(chapter.content, encoding="utf-8")
+
+                total_word_count += chapter.word_count or 0
+
+                # Build tree structure for metadata
+                chapter_tree.append({
+                    "id": chapter.id,
+                    "title": chapter.title,
+                    "parent_id": chapter.parent_id,
+                    "order_index": chapter.order_index,
+                    "is_folder": chapter.is_folder,
+                    "word_count": chapter.word_count
+                })
+
+        finally:
+            db.close()
 
         # Write metadata
         metadata = {
@@ -155,18 +199,25 @@ class VersionService:
             "trigger_type": trigger_type,
             "label": label,
             "description": description,
-            "word_count": word_count,
+            "word_count": word_count or total_word_count,
+            "chapter_count": len(chapters),
+            "chapter_tree": chapter_tree,
             "timestamp": datetime.utcnow().isoformat()
         }
         metadata_path = repo_path / "metadata.json"
         metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
-        # Stage files
+        # Stage all files
         index = repo.index
         index.read()
-        index.add("manuscript.json")
-        index.add("manuscript.txt")
         index.add("metadata.json")
+
+        # Add all chapter files
+        for chapter_file in chapters_dir.glob("*.json"):
+            index.add(f"chapters/{chapter_file.name}")
+        for text_file in chapters_dir.glob("*.txt"):
+            index.add(f"chapters/{text_file.name}")
+
         index.write()
 
         # Create tree
@@ -276,9 +327,9 @@ class VersionService:
         manuscript_id: str,
         snapshot_id: str,
         create_backup: bool = True
-    ) -> str:
+    ) -> Dict[str, Any]:
         """
-        Restore manuscript to a specific snapshot
+        Restore ALL chapters to a specific snapshot state
 
         Args:
             manuscript_id: ID of the manuscript
@@ -286,8 +337,10 @@ class VersionService:
             create_backup: Whether to create a backup snapshot first
 
         Returns:
-            Content of the restored snapshot
+            Dictionary with restoration info including chapter count
         """
+        from app.models.manuscript import Chapter
+
         db = SessionLocal()
         try:
             # Get snapshot from database
@@ -304,27 +357,94 @@ class VersionService:
 
             # Create backup snapshot if requested
             if create_backup:
-                content_path = repo_path / "manuscript.json"
-                if content_path.exists():
-                    current_content = content_path.read_text(encoding="utf-8")
-                    self.create_snapshot(
-                        manuscript_id=manuscript_id,
-                        content=current_content,
-                        trigger_type="AUTO",
-                        label="Pre-restore backup",
-                        description=f"Automatic backup before restoring to {snapshot.label or snapshot.commit_hash[:8]}"
-                    )
+                self.create_snapshot(
+                    manuscript_id=manuscript_id,
+                    trigger_type="AUTO",
+                    label="Pre-restore backup",
+                    description=f"Automatic backup before restoring to {snapshot.label or snapshot.commit_hash[:8]}"
+                )
 
             # Checkout the commit
             commit = repo.get(snapshot.commit_hash)
             repo.checkout_tree(commit.tree)
 
-            # Read restored content
-            content_path = repo_path / "manuscript.json"
-            if content_path.exists():
-                return content_path.read_text(encoding="utf-8")
-            else:
-                raise ValueError("manuscript.json not found in snapshot")
+            # Reset HEAD to the commit to update working directory
+            repo.set_head(commit.id)
+
+            # Load chapters from snapshot
+            chapters_dir = repo_path / "chapters"
+
+            if not chapters_dir.exists():
+                # Try legacy format (single manuscript.json)
+                content_path = repo_path / "manuscript.json"
+                if content_path.exists():
+                    content = content_path.read_text(encoding="utf-8")
+                    return {
+                        "content": content,
+                        "chapters_restored": 0,
+                        "legacy_format": True
+                    }
+                else:
+                    raise ValueError("No chapter data found in snapshot")
+
+            # Restore all chapters
+            restored_count = 0
+            chapter_files = list(chapters_dir.glob("*.json"))
+
+            for chapter_file in chapter_files:
+                chapter_data = json.loads(chapter_file.read_text(encoding="utf-8"))
+
+                # Check if chapter exists
+                existing_chapter = db.query(Chapter).filter(
+                    Chapter.id == chapter_data["id"]
+                ).first()
+
+                if existing_chapter:
+                    # Update existing chapter
+                    existing_chapter.title = chapter_data.get("title", "Untitled")
+                    existing_chapter.is_folder = chapter_data.get("is_folder", 0)
+                    existing_chapter.parent_id = chapter_data.get("parent_id")
+                    existing_chapter.order_index = chapter_data.get("order_index", 0)
+                    existing_chapter.lexical_state = chapter_data.get("lexical_state", "")
+                    existing_chapter.content = chapter_data.get("content", "")
+                    existing_chapter.word_count = chapter_data.get("word_count", 0)
+                else:
+                    # Create new chapter (it was deleted after snapshot)
+                    new_chapter = Chapter(
+                        id=chapter_data["id"],
+                        manuscript_id=manuscript_id,
+                        title=chapter_data.get("title", "Untitled"),
+                        is_folder=chapter_data.get("is_folder", 0),
+                        parent_id=chapter_data.get("parent_id"),
+                        order_index=chapter_data.get("order_index", 0),
+                        lexical_state=chapter_data.get("lexical_state", ""),
+                        content=chapter_data.get("content", ""),
+                        word_count=chapter_data.get("word_count", 0)
+                    )
+                    db.add(new_chapter)
+
+                restored_count += 1
+
+            # Delete chapters that don't exist in snapshot
+            snapshot_chapter_ids = {f.stem for f in chapter_files}
+            current_chapters = db.query(Chapter).filter(
+                Chapter.manuscript_id == manuscript_id
+            ).all()
+
+            deleted_count = 0
+            for chapter in current_chapters:
+                if chapter.id not in snapshot_chapter_ids:
+                    db.delete(chapter)
+                    deleted_count += 1
+
+            db.commit()
+
+            return {
+                "chapters_restored": restored_count,
+                "chapters_deleted": deleted_count,
+                "snapshot_label": snapshot.label or "Unnamed",
+                "legacy_format": False
+            }
 
         finally:
             db.close()

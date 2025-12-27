@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useCodexStore } from '@/stores/codexStore';
 import { timelineApi } from '@/lib/api';
+import { getManuscriptScale, getLayoutConfig } from '@/lib/timelineUtils';
 
 interface CharacterNetworkProps {
   manuscriptId: string;
@@ -59,6 +60,10 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
       </div>
     );
   }
+
+  // Get adaptive layout configuration
+  const scale = getManuscriptScale(events.length);
+  const layoutConfig = getLayoutConfig(scale);
 
   // Build character network from events
   const characters = entities.filter(e => e.type === 'CHARACTER');
@@ -252,7 +257,8 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
 
                 const isHighlighted = selectedNode === edge.source || selectedNode === edge.target;
                 const opacity = selectedNode ? (isHighlighted ? 0.8 : 0.1) : 0.4;
-                const strokeWidth = Math.min(edge.weight * 2, 8);
+                // Adaptive edge thickness based on scale
+                const strokeWidth = Math.min(edge.weight * layoutConfig.edgeThickness, 8);
 
                 return (
                   <line
@@ -279,7 +285,9 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
                   : false;
 
                 const opacity = selectedNode ? (isSelected || isConnected ? 1 : 0.3) : 1;
-                const nodeRadius = 15 + (node.appearances * 2);
+                // Adaptive node radius based on scale
+                const baseRadius = layoutConfig.nodeRadius;
+                const nodeRadius = baseRadius + (node.appearances * (scale === 'short' ? 3 : scale === 'medium' ? 2 : 1));
 
                 return (
                   <g
@@ -305,7 +313,7 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
                       y={node.y}
                       textAnchor="middle"
                       dominantBaseline="middle"
-                      fontSize="12"
+                      fontSize={layoutConfig.fontSize}
                       fontWeight="bold"
                       fill="white"
                       opacity={opacity}
@@ -313,18 +321,20 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
                       {node.appearances}
                     </text>
 
-                    {/* Name label */}
-                    <text
-                      x={node.x}
-                      y={node.y + nodeRadius + 15}
-                      textAnchor="middle"
-                      fontSize="11"
-                      fontFamily="serif"
-                      fill="#0f172a"
-                      opacity={opacity}
-                    >
-                      {node.name}
-                    </text>
+                    {/* Name label - only show if showAllLabels or selected/connected */}
+                    {(layoutConfig.showAllLabels || isSelected || isConnected) && (
+                      <text
+                        x={node.x}
+                        y={node.y + nodeRadius + 15}
+                        textAnchor="middle"
+                        fontSize={layoutConfig.fontSize - 1}
+                        fontFamily="serif"
+                        fill="#0f172a"
+                        opacity={opacity}
+                      >
+                        {node.name}
+                      </text>
+                    )}
 
                     {/* "New" indicator for detected persons */}
                     {node.isDetected && (

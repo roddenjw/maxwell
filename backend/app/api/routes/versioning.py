@@ -16,7 +16,6 @@ router = APIRouter(prefix="/api/versioning", tags=["versioning"])
 # Request/Response Models
 class CreateSnapshotRequest(BaseModel):
     manuscript_id: str
-    content: str
     trigger_type: str  # MANUAL, AUTO, CHAPTER_COMPLETE, PRE_GENERATION, SESSION_END
     label: Optional[str] = ""
     description: Optional[str] = ""
@@ -51,7 +50,7 @@ class MergeVariantRequest(BaseModel):
 @router.post("/snapshots")
 async def create_snapshot(request: CreateSnapshotRequest):
     """
-    Create a snapshot (version) of the manuscript
+    Create a snapshot (version) of ALL chapters in the manuscript
 
     Args:
         request: Snapshot creation details
@@ -62,7 +61,6 @@ async def create_snapshot(request: CreateSnapshotRequest):
     try:
         snapshot = version_service.create_snapshot(
             manuscript_id=request.manuscript_id,
-            content=request.content,
             trigger_type=request.trigger_type,
             label=request.label,
             description=request.description,
@@ -109,16 +107,16 @@ async def get_history(manuscript_id: str):
 @router.post("/restore")
 async def restore_snapshot(request: RestoreSnapshotRequest):
     """
-    Restore manuscript to a specific snapshot
+    Restore ALL chapters to a specific snapshot state
 
     Args:
         request: Restore details
 
     Returns:
-        Restored content
+        Restoration info including number of chapters restored
     """
     try:
-        content = version_service.restore_snapshot(
+        result = version_service.restore_snapshot(
             manuscript_id=request.manuscript_id,
             snapshot_id=request.snapshot_id,
             create_backup=request.create_backup
@@ -126,9 +124,7 @@ async def restore_snapshot(request: RestoreSnapshotRequest):
 
         return {
             "success": True,
-            "data": {
-                "content": content
-            }
+            "data": result
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

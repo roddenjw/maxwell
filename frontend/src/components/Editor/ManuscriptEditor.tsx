@@ -23,6 +23,7 @@ import { EntityMentionNode } from './nodes/EntityMentionNode';
 import AutoSavePlugin from './plugins/AutoSavePlugin';
 import EntityMentionsPlugin from './plugins/EntityMentionsPlugin';
 import RealtimeNLPPlugin from './plugins/RealtimeNLPPlugin';
+import FastCoachPlugin from './plugins/FastCoachPlugin';
 import { versioningApi } from '@/lib/api';
 
 interface ManuscriptEditorProps {
@@ -69,7 +70,8 @@ export default function ManuscriptEditor({
       EntityMentionNode,
     ],
     // Load saved content if available (JSON string)
-    editorState: initialContent || undefined,
+    // Pass undefined if empty to get a fresh editor
+    editorState: initialContent && initialContent.trim() !== '' ? initialContent : undefined,
   };
 
   // Handle editor state changes
@@ -100,23 +102,20 @@ export default function ManuscriptEditor({
 
   // Create manual snapshot
   const createManualSnapshot = async () => {
-    if (!manuscriptId || !latestEditorState) return;
+    if (!manuscriptId) return;
 
     try {
       const label = prompt('Enter a label for this snapshot:');
       if (!label) return;
 
-      const serializedState = JSON.stringify(latestEditorState.toJSON());
-
       await versioningApi.createSnapshot({
         manuscript_id: manuscriptId,
-        content: serializedState,
         trigger_type: 'MANUAL',
         label,
         word_count: wordCount,
       });
 
-      alert('✅ Snapshot created!');
+      alert('✅ Snapshot created! All chapters have been saved.');
     } catch (error) {
       console.error('Failed to create snapshot:', error);
       alert('Failed to create snapshot: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -207,6 +206,9 @@ export default function ManuscriptEditor({
 
             {/* Realtime NLP plugin - live entity detection via WebSocket */}
             {manuscriptId && <RealtimeNLPPlugin manuscriptId={manuscriptId} />}
+
+            {/* Fast Coach plugin - real-time writing suggestions */}
+            {manuscriptId && <FastCoachPlugin manuscriptId={manuscriptId} enabled={true} />}
           </div>
 
           {/* Status indicators - Maxwell Style */}

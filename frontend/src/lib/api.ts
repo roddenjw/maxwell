@@ -194,11 +194,10 @@ export const manuscriptApi = {
  */
 export const versioningApi = {
   /**
-   * Create a snapshot (save version)
+   * Create a snapshot (save version of ALL chapters)
    */
   async createSnapshot(data: {
     manuscript_id: string;
-    content: string;
     trigger_type: Snapshot['trigger_type'];
     label?: string;
     description?: string;
@@ -225,15 +224,17 @@ export const versioningApi = {
   },
 
   /**
-   * Restore a snapshot
+   * Restore ALL chapters to a snapshot state
    */
   async restoreSnapshot(data: {
     manuscript_id: string;
     snapshot_id: string;
     create_backup?: boolean;
   }): Promise<{
-    content: string;
-    backup_snapshot_id?: string;
+    chapters_restored: number;
+    chapters_deleted: number;
+    snapshot_label: string;
+    legacy_format: boolean;
   }> {
     return apiFetch('/versioning/restore', {
       method: 'POST',

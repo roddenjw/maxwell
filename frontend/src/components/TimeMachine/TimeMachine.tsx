@@ -12,7 +12,7 @@ import DiffViewer from './DiffViewer';
 interface TimeMachineProps {
   manuscriptId: string;
   currentContent: string;
-  onRestore: (content: string) => void;
+  onRestore: (snapshotId: string) => void;
   onClose: () => void;
 }
 
@@ -87,20 +87,16 @@ export default function TimeMachine({
   };
 
   const handleRestore = async (snapshot: Snapshot) => {
-    if (!confirm(`Restore to "${snapshot.label || 'snapshot'}"? Your current work will be backed up.`)) {
+    if (!confirm(`Restore to "${snapshot.label || 'snapshot'}"? All chapters will be restored to this point. Your current work will be backed up.`)) {
       return;
     }
 
     try {
-      const result = await versioningApi.restoreSnapshot({
-        manuscript_id: manuscriptId,
-        snapshot_id: snapshot.id,
-        create_backup: true,
-      });
+      // Pass snapshot ID to parent - it handles the restore API call
+      onRestore(snapshot.id);
 
-      onRestore(result.content);
-      await loadSnapshots(); // Reload to show new backup snapshot
-      alert('✅ Snapshot restored! Your previous work was saved as a backup.');
+      // Reload snapshots to show new backup that was created
+      await loadSnapshots();
     } catch (err) {
       alert('Failed to restore: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
@@ -113,15 +109,14 @@ export default function TimeMachine({
     try {
       await versioningApi.createSnapshot({
         manuscript_id: manuscriptId,
-        content: currentContent,
         trigger_type: 'MANUAL',
         label,
         description: '',
-        word_count: currentContent.split(/\s+/).length,
+        word_count: 0, // Word count will be calculated from chapters
       });
 
       await loadSnapshots();
-      alert('✅ Snapshot created!');
+      alert('✅ Snapshot created! All chapters have been saved.');
     } catch (err) {
       alert('Failed to create snapshot: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }

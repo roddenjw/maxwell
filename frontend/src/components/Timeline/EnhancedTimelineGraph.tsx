@@ -12,48 +12,11 @@ import { getEventTypeColor, getEventTypeIcon } from '@/types/timeline';
 import { timelineApi } from '@/lib/api';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useCodexStore } from '@/stores/codexStore';
+import { getManuscriptScale, getLayoutConfig, getScaleInfo } from '@/lib/timelineUtils';
 
 interface EnhancedTimelineGraphProps {
   manuscriptId: string;
 }
-
-type ManuscriptScale = 'short' | 'medium' | 'long';
-
-interface LayoutConfig {
-  eventSpacing: number;
-  fontSize: number;
-  showAllLabels: boolean;
-  graphHeight: number;
-}
-
-// Determine manuscript scale based on event count
-function getManuscriptScale(eventCount: number): ManuscriptScale {
-  if (eventCount < 20) return 'short';      // Short story
-  if (eventCount < 100) return 'medium';    // Novella
-  return 'long';                             // Novel
-}
-
-// Layout configurations for different scales
-const LAYOUT_CONFIGS: Record<ManuscriptScale, LayoutConfig> = {
-  short: {
-    eventSpacing: 150,      // More space between events
-    fontSize: 14,           // Larger text
-    showAllLabels: true,    // Show all event labels
-    graphHeight: 400,
-  },
-  medium: {
-    eventSpacing: 100,
-    fontSize: 12,
-    showAllLabels: false,   // Show only important labels
-    graphHeight: 500,
-  },
-  long: {
-    eventSpacing: 60,       // Condensed view
-    fontSize: 10,
-    showAllLabels: false,   // Minimal labels
-    graphHeight: 600,
-  }
-};
 
 export default function EnhancedTimelineGraph({ manuscriptId }: EnhancedTimelineGraphProps) {
   const { events, setEvents, setSelectedEvent } = useTimelineStore();
@@ -124,7 +87,8 @@ export default function EnhancedTimelineGraph({ manuscriptId }: EnhancedTimeline
 
   // Determine manuscript scale and layout
   const scale = getManuscriptScale(sortedEvents.length);
-  const layout = LAYOUT_CONFIGS[scale];
+  const layout = getLayoutConfig(scale);
+  const scaleInfo = getScaleInfo(scale);
 
   // Get all characters involved in timeline
   const charactersInTimeline = Array.from(
@@ -430,17 +394,6 @@ export default function EnhancedTimelineGraph({ manuscriptId }: EnhancedTimeline
     );
   };
 
-  // Get scale emoji and label
-  const getScaleLabel = () => {
-    switch (scale) {
-      case 'short': return { emoji: '📖', label: 'Short Story' };
-      case 'medium': return { emoji: '📚', label: 'Novella' };
-      case 'long': return { emoji: '📕', label: 'Novel' };
-    }
-  };
-
-  const scaleInfo = getScaleLabel();
-
   return (
     <div className="h-full flex flex-col">
       {/* View mode tabs with scale indicator */}
@@ -474,7 +427,7 @@ export default function EnhancedTimelineGraph({ manuscriptId }: EnhancedTimeline
 
         {/* Scale indicator */}
         <div className="px-4 py-2 flex items-center gap-2 border-l border-slate-ui">
-          <span className="text-sm">{scaleInfo.emoji}</span>
+          <span className="text-sm">{scaleInfo.icon}</span>
           <span className="text-xs font-sans text-faded-ink">
             {scaleInfo.label}
           </span>

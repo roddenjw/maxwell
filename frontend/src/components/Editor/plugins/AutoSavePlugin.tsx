@@ -109,13 +109,12 @@ export default function AutoSavePlugin({
           try {
             await versioningApi.createSnapshot({
               manuscript_id: manuscriptId,
-              content: serializedState,
               trigger_type: 'AUTO',
               label: 'Auto-save snapshot',
               word_count: wordCount,
             });
             lastSnapshotTimeRef.current = now;
-            console.log(`Created auto-snapshot for manuscript ${manuscriptId}`);
+            console.log(`Created auto-snapshot for manuscript ${manuscriptId} (all chapters saved)`);
           } catch (error) {
             console.error('Failed to create snapshot:', error);
           }

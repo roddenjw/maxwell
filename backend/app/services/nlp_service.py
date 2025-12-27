@@ -95,15 +95,24 @@ class NLPService:
             # Get surrounding context (sentence)
             context = ent.sent.text.strip()
 
+            # Extract description if available
+            description = self._extract_description(ent, doc)
+
             # Calculate confidence based on spaCy label
             confidence = self._calculate_confidence(ent.label_)
 
-            detected.append({
+            entity_dict = {
                 "name": name,
                 "type": entity_type,
                 "context": context,
                 "confidence": confidence
-            })
+            }
+
+            # Add description if found
+            if description:
+                entity_dict["description"] = description
+
+            detected.append(entity_dict)
 
             seen_in_text.add(name.lower())
 
@@ -111,9 +120,16 @@ class NLPService:
         proper_nouns = self._extract_proper_nouns(doc, known_names, seen_in_text)
         detected.extend(proper_nouns)
 
+        # Extract entities from descriptive patterns (e.g., "The alhastra is a kind of...")
+        pattern_entities = self._extract_from_descriptive_patterns(doc, known_names, seen_in_text)
+        detected.extend(pattern_entities)
+
         # Remove partial names when full name exists
         # E.g., if "Piggy Bob" exists, remove "Piggy" and "Bob"
         detected = self._filter_partial_names(detected)
+
+        # Remove duplicates (keep highest confidence version)
+        detected = self._remove_duplicate_entities(detected)
 
         # Sort by confidence
         detected.sort(key=lambda x: x["confidence"], reverse=True)
@@ -162,7 +178,8 @@ class NLPService:
         seen_in_text: set
     ) -> List[Dict[str, Any]]:
         """
-        Extract proper nouns that might be entities missed by NER
+        Extract proper nouns that might be entities missed by NER.
+        Groups consecutive proper nouns together (e.g., "Farid Sa Garai" as one entity)
 
         Args:
             doc: spaCy Doc object
@@ -174,36 +191,124 @@ class NLPService:
         """
         proper_nouns = []
 
-        for token in doc:
+        # Group consecutive proper nouns together
+        i = 0
+        tokens = list(doc)
+
+        while i < len(tokens):
+            token = tokens[i]
+
             # Look for proper nouns (PROPN)
             if token.pos_ == "PROPN":
-                name = token.text.strip()
+                # Collect consecutive proper nouns, including connecting words
+                name_parts = [token.text.strip()]
+                j = i + 1
+
+                # Look ahead for more consecutive proper nouns
+                # Also include common connecting words like "of", "the", "and"
+                connecting_words = {"of", "the", "and"}
+
+                while j < len(tokens):
+                    if tokens[j].pos_ == "PROPN":
+                        name_parts.append(tokens[j].text.strip())
+                        j += 1
+                    elif tokens[j].text.lower() in connecting_words and j + 1 < len(tokens) and tokens[j + 1].pos_ == "PROPN":
+                        # Include connecting word if followed by another PROPN
+                        name_parts.append(tokens[j].text.strip())
+                        j += 1
+                    else:
+                        break
+
+                # Join into full name
+                name = " ".join(name_parts)
 
                 # Skip if already known or seen
-                if name.lower() in known_names or name.lower() in seen_in_text:
-                    continue
+                if name.lower() not in known_names and name.lower() not in seen_in_text:
+                    # Skip common words and single letters
+                    if len(name) > 1 and name.lower() not in {"the", "a", "an", "i"}:
+                        # Get context
+                        context = token.sent.text.strip()
 
-                # Skip common words and single letters
-                if len(name) <= 1 or name.lower() in {"the", "a", "an", "i"}:
-                    continue
+                        # Infer type based on surrounding words (simple heuristic)
+                        entity_type = self._infer_type_from_context(token)
 
-                # Get context
-                context = token.sent.text.strip()
+                        if entity_type:
+                            proper_nouns.append({
+                                "name": name,
+                                "type": entity_type,
+                                "context": context,
+                                "confidence": 0.4  # Lower confidence for heuristic detection
+                            })
 
-                # Infer type based on surrounding words (simple heuristic)
-                entity_type = self._infer_type_from_context(token)
+                            seen_in_text.add(name.lower())
 
-                if entity_type:
-                    proper_nouns.append({
-                        "name": name,
-                        "type": entity_type,
-                        "context": context,
-                        "confidence": 0.4  # Lower confidence for heuristic detection
-                    })
-
-                    seen_in_text.add(name.lower())
+                # Skip ahead past the grouped proper nouns
+                i = j
+            else:
+                i += 1
 
         return proper_nouns
+
+    def _extract_description(self, ent, doc) -> Optional[str]:
+        """
+        Extract description for an entity from surrounding context.
+        Looks for patterns like "X is a..." or "X was a..."
+
+        Args:
+            ent: spaCy entity
+            doc: spaCy Doc object
+
+        Returns:
+            Description string or None
+        """
+        entity_name_lower = ent.text.lower()
+        sent = ent.sent
+
+        # Look for descriptive patterns in the sentence
+        sent_text = sent.text
+        sent_lower = sent_text.lower()
+
+        # Pattern: "The X is a..." or "X is a kind of..." etc.
+        descriptive_patterns = [
+            f"{entity_name_lower} is a",
+            f"{entity_name_lower} was a",
+            f"the {entity_name_lower} is",
+            f"the {entity_name_lower} was",
+            f"an {entity_name_lower} is",
+            f"a {entity_name_lower} is"
+        ]
+
+        for pattern in descriptive_patterns:
+            if pattern in sent_lower:
+                # Extract from the pattern onwards
+                start_idx = sent_lower.index(pattern)
+                # Get the rest of the sentence after entity name
+                description = sent_text[start_idx:].strip()
+
+                # Clean up the description
+                # Remove leading articles and entity name
+                description = description.split(' is ', 1)[-1] if ' is ' in description else description
+                description = description.split(' was ', 1)[-1] if ' was ' in description else description
+
+                # Capitalize first letter
+                if description:
+                    description = description[0].upper() + description[1:]
+                    return description
+
+        # Also check next sentence for continuing description
+        # Find sentence index
+        for i, s in enumerate(doc.sents):
+            if s == sent and i < len(list(doc.sents)) - 1:
+                next_sent = list(doc.sents)[i + 1]
+                next_lower = next_sent.text.lower()
+
+                # If next sentence starts with descriptive words, include it
+                if any(next_lower.startswith(word) for word in ['it ', 'this ', 'the creature', 'the beast']):
+                    # Combine sentences
+                    combined = sent.text + " " + next_sent.text
+                    return combined.strip()
+
+        return None
 
     def _infer_type_from_context(self, token) -> Optional[str]:
         """
@@ -217,16 +322,35 @@ class NLPService:
         """
         # Look at surrounding tokens
         sent_text = token.sent.text.lower()
+        entity_name_lower = token.text.lower()
+
+        # Creature/Item/Lore indicators (check these first as they're more specific)
+        creature_patterns = [
+            "is a kind of", "is a type of", "is a species of",
+            "creature", "beast", "monster", "animal", "insect", "arachnid",
+            "lives in", "inhabits", "found in"
+        ]
+        if any(pattern in sent_text for pattern in creature_patterns):
+            # Check if the entity name appears before these patterns
+            if any(pattern in sent_text.split(entity_name_lower, 1)[-1][:100] for pattern in creature_patterns):
+                return "LORE"
+
+        # Item/object indicators
+        item_patterns = ["weapon", "sword", "dagger", "artifact", "relic", "tool", "device"]
+        if any(pattern in sent_text for pattern in item_patterns):
+            return "ITEM"
 
         # Character indicators
-        if any(word in sent_text for word in ["said", "asked", "thought", "felt", "looked", "walked"]):
+        character_patterns = ["said", "asked", "thought", "felt", "looked", "walked",
+                            "spoke", "replied", "answered", "whispered", "shouted",
+                            "he ", "she ", "they ", "his ", "her ", "their "]
+        if any(word in sent_text for word in character_patterns):
             return "CHARACTER"
 
         # Location indicators
-        if any(word in sent_text for word in ["at", "in", "to", "from", "near"]):
-            # Check if it's likely a place name
-            if token.i > 0 and token.nbor(-1).text.lower() in {"in", "at", "to", "from", "near"}:
-                return "LOCATION"
+        location_patterns = {"in", "at", "to", "from", "near", "within", "outside"}
+        if token.i > 0 and token.nbor(-1).text.lower() in location_patterns:
+            return "LOCATION"
 
         # Default to CHARACTER for capitalized words in dialogue/narrative
         return "CHARACTER"
@@ -234,7 +358,8 @@ class NLPService:
     def _filter_partial_names(self, detected: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Filter out partial names when a longer version exists.
-        E.g., if "Piggy Bob" exists, remove "Piggy" and "Bob"
+        E.g., if "Farid Sa Garai Fol Jahan" exists, remove "Garai Fol Jahan"
+        Or if "Piggy Bob" exists, remove "Piggy" and "Bob"
 
         Args:
             detected: List of detected entities
@@ -250,24 +375,157 @@ class NLPService:
 
         # Track names to keep
         keep = []
-        kept_words = set()
+        kept_names = set()
 
         for entity in sorted_entities:
-            name_words = entity["name"].split()
+            entity_name_lower = entity["name"].lower()
+            is_partial = False
 
-            # If this is a multi-word name, check if any single words should be removed
-            if len(name_words) > 1:
-                # Keep this entity
+            # Check if this name is contained in any already-kept longer name
+            for kept_name in kept_names:
+                # Check if this entity's name is a substring of a longer kept name
+                # (accounting for word boundaries)
+                words_in_entity = set(entity_name_lower.split())
+                words_in_kept = set(kept_name.split())
+
+                # If all words in this entity are in the kept name, and kept has more words, it's partial
+                if words_in_entity.issubset(words_in_kept) and len(words_in_entity) < len(words_in_kept):
+                    is_partial = True
+                    break
+
+                # Also check direct substring match (e.g., "Garai Fol Jahan" in "Farid Sa Garai Fol Jahan")
+                if entity_name_lower in kept_name and entity_name_lower != kept_name:
+                    is_partial = True
+                    break
+
+            if not is_partial:
                 keep.append(entity)
-                # Mark individual words as "covered" by this longer name
-                for word in name_words:
-                    kept_words.add(word.lower())
-            else:
-                # Single word name - only keep if not already covered by a longer name
-                if entity["name"].lower() not in kept_words:
-                    keep.append(entity)
+                kept_names.add(entity_name_lower)
 
         return keep
+
+    def _extract_from_descriptive_patterns(
+        self,
+        doc: "Doc",
+        known_names: set,
+        seen_in_text: set
+    ) -> List[Dict[str, Any]]:
+        """
+        Extract entities from descriptive patterns even if not capitalized.
+        E.g., "The alhastra is a kind of arachnid..."
+
+        This catches entities that spaCy NER misses because they're lowercase
+        or fictional/uncommon words.
+
+        Args:
+            doc: spaCy Doc object
+            known_names: Set of known entity names
+            seen_in_text: Set of already detected entities
+
+        Returns:
+            List of detected entities
+        """
+        pattern_entities = []
+
+        # Patterns that indicate an entity description
+        descriptive_patterns = [
+            r"(?:the|an?)\s+(\w+)\s+(?:is|was)\s+(?:a kind of|a type of|a species of)",
+            r"(?:the|an?)\s+(\w+)\s+(?:is|was)\s+a\s+\w+\s+(?:creature|beast|monster|animal)",
+            r"(?:the|an?)\s+(\w+)\s+(?:lives|inhabits|dwells|hunts)",
+        ]
+
+        import re
+
+        for sent in doc.sents:
+            sent_text = sent.text
+            sent_lower = sent_text.lower()
+
+            for pattern in descriptive_patterns:
+                matches = re.finditer(pattern, sent_lower, re.IGNORECASE)
+                for match in matches:
+                    entity_name = match.group(1).strip()
+
+                    # Skip if already known or seen
+                    if entity_name.lower() in known_names or entity_name.lower() in seen_in_text:
+                        continue
+
+                    # Skip common words
+                    if entity_name.lower() in {"it", "this", "that", "there", "here", "one", "thing"}:
+                        continue
+
+                    # Extract description from the full sentence
+                    description = self._extract_description_from_sentence(
+                        entity_name, sent_text
+                    )
+
+                    # Determine type based on pattern
+                    entity_type = "LORE"  # Default for creatures/beasts/etc
+
+                    pattern_entities.append({
+                        "name": entity_name.capitalize(),
+                        "type": entity_type,
+                        "context": sent_text.strip(),
+                        "confidence": 0.75,  # Medium-high confidence for pattern matches
+                        "description": description if description else None
+                    })
+
+                    seen_in_text.add(entity_name.lower())
+
+        return [e for e in pattern_entities if e["description"]]  # Only return if we found a description
+
+    def _extract_description_from_sentence(self, entity_name: str, sentence: str) -> Optional[str]:
+        """
+        Extract description for an entity from a sentence.
+
+        Args:
+            entity_name: Name of the entity
+            sentence: Sentence text
+
+        Returns:
+            Description or None
+        """
+        entity_lower = entity_name.lower()
+        sent_lower = sentence.lower()
+
+        # Find where "is/was a" occurs after the entity name and extract what follows
+        for verb in [' is ', ' was ']:
+            # Try patterns like "the alhastra is" or just "alhastra is"
+            for prefix in ['the ', 'an ', 'a ', '']:
+                pattern = f"{prefix}{entity_lower}{verb}"
+                if pattern in sent_lower:
+                    # Find the position after the pattern
+                    idx = sent_lower.find(pattern) + len(pattern)
+                    # Extract everything after "is/was"
+                    description = sentence[idx:].strip()
+                    if description and len(description) > 3:  # Ensure it's not empty
+                        # Capitalize first letter
+                        return description[0].upper() + description[1:]
+
+        return None
+
+    def _remove_duplicate_entities(self, detected: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Remove duplicate entities, keeping the one with highest confidence.
+
+        Args:
+            detected: List of detected entities
+
+        Returns:
+            Deduplicated list
+        """
+        seen = {}
+
+        for entity in detected:
+            name_lower = entity["name"].lower()
+
+            if name_lower not in seen:
+                seen[name_lower] = entity
+            else:
+                # Keep the one with higher confidence
+                if entity["confidence"] > seen[name_lower]["confidence"]:
+                    seen[name_lower] = entity
+
+        return list(seen.values())
 
     def extract_relationships(
         self,

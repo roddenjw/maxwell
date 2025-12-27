@@ -5,12 +5,14 @@ import { TimeMachine } from './components/TimeMachine'
 import { CodexSidebar } from './components/Codex'
 import TimelineSidebar from './components/Timeline/TimelineSidebar'
 import DocumentNavigator from './components/Document/DocumentNavigator'
+import FastCoachSidebar from './components/FastCoach/FastCoachSidebar'
 import ToastContainer from './components/common/ToastContainer'
 import KeyboardShortcutsModal from './components/common/KeyboardShortcutsModal'
 import { useManuscriptStore } from './stores/manuscriptStore'
 import { useCodexStore } from './stores/codexStore'
 import { useTimelineStore } from './stores/timelineStore'
 import { useChapterStore } from './stores/chapterStore'
+import { useFastCoachStore } from './stores/fastCoachStore'
 import { chaptersApi } from './lib/api'
 import { useKeyboardShortcuts, type KeyboardShortcut } from './hooks/useKeyboardShortcuts'
 import { toast } from './stores/toastStore'
@@ -19,11 +21,12 @@ import { useUnsavedChanges } from './hooks/useUnsavedChanges'
 import RecapModal from './components/RecapModal'
 
 function App() {
-  const { currentManuscriptId, setCurrentManuscript, getCurrentManuscript, updateManuscript } = useManuscriptStore()
+  const { currentManuscriptId, setCurrentManuscript, getCurrentManuscript } = useManuscriptStore()
   const currentManuscript = getCurrentManuscript()
   const { isSidebarOpen, toggleSidebar } = useCodexStore()
   const { isTimelineOpen, setTimelineOpen } = useTimelineStore()
   const { setCurrentChapter, currentChapterId } = useChapterStore()
+  const { isSidebarOpen: isCoachOpen, toggleSidebar: toggleCoach } = useFastCoachStore()
   const [showTimeMachine, setShowTimeMachine] = useState(false)
   const [isDocNavOpen, setDocNavOpen] = useState(true)
   const [editorKey, setEditorKey] = useState(0) // Force editor re-mount on restore
@@ -60,7 +63,10 @@ function App() {
 
         const firstChapter = findFirstChapter(data.data)
         if (firstChapter) {
-          handleChapterSelect(firstChapter.id)
+          // Use setTimeout to ensure manuscript state is set first
+          setTimeout(() => {
+            handleChapterSelect(firstChapter.id)
+          }, 100)
         }
       }
     } catch (error) {
@@ -77,13 +83,115 @@ function App() {
     setSaveStatus('saved') // Reset save status
   }
 
-  const handleRestoreSnapshot = (content: string) => {
-    if (currentManuscriptId) {
-      updateManuscript(currentManuscriptId, { content })
-      setShowTimeMachine(false)
-      // Force editor re-mount with new content
-      setEditorKey(prev => prev + 1)
+  const handleRestoreSnapshot = async (snapshotId: string) => {
+    if (!currentManuscriptId) {
+      alert('No manuscript selected')
+      return
     }
+
+    try {
+      // Call the restore API - it now restores ALL chapters
+      const response = await fetch('http://localhost:8000/api/versioning/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          manuscript_id: currentManuscriptId,
+          snapshot_id: snapshotId,
+          create_backup: true
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to restore snapshot')
+      }
+
+      const result = await response.json()
+      const data = result.data
+
+      console.log('Snapshot restored:', data)
+
+      setShowTimeMachine(false)
+
+      // Show success message with restoration details
+      if (data.legacy_format) {
+        toast.success('Snapshot restored (legacy format)')
+      } else {
+        toast.success(
+          `Restored ${data.chapters_restored} chapter${data.chapters_restored !== 1 ? 's' : ''}` +
+          (data.chapters_deleted > 0 ? ` (${data.chapters_deleted} deleted)` : '')
+        )
+      }
+
+      // Reload the current chapter if one is selected
+      if (currentChapterId) {
+        try {
+          const chapter = await chaptersApi.getChapter(currentChapterId)
+
+          const hasLexicalState = chapter.lexical_state && chapter.lexical_state.trim() !== ''
+          const hasPlainContent = chapter.content && chapter.content.trim() !== ''
+
+          let editorContent: string | undefined
+
+          if (hasLexicalState) {
+            editorContent = chapter.lexical_state
+          } else if (hasPlainContent) {
+            editorContent = convertPlainTextToLexical(chapter.content)
+          }
+
+          setCurrentChapterContent(editorContent || '')
+          setEditorKey(prev => prev + 1)
+          setSaveStatus('saved')
+        } catch (error) {
+          console.error('Failed to reload chapter after restore:', error)
+          // Chapter might have been deleted, clear selection
+          setCurrentChapter(null)
+        }
+      }
+
+    } catch (error) {
+      console.error('Failed to restore snapshot:', error)
+      toast.error('Failed to restore snapshot: ' + getErrorMessage(error))
+    }
+  }
+
+  // Convert plain text to Lexical editor state format
+  const convertPlainTextToLexical = (plainText: string): string => {
+    // Split text into paragraphs
+    const paragraphs = plainText.split('\n').filter(line => line.trim() !== '')
+
+    // Create Lexical nodes for each paragraph
+    const children = paragraphs.map(text => ({
+      children: [
+        {
+          detail: 0,
+          format: 0,
+          mode: 'normal',
+          style: '',
+          text: text,
+          type: 'text',
+          version: 1
+        }
+      ],
+      direction: 'ltr',
+      format: '',
+      indent: 0,
+      type: 'paragraph',
+      version: 1
+    }))
+
+    // Create root Lexical state
+    const lexicalState = {
+      root: {
+        children: children,
+        direction: 'ltr',
+        format: '',
+        indent: 0,
+        type: 'root',
+        version: 1
+      }
+    }
+
+    return JSON.stringify(lexicalState)
   }
 
   const handleChapterSelect = async (chapterId: string) => {
@@ -98,8 +206,46 @@ function App() {
       // Fetch chapter content
       const chapter = await chaptersApi.getChapter(chapterId)
 
-      // Load into editor
-      setCurrentChapterContent(chapter.lexical_state || '')
+      // Data integrity check: Log chapter content status
+      const hasLexicalState = chapter.lexical_state && chapter.lexical_state.trim() !== ''
+      const hasPlainContent = chapter.content && chapter.content.trim() !== ''
+
+      console.log(`Chapter ${chapterId} content status:`, {
+        hasLexicalState,
+        hasPlainContent,
+        lexicalStateLength: chapter.lexical_state?.length || 0,
+        plainContentLength: chapter.content?.length || 0,
+        wordCount: chapter.word_count || 0
+      })
+
+      // Determine editor content to load
+      let editorContent: string | undefined
+
+      if (hasLexicalState) {
+        // Use Lexical state if available
+        editorContent = chapter.lexical_state
+        console.log('Loaded Lexical state for chapter:', chapterId)
+      } else if (hasPlainContent) {
+        // Fallback: Convert plain text content to Lexical format
+        console.warn('Lexical state missing - converting plain text to Lexical format for chapter:', chapterId)
+        editorContent = convertPlainTextToLexical(chapter.content)
+        toast.info('Chapter content recovered from plain text backup')
+      } else {
+        // No content - start with blank editor
+        console.warn('Chapter has no content:', chapterId)
+        editorContent = undefined
+
+        // Only show warning if word_count suggests there should be content
+        if (chapter.word_count && chapter.word_count > 0) {
+          console.error('DATA INTEGRITY ISSUE: Chapter reports word count but has no content!', {
+            chapterId,
+            wordCount: chapter.word_count
+          })
+          toast.error('Warning: Chapter data may be incomplete (word count mismatch)')
+        }
+      }
+
+      setCurrentChapterContent(editorContent || '')
 
       // Force editor re-mount with new content
       setEditorKey(prev => prev + 1)
@@ -230,6 +376,15 @@ function App() {
               >
                 📖 Codex
               </button>
+
+              {/* Coach Toggle Button */}
+              <button
+                onClick={toggleCoach}
+                className="flex items-center gap-2 px-4 py-2 bg-bronze text-white font-sans text-sm rounded hover:bg-bronze/90 transition-colors"
+                title="Toggle Writing Coach"
+              >
+                ✨ Coach
+              </button>
             </div>
           </div>
         </header>
@@ -290,6 +445,13 @@ function App() {
             isOpen={isSidebarOpen}
             onToggle={toggleSidebar}
           />
+
+          {/* FastCoach Sidebar (Far Right) */}
+          <FastCoachSidebar
+            manuscriptId={currentManuscript.id}
+            isOpen={isCoachOpen}
+            onToggle={toggleCoach}
+          />
         </main>
 
         {/* Time Machine Modal */}
@@ -298,7 +460,7 @@ function App() {
             <div className="bg-vellum rounded-lg shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden">
               <TimeMachine
                 manuscriptId={currentManuscript.id}
-                currentContent={currentManuscript.content}
+                currentContent={currentChapterContent}
                 onRestore={handleRestoreSnapshot}
                 onClose={() => setShowTimeMachine(false)}
               />

@@ -12,6 +12,32 @@ import { createPortal } from 'react-dom';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useCodexStore } from '@/stores/codexStore';
 import { timelineApi } from '@/lib/api';
+import { getManuscriptScale, getLayoutConfig, getScaleInfo } from '@/lib/timelineUtils';
+
+// Emotion to emoji mapping
+const EMOTION_ICONS: Record<string, string> = {
+  happy: '😊',
+  joyful: '😊',
+  sad: '😢',
+  angry: '😠',
+  fearful: '😨',
+  scared: '😨',
+  surprised: '😲',
+  shocked: '😲',
+  neutral: '😐',
+  excited: '🤩',
+  triumphant: '🎉',
+  tense: '😰',
+  anxious: '😰',
+  peaceful: '😌',
+  calm: '😌',
+  dramatic: '🎭',
+  mysterious: '🤔',
+  hopeful: '🌟',
+  tragic: '😭',
+  melancholic: '😔',
+  nostalgic: '🌅',
+};
 
 interface TimelineHeatmapProps {
   manuscriptId: string;
@@ -53,11 +79,24 @@ export default function TimelineHeatmap({ manuscriptId }: TimelineHeatmapProps) 
 
   const sortedEvents = [...events].sort((a, b) => a.order_index - b.order_index);
 
-  // Determine if we should sample events for large manuscripts
-  const shouldSample = sortedEvents.length > 100; // Novel-length
-  const displayEvents = shouldSample
-    ? sortedEvents.filter((_, idx) => idx % 2 === 0) // Show every other event
-    : sortedEvents;
+  // Determine manuscript scale and layout config
+  const scale = getManuscriptScale(sortedEvents.length);
+  const layoutConfig = getLayoutConfig(scale);
+  const scaleInfo = getScaleInfo(scale);
+
+  // Adaptive sampling based on scale
+  const displayEvents = (() => {
+    switch (layoutConfig.heatmapCells) {
+      case 'all':
+        return sortedEvents;
+      case 'sample':
+        return sortedEvents.filter((_, idx) => idx % 2 === 0); // Every other event
+      case 'aggregated':
+        return sortedEvents.filter((_, idx) => idx % 3 === 0); // Every third event
+      default:
+        return sortedEvents;
+    }
+  })();
 
   // Calculate heatmap values based on mode
   const getHeatmapValue = (eventIndex: number): number => {
@@ -121,7 +160,9 @@ export default function TimelineHeatmap({ manuscriptId }: TimelineHeatmapProps) 
 
     switch (heatmapMode) {
       case 'emotion':
-        return `Event ${eventIndex + 1}\n${event.description.slice(0, 50)}...\nSentiment: ${event.event_metadata?.sentiment?.toFixed(2) || 0}\nIntensity: ${(value * 100).toFixed(0)}%`;
+        const tone = event.event_metadata?.tone || 'unknown';
+        const emoji = EMOTION_ICONS[tone.toLowerCase()] || '❓';
+        return `Event ${eventIndex + 1}\n${event.description.slice(0, 50)}...\n${emoji} ${tone.charAt(0).toUpperCase() + tone.slice(1)}\nSentiment: ${event.event_metadata?.sentiment?.toFixed(2) || 0}\nIntensity: ${(value * 100).toFixed(0)}%`;
 
       case 'density':
         return `Event ${eventIndex + 1}\n${event.description.slice(0, 50)}...\nWords: ${event.event_metadata?.word_count || 0}`;
@@ -198,7 +239,21 @@ export default function TimelineHeatmap({ manuscriptId }: TimelineHeatmapProps) 
       </div>
 
       {/* Legend */}
-      <div className="p-4 border-b border-slate-ui bg-white">
+      <div className="p-4 border-b border-slate-ui bg-white space-y-3">
+        {/* Scale indicator */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-faded-ink font-sans">Timeline Scale:</span>
+            <span className="px-2 py-1 bg-bronze/10 text-bronze font-sans font-semibold rounded" style={{ fontSize: '11px' }}>
+              {scaleInfo.icon} {scaleInfo.label}
+            </span>
+          </div>
+          <span className="text-xs text-faded-ink font-sans">
+            {scaleInfo.description}
+          </span>
+        </div>
+
+        {/* Color legend */}
         <div className="flex items-center gap-2 text-xs font-sans text-faded-ink">
           <span>Low</span>
           <div className="flex-1 h-4 rounded overflow-hidden flex">
@@ -215,7 +270,7 @@ export default function TimelineHeatmap({ manuscriptId }: TimelineHeatmapProps) 
           <span>High</span>
         </div>
         {heatmapMode === 'emotion' && (
-          <p className="text-xs text-faded-ink mt-2">
+          <p className="text-xs text-faded-ink">
             Green = Positive, Red = Negative, Blue = Neutral
           </p>
         )}
@@ -223,9 +278,9 @@ export default function TimelineHeatmap({ manuscriptId }: TimelineHeatmapProps) 
 
       {/* Heatmap grid */}
       <div className="flex-1 overflow-auto p-4 pb-8">
-        {shouldSample && (
+        {displayEvents.length < sortedEvents.length && (
           <div className="mb-4 p-2 bg-bronze/10 border border-bronze/20 rounded text-xs font-sans text-bronze">
-            Showing sample of {displayEvents.length} / {sortedEvents.length} events (every other event)
+            Showing {displayEvents.length} / {sortedEvents.length} events ({layoutConfig.heatmapCells} view)
           </div>
         )}
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(60px, 1fr))` }}>
@@ -255,10 +310,10 @@ export default function TimelineHeatmap({ manuscriptId }: TimelineHeatmapProps) 
               >
                 {event.event_metadata?.tone && heatmapMode === 'emotion' ? (
                   <div className="flex flex-col items-center gap-0.5">
-                    <span className="text-xs text-gray-700 font-medium capitalize">
-                      {event.event_metadata.tone}
+                    <span className="text-2xl leading-none">
+                      {EMOTION_ICONS[event.event_metadata.tone.toLowerCase()] || '❓'}
                     </span>
-                    <span className="text-xs text-gray-500 font-medium">
+                    <span className="text-xs text-gray-600 font-medium">
                       #{index + 1}
                     </span>
                   </div>
