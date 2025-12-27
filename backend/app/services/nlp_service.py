@@ -798,6 +798,123 @@ class NLPService:
 
     # ==================== Timeline Event Extraction ====================
 
+    def _is_dialogue(self, paragraph: str) -> bool:
+        """
+        Check if paragraph is primarily dialogue
+
+        Args:
+            paragraph: Text to check
+
+        Returns:
+            True if paragraph appears to be dialogue
+        """
+        # Count various quotation marks
+        quote_count = (
+            paragraph.count('"') +
+            paragraph.count('"') +
+            paragraph.count('"') +
+            paragraph.count("'") +
+            paragraph.count("'") +
+            paragraph.count("'")
+        )
+
+        # Dialogue if has multiple quotes or starts with quote
+        stripped = paragraph.strip()
+        starts_with_quote = stripped.startswith(('"', '"', '"', "'", "'", "'"))
+
+        return quote_count >= 2 or starts_with_quote
+
+    def _detect_flashback_conservative(self, paragraph: str) -> bool:
+        """
+        Conservative flashback detection using word-boundary regex
+        Requires multiple indicators to reduce false positives
+
+        Args:
+            paragraph: Text to check
+
+        Returns:
+            True if flashback detected with high confidence
+        """
+        import re
+
+        # Exclude dialogue from flashback detection
+        if self._is_dialogue(paragraph):
+            return False
+
+        # Flashback patterns with word boundaries
+        FLASHBACK_PATTERNS = [
+            r'\b(years?|months?|days?|decades?) (ago|earlier|before)\b',
+            r'\b(remembered|recalled|thought back|reminisced)\b',
+            r'\b(flashback|memory)\b',
+            r'\b(had been|had gone|had seen|had done)\b.*\b(years?|ago)\b'
+        ]
+
+        # Count pattern matches
+        matches = 0
+        for pattern in FLASHBACK_PATTERNS:
+            if re.search(pattern, paragraph, re.IGNORECASE):
+                matches += 1
+
+        # Conservative: require at least 2 different pattern matches
+        return matches >= 2
+
+    def _detect_characters_with_ner(self, para_doc, entity_lookup: dict) -> tuple[set, list]:
+        """
+        Detect characters using both entity_lookup and spaCy NER fallback
+
+        Args:
+            para_doc: spaCy Doc object
+            entity_lookup: Dictionary of known entities
+
+        Returns:
+            Tuple of (registered_character_names, detected_person_names)
+        """
+        characters_in_para = set()
+        detected_persons = []
+
+        # Common pronouns and titles to filter out
+        FILTER_WORDS = {
+            'I', 'You', 'He', 'She', 'They', 'We', 'It',
+            'Mr', 'Mrs', 'Ms', 'Dr', 'Sir', 'Lady', 'Lord',
+            'The', 'A', 'An'
+        }
+
+        # First pass: Check registered entities
+        for token in para_doc:
+            token_lower = token.text.lower()
+            if token_lower in entity_lookup:
+                entity = entity_lookup[token_lower]
+                if entity.get("type") == "CHARACTER":
+                    characters_in_para.add(entity["name"])
+
+        # Second pass: NER fallback for unregistered characters
+        for ent in para_doc.ents:
+            if ent.label_ == "PERSON":
+                person_name = ent.text.strip()
+
+                # Filter out pronouns, single letters, and titles
+                if (len(person_name) > 1 and
+                    person_name not in FILTER_WORDS and
+                    not person_name.isupper()):  # Avoid all-caps acronyms
+
+                    # Check if already in registered entities
+                    is_registered = any(
+                        person_name.lower() == name.lower()
+                        for name in characters_in_para
+                    )
+
+                    if not is_registered:
+                        # Check if it's a known entity name
+                        name_in_lookup = any(
+                            person_name.lower() in key or key in person_name.lower()
+                            for key in entity_lookup.keys()
+                        )
+
+                        if not name_in_lookup and person_name not in detected_persons:
+                            detected_persons.append(person_name)
+
+        return characters_in_para, detected_persons
+
     def extract_events(
         self,
         text: str,
@@ -867,24 +984,28 @@ class NLPService:
                 order_index += 1
                 continue
 
-            # Check for flashback indicators
-            if any(phrase in paragraph.lower() for phrase in ["years ago", "remembered", "flashback", "had been", "used to"]):
+            # Check for flashback indicators using conservative detection
+            if self._detect_flashback_conservative(paragraph):
                 event_type = "FLASHBACK"
             else:
                 event_type = "SCENE"
 
             # Extract characters mentioned in paragraph
             para_doc = self.nlp(paragraph[:1000])  # Limit to first 1000 chars for performance
-            characters_in_para = set()
-            location_in_para = None
 
+            # Use NER fallback for character detection
+            characters_in_para, detected_persons = self._detect_characters_with_ner(
+                para_doc,
+                entity_lookup
+            )
+
+            # Extract location
+            location_in_para = None
             for token in para_doc:
                 token_lower = token.text.lower()
                 if token_lower in entity_lookup:
                     entity = entity_lookup[token_lower]
-                    if entity.get("type") == "CHARACTER":
-                        characters_in_para.add(entity["name"])
-                    elif entity.get("type") == "LOCATION" and not location_in_para:
+                    if entity.get("type") == "LOCATION" and not location_in_para:
                         location_in_para = entity["name"]
 
             # Extract timestamp
@@ -921,7 +1042,8 @@ class NLPService:
                         "emotion_scores": emotional_context.get("emotion_scores", {}),
                         "adjectives": emotional_context.get("adjectives", []),
                         "adverbs": emotional_context.get("adverbs", []),
-                        "has_transition": has_transition
+                        "has_transition": has_transition,
+                        "detected_persons": detected_persons  # Unregistered characters from NER
                     }
                 })
                 order_index += 1

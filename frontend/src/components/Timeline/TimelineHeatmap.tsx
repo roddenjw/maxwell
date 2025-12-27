@@ -7,7 +7,8 @@
  * - Location usage
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useCodexStore } from '@/stores/codexStore';
 import { timelineApi } from '@/lib/api';
@@ -21,6 +22,8 @@ export default function TimelineHeatmap({ manuscriptId }: TimelineHeatmapProps) 
   const { entities } = useCodexStore();
   const [loading, setLoading] = useState(false);
   const [heatmapMode, setHeatmapMode] = useState<'emotion' | 'density' | 'character' | 'location'>('emotion');
+  const [hoveredEvent, setHoveredEvent] = useState<{ index: number; rect: DOMRect } | null>(null);
+  const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   useEffect(() => {
     loadEvents();
@@ -49,6 +52,12 @@ export default function TimelineHeatmap({ manuscriptId }: TimelineHeatmapProps) 
   }
 
   const sortedEvents = [...events].sort((a, b) => a.order_index - b.order_index);
+
+  // Determine if we should sample events for large manuscripts
+  const shouldSample = sortedEvents.length > 100; // Novel-length
+  const displayEvents = shouldSample
+    ? sortedEvents.filter((_, idx) => idx % 2 === 0) // Show every other event
+    : sortedEvents;
 
   // Calculate heatmap values based on mode
   const getHeatmapValue = (eventIndex: number): number => {
@@ -213,38 +222,51 @@ export default function TimelineHeatmap({ manuscriptId }: TimelineHeatmapProps) 
       </div>
 
       {/* Heatmap grid */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto p-4 pb-8">
+        {shouldSample && (
+          <div className="mb-4 p-2 bg-bronze/10 border border-bronze/20 rounded text-xs font-sans text-bronze">
+            Showing sample of {displayEvents.length} / {sortedEvents.length} events (every other event)
+          </div>
+        )}
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(60px, 1fr))` }}>
-          {sortedEvents.map((event, index) => {
+          {displayEvents.map((event) => {
+            // Get original index for proper coloring and tooltip
+            const index = sortedEvents.indexOf(event);
             const value = getHeatmapValue(index);
             const color = getHeatmapColor(value, index);
 
             return (
               <div
                 key={event.id}
-                className="aspect-square flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform relative group"
+                ref={(el) => {
+                  if (el) cardRefs.current.set(index, el);
+                }}
+                className="aspect-square flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform relative"
                 style={{
                   backgroundColor: color,
                   borderRadius: '4px',
                   border: '1px solid rgba(0,0,0,0.1)'
                 }}
-                title={getTooltipText(index)}
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setHoveredEvent({ index, rect });
+                }}
+                onMouseLeave={() => setHoveredEvent(null)}
               >
-                <span className="text-xs font-bold text-midnight">
-                  {index + 1}
-                </span>
-                {event.event_metadata?.tone && heatmapMode === 'emotion' && (
-                  <span className="text-xs opacity-70">
-                    {event.event_metadata.tone.slice(0, 3)}
+                {event.event_metadata?.tone && heatmapMode === 'emotion' ? (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="text-xs text-gray-700 font-medium capitalize">
+                      {event.event_metadata.tone}
+                    </span>
+                    <span className="text-xs text-gray-500 font-medium">
+                      #{index + 1}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-xs font-bold text-midnight">
+                    {index + 1}
                   </span>
                 )}
-
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10">
-                  <div className="bg-midnight text-white text-xs p-2 rounded shadow-lg whitespace-pre-wrap max-w-xs">
-                    {getTooltipText(index)}
-                  </div>
-                </div>
               </div>
             );
           })}
@@ -285,6 +307,23 @@ export default function TimelineHeatmap({ manuscriptId }: TimelineHeatmapProps) 
           </div>
         </div>
       </div>
+
+      {/* Portal tooltip - renders at document root to avoid z-index issues */}
+      {hoveredEvent && createPortal(
+        <div
+          className="fixed pointer-events-none z-[10000]"
+          style={{
+            left: `${hoveredEvent.rect.left + hoveredEvent.rect.width / 2}px`,
+            top: `${hoveredEvent.rect.top - 10}px`,
+            transform: 'translate(-50%, -100%)',
+          }}
+        >
+          <div className="bg-midnight text-white text-xs p-3 rounded-lg shadow-2xl whitespace-pre-wrap max-w-xs border-2 border-bronze">
+            {getTooltipText(hoveredEvent.index)}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

@@ -19,6 +19,7 @@ interface NetworkNode {
   y: number;
   appearances: number;
   color: string;
+  isDetected?: boolean; // True if from NER detection, not registered in Codex
 }
 
 interface NetworkEdge {
@@ -62,7 +63,7 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
   // Build character network from events
   const characters = entities.filter(e => e.type === 'CHARACTER');
 
-  // Count character appearances
+  // Count character appearances (registered)
   const characterAppearances = new Map<string, number>();
   events.forEach(event => {
     event.character_ids.forEach(charId => {
@@ -70,13 +71,26 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
     });
   });
 
-  // Build co-occurrence matrix (characters appearing together)
+  // Count detected person appearances (NER fallback)
+  const detectedPersonAppearances = new Map<string, number>();
+  events.forEach(event => {
+    const detectedPersons = event.event_metadata?.detected_persons || [];
+    detectedPersons.forEach((personName: string) => {
+      detectedPersonAppearances.set(personName, (detectedPersonAppearances.get(personName) || 0) + 1);
+    });
+  });
+
+  // Build co-occurrence matrix for both registered and detected characters
   const coOccurrences = new Map<string, number>();
   events.forEach(event => {
-    const chars = event.character_ids;
-    for (let i = 0; i < chars.length; i++) {
-      for (let j = i + 1; j < chars.length; j++) {
-        const key = [chars[i], chars[j]].sort().join('-');
+    // Combine registered character IDs and detected person names
+    const registeredIds = event.character_ids;
+    const detectedNames = event.event_metadata?.detected_persons || [];
+    const allCharacters = [...registeredIds, ...detectedNames];
+
+    for (let i = 0; i < allCharacters.length; i++) {
+      for (let j = i + 1; j < allCharacters.length; j++) {
+        const key = [allCharacters[i], allCharacters[j]].sort().join('-');
         coOccurrences.set(key, (coOccurrences.get(key) || 0) + 1);
       }
     }
@@ -84,8 +98,9 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
 
   // Filter to characters that appear in timeline
   const activeCharacters = characters.filter(c => characterAppearances.has(c.id));
+  const activeDetectedPersons = Array.from(detectedPersonAppearances.keys());
 
-  if (activeCharacters.length === 0) {
+  if (activeCharacters.length === 0 && activeDetectedPersons.length === 0) {
     return (
       <div className="flex items-center justify-center p-8 text-center">
         <div>
@@ -93,7 +108,7 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
             No character data
           </p>
           <p className="text-sm text-faded-ink font-sans">
-            Add characters to events to see relationships
+            Characters will appear automatically as you write
           </p>
         </div>
       </div>
@@ -105,8 +120,12 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
   const centerY = 300;
   const radius = 200;
 
-  const nodes: NetworkNode[] = activeCharacters.map((char, index) => {
-    const angle = (index / activeCharacters.length) * 2 * Math.PI;
+  // Total nodes = registered + detected
+  const totalNodes = activeCharacters.length + activeDetectedPersons.length;
+
+  // Nodes for registered characters
+  const registeredNodes: NetworkNode[] = activeCharacters.map((char, index) => {
+    const angle = (index / totalNodes) * 2 * Math.PI;
     const appearances = characterAppearances.get(char.id) || 0;
 
     return {
@@ -115,20 +134,54 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
       x: centerX + radius * Math.cos(angle),
       y: centerY + radius * Math.sin(angle),
       appearances,
-      color: `hsl(${(index * 360 / activeCharacters.length)}, 70%, 60%)`
+      color: `hsl(${(index * 360 / totalNodes)}, 70%, 60%)`,
+      isDetected: false
     };
   });
 
-  // Create edges
+  // Nodes for detected persons (use person name as ID)
+  const detectedNodes: NetworkNode[] = activeDetectedPersons.map((personName, index) => {
+    const angle = ((activeCharacters.length + index) / totalNodes) * 2 * Math.PI;
+    const appearances = detectedPersonAppearances.get(personName) || 0;
+
+    return {
+      id: `detected:${personName}`,
+      name: personName,
+      x: centerX + radius * Math.cos(angle),
+      y: centerY + radius * Math.sin(angle),
+      appearances,
+      color: `hsl(${((activeCharacters.length + index) * 360 / totalNodes)}, 70%, 60%)`,
+      isDetected: true
+    };
+  });
+
+  const nodes: NetworkNode[] = [...registeredNodes, ...detectedNodes];
+
+  // Create edges for all character pairs
   const edges: NetworkEdge[] = [];
-  for (let i = 0; i < activeCharacters.length; i++) {
-    for (let j = i + 1; j < activeCharacters.length; j++) {
-      const key = [activeCharacters[i].id, activeCharacters[j].id].sort().join('-');
+
+  // All character identifiers (IDs for registered, names for detected)
+  const allCharacterIds = [
+    ...activeCharacters.map(c => c.id),
+    ...activeDetectedPersons
+  ];
+
+  for (let i = 0; i < allCharacterIds.length; i++) {
+    for (let j = i + 1; j < allCharacterIds.length; j++) {
+      const key = [allCharacterIds[i], allCharacterIds[j]].sort().join('-');
       const weight = coOccurrences.get(key) || 0;
       if (weight > 0) {
+        // Map IDs to node IDs (add 'detected:' prefix for detected persons)
+        const sourceId = activeCharacters.find(c => c.id === allCharacterIds[i])
+          ? allCharacterIds[i]
+          : `detected:${allCharacterIds[i]}`;
+        const targetId = activeCharacters.find(c => c.id === allCharacterIds[j])
+          ? allCharacterIds[j]
+          : `detected:${allCharacterIds[j]}`;
+
         edges.push({
-          source: activeCharacters[i].id,
-          target: activeCharacters[j].id,
+          source: sourceId,
+          target: targetId,
           weight
         });
       }
@@ -140,20 +193,33 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
 
   // Get selected node info
   const selectedNodeData = selectedNode ? getNode(selectedNode) : null;
-  const selectedCharacter = selectedNodeData ? entities.find(e => e.id === selectedNode) : null;
+  const isDetectedPerson = selectedNodeData?.isDetected || false;
 
-  // Get relationships for selected character
+  // Get relationships for selected character (works for both registered and detected)
   const getRelationships = (charId: string) => {
     return edges
       .filter(e => e.source === charId || e.target === charId)
       .map(e => {
         const otherId = e.source === charId ? e.target : e.source;
+        // Try to find in entities, or get detected person name
+        const entityChar = entities.find(en => en.id === otherId);
+        if (entityChar) {
+          return {
+            character: entityChar,
+            name: entityChar.name,
+            interactions: e.weight,
+            isDetected: false
+          };
+        }
+        // Must be a detected person
+        const detectedName = otherId.replace('detected:', '');
         return {
-          character: entities.find(en => en.id === otherId),
-          interactions: e.weight
+          character: null,
+          name: detectedName,
+          interactions: e.weight,
+          isDetected: true
         };
-      })
-      .filter(r => r.character);
+      });
   };
 
   return (
@@ -221,7 +287,7 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
                     className="cursor-pointer hover:opacity-100 transition-opacity"
                     onClick={() => setSelectedNode(isSelected ? null : node.id)}
                   >
-                    {/* Node circle */}
+                    {/* Node circle - dashed for detected persons */}
                     <circle
                       cx={node.x}
                       cy={node.y}
@@ -229,6 +295,7 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
                       fill={node.color}
                       stroke={isSelected ? '#9a6f47' : 'white'}
                       strokeWidth={isSelected ? 4 : 2}
+                      strokeDasharray={node.isDetected ? '5,3' : 'none'}
                       opacity={opacity}
                     />
 
@@ -258,6 +325,22 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
                     >
                       {node.name}
                     </text>
+
+                    {/* "New" indicator for detected persons */}
+                    {node.isDetected && (
+                      <text
+                        x={node.x}
+                        y={node.y + nodeRadius + 28}
+                        textAnchor="middle"
+                        fontSize="9"
+                        fontFamily="sans-serif"
+                        fill="#9a6f47"
+                        opacity={opacity}
+                        fontWeight="600"
+                      >
+                        (auto-detected)
+                      </text>
+                    )}
                   </g>
                 );
               })}
@@ -269,19 +352,44 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
             <p className="text-xs font-sans text-faded-ink mb-2">
               Node size = appearance count | Line thickness = interactions
             </p>
+            {activeDetectedPersons.length > 0 && (
+              <p className="text-xs font-sans text-bronze">
+                Dashed border = auto-detected character (click to add to Codex)
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Details panel */}
-        {selectedNodeData && selectedCharacter && (
+        {/* Details panel - for both registered and detected characters */}
+        {selectedNodeData && (
           <div className="w-80 border-l border-slate-ui bg-white overflow-y-auto">
             <div className="p-4 border-b border-slate-ui">
               <h3 className="font-garamond text-lg text-midnight mb-1">
-                {selectedCharacter.name}
+                {selectedNodeData.name}
               </h3>
-              <p className="text-sm font-sans text-faded-ink">
+              <p className="text-sm font-sans text-faded-ink mb-2">
                 {selectedNodeData.appearances} appearance{selectedNodeData.appearances !== 1 ? 's' : ''}
               </p>
+
+              {/* Add to Codex button for detected persons */}
+              {isDetectedPerson && (
+                <button
+                  className="w-full px-3 py-2 bg-bronze text-white text-sm font-sans hover:bg-opacity-90 transition-colors"
+                  style={{ borderRadius: '2px' }}
+                  onClick={() => {
+                    // TODO: Implement add to Codex functionality
+                    alert(`Add "${selectedNodeData.name}" to Codex - Feature coming soon!`);
+                  }}
+                >
+                  + Add to Codex
+                </button>
+              )}
+
+              {isDetectedPerson && (
+                <p className="text-xs font-sans text-faded-ink mt-2 italic">
+                  Auto-detected from your manuscript
+                </p>
+              )}
             </div>
 
             <div className="p-4">
@@ -297,15 +405,16 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-serif text-sm text-midnight">
-                        {rel.character!.name}
+                        {rel.name}
+                        {rel.isDetected && <span className="text-xs text-bronze ml-1">(detected)</span>}
                       </span>
                       <span className="text-xs font-sans text-bronze font-semibold">
                         {rel.interactions} {rel.interactions === 1 ? 'scene' : 'scenes'}
                       </span>
                     </div>
-                    {rel.character!.attributes?.description && (
+                    {rel.character?.attributes?.description && (
                       <p className="text-xs font-sans text-faded-ink">
-                        {rel.character!.attributes.description}
+                        {rel.character.attributes.description}
                       </p>
                     )}
                   </div>

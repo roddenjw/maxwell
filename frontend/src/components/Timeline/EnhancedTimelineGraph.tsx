@@ -17,6 +17,44 @@ interface EnhancedTimelineGraphProps {
   manuscriptId: string;
 }
 
+type ManuscriptScale = 'short' | 'medium' | 'long';
+
+interface LayoutConfig {
+  eventSpacing: number;
+  fontSize: number;
+  showAllLabels: boolean;
+  graphHeight: number;
+}
+
+// Determine manuscript scale based on event count
+function getManuscriptScale(eventCount: number): ManuscriptScale {
+  if (eventCount < 20) return 'short';      // Short story
+  if (eventCount < 100) return 'medium';    // Novella
+  return 'long';                             // Novel
+}
+
+// Layout configurations for different scales
+const LAYOUT_CONFIGS: Record<ManuscriptScale, LayoutConfig> = {
+  short: {
+    eventSpacing: 150,      // More space between events
+    fontSize: 14,           // Larger text
+    showAllLabels: true,    // Show all event labels
+    graphHeight: 400,
+  },
+  medium: {
+    eventSpacing: 100,
+    fontSize: 12,
+    showAllLabels: false,   // Show only important labels
+    graphHeight: 500,
+  },
+  long: {
+    eventSpacing: 60,       // Condensed view
+    fontSize: 10,
+    showAllLabels: false,   // Minimal labels
+    graphHeight: 600,
+  }
+};
+
 export default function EnhancedTimelineGraph({ manuscriptId }: EnhancedTimelineGraphProps) {
   const { events, setEvents, setSelectedEvent } = useTimelineStore();
   const { entities } = useCodexStore();
@@ -84,6 +122,10 @@ export default function EnhancedTimelineGraph({ manuscriptId }: EnhancedTimeline
   // Sort events by order
   const sortedEvents = [...events].sort((a, b) => a.order_index - b.order_index);
 
+  // Determine manuscript scale and layout
+  const scale = getManuscriptScale(sortedEvents.length);
+  const layout = LAYOUT_CONFIGS[scale];
+
   // Get all characters involved in timeline
   const charactersInTimeline = Array.from(
     new Set(sortedEvents.flatMap(e => e.character_ids))
@@ -104,12 +146,12 @@ export default function EnhancedTimelineGraph({ manuscriptId }: EnhancedTimeline
 
   // Render timeline view
   const renderTimelineView = () => (
-    <div className="relative">
+    <div className="relative" style={{ minHeight: `${layout.graphHeight}px` }}>
       {/* Timeline line */}
       <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-slate-ui"></div>
 
-      {/* Events */}
-      <div className="space-y-6">
+      {/* Events - spacing adapts to scale */}
+      <div className="space-y-6" style={{ '--event-spacing': `${layout.eventSpacing}px` } as React.CSSProperties}>
         {sortedEvents.map((event, index) => {
           const typeColor = getEventTypeColor(event.event_type);
           const typeIcon = getEventTypeIcon(event.event_type);
@@ -183,12 +225,15 @@ export default function EnhancedTimelineGraph({ manuscriptId }: EnhancedTimeline
                 </div>
 
                 {/* Description */}
-                <p className="text-sm font-serif text-midnight mb-2">
+                <p
+                  className="font-serif text-midnight mb-2"
+                  style={{ fontSize: `${layout.fontSize}px` }}
+                >
                   {event.description}
                 </p>
 
-                {/* Actions */}
-                {event.event_metadata?.actions && event.event_metadata.actions.length > 0 && (
+                {/* Actions - hide in condensed view */}
+                {layout.showAllLabels && event.event_metadata?.actions && event.event_metadata.actions.length > 0 && (
                   <div className="mb-2">
                     <p className="text-xs font-sans text-faded-ink uppercase mb-1">Actions:</p>
                     <div className="flex flex-wrap gap-1">
@@ -385,34 +430,58 @@ export default function EnhancedTimelineGraph({ manuscriptId }: EnhancedTimeline
     );
   };
 
+  // Get scale emoji and label
+  const getScaleLabel = () => {
+    switch (scale) {
+      case 'short': return { emoji: '📖', label: 'Short Story' };
+      case 'medium': return { emoji: '📚', label: 'Novella' };
+      case 'long': return { emoji: '📕', label: 'Novel' };
+    }
+  };
+
+  const scaleInfo = getScaleLabel();
+
   return (
     <div className="h-full flex flex-col">
-      {/* View mode tabs */}
-      <div className="flex border-b border-slate-ui bg-white">
-        <button
-          onClick={() => setViewMode('timeline')}
-          className={`
-            flex-1 px-4 py-2 text-sm font-sans transition-colors
-            ${viewMode === 'timeline'
-              ? 'text-bronze border-b-2 border-bronze'
-              : 'text-faded-ink hover:text-midnight'
-            }
-          `}
-        >
-          Timeline
-        </button>
-        <button
-          onClick={() => setViewMode('journey')}
-          className={`
-            flex-1 px-4 py-2 text-sm font-sans transition-colors
-            ${viewMode === 'journey'
-              ? 'text-bronze border-b-2 border-bronze'
-              : 'text-faded-ink hover:text-midnight'
-            }
-          `}
-        >
-          Journey
-        </button>
+      {/* View mode tabs with scale indicator */}
+      <div className="flex items-center border-b border-slate-ui bg-white">
+        <div className="flex flex-1">
+          <button
+            onClick={() => setViewMode('timeline')}
+            className={`
+              flex-1 px-4 py-2 text-sm font-sans transition-colors
+              ${viewMode === 'timeline'
+                ? 'text-bronze border-b-2 border-bronze'
+                : 'text-faded-ink hover:text-midnight'
+              }
+            `}
+          >
+            Timeline
+          </button>
+          <button
+            onClick={() => setViewMode('journey')}
+            className={`
+              flex-1 px-4 py-2 text-sm font-sans transition-colors
+              ${viewMode === 'journey'
+                ? 'text-bronze border-b-2 border-bronze'
+                : 'text-faded-ink hover:text-midnight'
+              }
+            `}
+          >
+            Journey
+          </button>
+        </div>
+
+        {/* Scale indicator */}
+        <div className="px-4 py-2 flex items-center gap-2 border-l border-slate-ui">
+          <span className="text-sm">{scaleInfo.emoji}</span>
+          <span className="text-xs font-sans text-faded-ink">
+            {scaleInfo.label}
+          </span>
+          <span className="text-xs font-sans text-bronze font-semibold">
+            ({sortedEvents.length} events)
+          </span>
+        </div>
       </div>
 
       {/* Character selector for journey view */}
