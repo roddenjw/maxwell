@@ -6,6 +6,7 @@ import { CodexSidebar } from './components/Codex'
 import TimelineSidebar from './components/Timeline/TimelineSidebar'
 import DocumentNavigator from './components/Document/DocumentNavigator'
 import FastCoachSidebar from './components/FastCoach/FastCoachSidebar'
+import UnifiedSidebar from './components/Navigation/UnifiedSidebar'
 import ToastContainer from './components/common/ToastContainer'
 import KeyboardShortcutsModal from './components/common/KeyboardShortcutsModal'
 import { useManuscriptStore } from './stores/manuscriptStore'
@@ -27,13 +28,11 @@ function App() {
   const { isTimelineOpen, setTimelineOpen } = useTimelineStore()
   const { setCurrentChapter, currentChapterId } = useChapterStore()
   const { isSidebarOpen: isCoachOpen, toggleSidebar: toggleCoach } = useFastCoachStore()
-  const [showTimeMachine, setShowTimeMachine] = useState(false)
-  const [isDocNavOpen, setDocNavOpen] = useState(true)
+  const [activeView, setActiveView] = useState<'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap'>('chapters')
   const [editorKey, setEditorKey] = useState(0) // Force editor re-mount on restore
   const [currentChapterContent, setCurrentChapterContent] = useState<string>('')
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
-  const [showRecap, setShowRecap] = useState(false)
 
   // Track unsaved changes and warn before closing
   const { checkNavigateAway } = useUnsavedChanges(saveStatus === 'unsaved' || saveStatus === 'saving')
@@ -81,6 +80,24 @@ function App() {
     setCurrentManuscript(null)
     setCurrentChapter(null) // Clear chapter selection
     setSaveStatus('saved') // Reset save status
+    setActiveView('chapters') // Reset view
+  }
+
+  const handleNavigate = (view: 'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap') => {
+    setActiveView(view)
+
+    // Handle view-specific state updates
+    if (view === 'chapters') {
+      // No additional state needed
+    } else if (view === 'codex') {
+      if (!isSidebarOpen) toggleSidebar()
+    } else if (view === 'timeline') {
+      if (!isTimelineOpen) setTimelineOpen(true)
+    } else if (view === 'timemachine') {
+      // Time machine is a modal, handled separately
+    } else if (view === 'coach') {
+      if (!isCoachOpen) toggleCoach()
+    }
   }
 
   const handleRestoreSnapshot = async (snapshotId: string) => {
@@ -110,7 +127,7 @@ function App() {
 
       console.log('Snapshot restored:', data)
 
-      setShowTimeMachine(false)
+      setActiveView('chapters')
 
       // Show success message with restoration details
       if (data.legacy_format) {
@@ -267,32 +284,32 @@ function App() {
     {
       key: 'b',
       ctrl: true,
-      description: 'Toggle Codex sidebar',
-      handler: () => toggleSidebar(),
+      description: 'Navigate to Codex',
+      handler: () => handleNavigate('codex'),
     },
     {
       key: 't',
       ctrl: true,
-      description: 'Toggle Timeline sidebar',
-      handler: () => setTimelineOpen(!isTimelineOpen),
+      description: 'Navigate to Timeline',
+      handler: () => handleNavigate('timeline'),
     },
     {
       key: 'd',
       ctrl: true,
-      description: 'Toggle chapter navigator',
-      handler: () => setDocNavOpen(!isDocNavOpen),
+      description: 'Navigate to Chapters',
+      handler: () => handleNavigate('chapters'),
     },
     {
       key: 'h',
       ctrl: true,
-      description: 'Show Time Machine (history)',
-      handler: () => setShowTimeMachine(true),
+      description: 'Navigate to Time Machine',
+      handler: () => handleNavigate('timemachine'),
     },
     {
       key: 'Escape',
-      description: 'Close modals and sidebars',
+      description: 'Return to chapters view',
       handler: () => {
-        setShowTimeMachine(false);
+        setActiveView('chapters');
         setShowKeyboardShortcuts(false);
       },
     },
@@ -304,21 +321,21 @@ function App() {
   // Show editor when a manuscript is selected
   if (currentManuscriptId && currentManuscript) {
     return (
-      <div className="min-h-screen bg-vellum text-midnight flex flex-col">
-        {/* Header - Maxwell Style */}
-        <header className="border-b border-slate-ui bg-white px-6 py-3 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleCloseEditor}
-                className="text-faded-ink hover:text-midnight transition-colors font-sans text-sm"
-                title="Back to library"
-              >
-                ← Library
-              </button>
-              <h1 className="text-xl font-serif font-bold text-midnight">
-                {currentManuscript.title}
-              </h1>
+      <div className="min-h-screen bg-vellum text-midnight flex">
+        {/* Unified Left Sidebar Navigation */}
+        <UnifiedSidebar
+          currentManuscriptId={currentManuscriptId}
+          manuscriptTitle={currentManuscript.title}
+          onNavigate={handleNavigate}
+          onCloseEditor={handleCloseEditor}
+          activeView={activeView}
+        />
+
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          {/* Minimal Header */}
+          <header className="border-b border-slate-ui bg-white px-6 py-3 flex-shrink-0">
+            <div className="flex items-center justify-end gap-4">
               {/* Save status indicator */}
               <span className="text-xs font-sans text-faded-ink">
                 {saveStatus === 'saved' && '✓ Saved'}
@@ -326,161 +343,131 @@ function App() {
                 {saveStatus === 'unsaved' && '• Unsaved changes'}
               </span>
             </div>
+          </header>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2">
-              {/* Document Navigator Toggle */}
-              <button
-                onClick={() => setDocNavOpen(!isDocNavOpen)}
-                className="flex items-center gap-2 px-4 py-2 bg-bronze text-white font-sans text-sm rounded hover:bg-bronze/90 transition-colors"
-                title="Toggle Document Navigator"
-              >
-                📑 Chapters
-              </button>
+          {/* Content based on active view */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Chapters View */}
+            {activeView === 'chapters' && (
+              <>
+                <div className="w-64 flex-shrink-0">
+                  <DocumentNavigator
+                    manuscriptId={currentManuscript.id}
+                    onChapterSelect={handleChapterSelect}
+                  />
+                </div>
+                <div className="flex-1 overflow-auto">
+                  {currentChapterId ? (
+                    <ManuscriptEditor
+                      key={editorKey}
+                      manuscriptId={currentManuscript.id}
+                      chapterId={currentChapterId}
+                      initialContent={currentChapterContent}
+                      mode="normal"
+                      onSaveStatusChange={setSaveStatus}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full bg-vellum">
+                      <div className="text-center max-w-md p-8">
+                        <h2 className="font-garamond text-3xl font-semibold text-midnight mb-4">
+                          {currentManuscript.title}
+                        </h2>
+                        <p className="font-sans text-faded-ink mb-6">
+                          Select a chapter from the navigator to start writing, or create a new chapter.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
-              {/* Writing Recap Button */}
-              <button
-                onClick={() => setShowRecap(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-bronze text-white font-sans text-sm rounded hover:bg-bronze/90 transition-colors"
-                title="Generate writing recap card"
-              >
-                ✨ Recap
-              </button>
+            {/* Codex View */}
+            {activeView === 'codex' && (
+              <>
+                {currentChapterId && (
+                  <div className="flex-1 overflow-auto">
+                    <ManuscriptEditor
+                      key={editorKey}
+                      manuscriptId={currentManuscript.id}
+                      chapterId={currentChapterId}
+                      initialContent={currentChapterContent}
+                      mode="normal"
+                      onSaveStatusChange={setSaveStatus}
+                    />
+                  </div>
+                )}
+                <CodexSidebar
+                  manuscriptId={currentManuscript.id}
+                  isOpen={true}
+                  onToggle={() => setActiveView('chapters')}
+                />
+              </>
+            )}
 
-              {/* Time Machine Button */}
-              <button
-                onClick={() => setShowTimeMachine(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-bronze text-white font-sans text-sm rounded hover:bg-bronze/90 transition-colors"
-                title="View version history"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Time Machine
-              </button>
+            {/* Timeline View */}
+            {activeView === 'timeline' && (
+              <div className="flex-1 flex">
+                <TimelineSidebar
+                  manuscriptId={currentManuscript.id}
+                  isOpen={true}
+                  onToggle={() => setActiveView('chapters')}
+                />
+              </div>
+            )}
 
-              {/* Timeline Toggle Button */}
-              <button
-                onClick={() => setTimelineOpen(!isTimelineOpen)}
-                className="flex items-center gap-2 px-4 py-2 bg-bronze text-white font-sans text-sm rounded hover:bg-bronze/90 transition-colors"
-                title="Toggle Timeline"
-              >
-                📅 Timeline
-              </button>
+            {/* Coach View */}
+            {activeView === 'coach' && (
+              <>
+                {currentChapterId && (
+                  <div className="flex-1 overflow-auto">
+                    <ManuscriptEditor
+                      key={editorKey}
+                      manuscriptId={currentManuscript.id}
+                      chapterId={currentChapterId}
+                      initialContent={currentChapterContent}
+                      mode="normal"
+                      onSaveStatusChange={setSaveStatus}
+                    />
+                  </div>
+                )}
+                <FastCoachSidebar
+                  manuscriptId={currentManuscript.id}
+                  isOpen={true}
+                  onToggle={() => setActiveView('chapters')}
+                />
+              </>
+            )}
 
-              {/* Codex Toggle Button */}
-              <button
-                onClick={toggleSidebar}
-                className="flex items-center gap-2 px-4 py-2 bg-bronze text-white font-sans text-sm rounded hover:bg-bronze/90 transition-colors"
-                title="Toggle Codex"
-              >
-                📖 Codex
-              </button>
-
-              {/* Coach Toggle Button */}
-              <button
-                onClick={toggleCoach}
-                className="flex items-center gap-2 px-4 py-2 bg-bronze text-white font-sans text-sm rounded hover:bg-bronze/90 transition-colors"
-                title="Toggle Writing Coach"
-              >
-                ✨ Coach
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* Main Content Area with Editor and Sidebars */}
-        <main className="flex-1 flex overflow-hidden">
-          {/* Document Navigator (Far Left) */}
-          {isDocNavOpen && (
-            <div className="w-64 flex-shrink-0">
-              <DocumentNavigator
-                manuscriptId={currentManuscript.id}
-                onChapterSelect={handleChapterSelect}
-              />
-            </div>
-          )}
-
-          {/* Timeline Sidebar (Left) */}
-          <TimelineSidebar
-            manuscriptId={currentManuscript.id}
-            isOpen={isTimelineOpen}
-            onToggle={() => setTimelineOpen(!isTimelineOpen)}
-          />
-
-          {/* Editor */}
-          <div className="flex-1 overflow-auto">
-            {currentChapterId ? (
-              <ManuscriptEditor
-                key={editorKey}
-                manuscriptId={currentManuscript.id}
-                chapterId={currentChapterId}
-                initialContent={currentChapterContent}
-                mode="normal"
-                onSaveStatusChange={setSaveStatus}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full bg-vellum">
-                <div className="text-center max-w-md p-8">
-                  <h2 className="font-garamond text-3xl font-semibold text-midnight mb-4">
-                    {currentManuscript.title}
-                  </h2>
-                  <p className="font-sans text-faded-ink mb-6">
-                    Select a chapter from the navigator to start writing, or create a new chapter.
-                  </p>
-                  <button
-                    onClick={() => setDocNavOpen(true)}
-                    className="px-6 py-3 bg-bronze text-white font-sans rounded hover:bg-bronze/90 transition-colors"
-                  >
-                    {isDocNavOpen ? 'Create New Chapter' : 'Show Chapters'}
-                  </button>
+            {/* Time Machine View (Modal) */}
+            {activeView === 'timemachine' && (
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div className="bg-vellum rounded-lg shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden">
+                  <TimeMachine
+                    manuscriptId={currentManuscript.id}
+                    currentContent={currentChapterContent}
+                    onRestore={handleRestoreSnapshot}
+                    onClose={() => setActiveView('chapters')}
+                  />
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Codex Sidebar (Right) */}
-          <CodexSidebar
-            manuscriptId={currentManuscript.id}
-            isOpen={isSidebarOpen}
-            onToggle={toggleSidebar}
-          />
-
-          {/* FastCoach Sidebar (Far Right) */}
-          <FastCoachSidebar
-            manuscriptId={currentManuscript.id}
-            isOpen={isCoachOpen}
-            onToggle={toggleCoach}
-          />
-        </main>
-
-        {/* Time Machine Modal */}
-        {showTimeMachine && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-vellum rounded-lg shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden">
-              <TimeMachine
+            {/* Recap View (Modal) */}
+            {activeView === 'recap' && (
+              <RecapModal
                 manuscriptId={currentManuscript.id}
-                currentContent={currentChapterContent}
-                onRestore={handleRestoreSnapshot}
-                onClose={() => setShowTimeMachine(false)}
+                onClose={() => setActiveView('chapters')}
               />
-            </div>
+            )}
           </div>
-        )}
+        </main>
 
         {/* Keyboard Shortcuts Modal */}
         {showKeyboardShortcuts && (
           <KeyboardShortcutsModal
             shortcuts={shortcuts}
             onClose={() => setShowKeyboardShortcuts(false)}
-          />
-        )}
-
-        {/* Writing Recap Modal */}
-        {showRecap && (
-          <RecapModal
-            manuscriptId={currentManuscript.id}
-            onClose={() => setShowRecap(false)}
           />
         )}
 

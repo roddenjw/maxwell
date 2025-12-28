@@ -6,7 +6,7 @@
 import { useTimelineStore } from '@/stores/timelineStore';
 import EventList from './EventList';
 import InconsistencyList from './InconsistencyList';
-import EnhancedTimelineGraph from './EnhancedTimelineGraph';
+import InteractiveTimeline from './InteractiveTimeline';
 import TimelineHeatmap from './TimelineHeatmap';
 import CharacterNetwork from './CharacterNetwork';
 import EmotionalArc from './EmotionalArc';
@@ -27,9 +27,9 @@ export default function TimelineSidebar({
   const pendingCount = inconsistencies.length;
 
   const tabs = [
+    { id: 'visual' as const, label: 'Visual', icon: '📜' },
     { id: 'events' as const, label: 'Events', icon: '🎬' },
     { id: 'inconsistencies' as const, label: 'Issues', icon: '⚠️', badge: pendingCount },
-    { id: 'graph' as const, label: 'Visual', icon: '📅' },
     { id: 'heatmap' as const, label: 'Heatmap', icon: '🔥' },
     { id: 'network' as const, label: 'Network', icon: '🕸️' },
     { id: 'emotion' as const, label: 'Emotion', icon: '💭' },
@@ -76,7 +76,7 @@ export default function TimelineSidebar({
   }
 
   return (
-    <div className="w-96 border-l border-slate-ui bg-vellum flex flex-col h-full">
+    <div className="flex-1 border-l border-slate-ui bg-vellum flex flex-col h-full">
       {/* Header */}
       <div className="border-b border-slate-ui bg-white p-4 flex items-center justify-between">
         <h2 className="text-xl font-garamond font-bold text-midnight">Timeline</h2>
@@ -116,9 +116,9 @@ export default function TimelineSidebar({
 
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
+        {activeTab === 'visual' && <InteractiveTimeline manuscriptId={manuscriptId} />}
         {activeTab === 'events' && <EventList manuscriptId={manuscriptId} />}
         {activeTab === 'inconsistencies' && <InconsistencyList manuscriptId={manuscriptId} />}
-        {activeTab === 'graph' && <EnhancedTimelineGraph manuscriptId={manuscriptId} />}
         {activeTab === 'heatmap' && <TimelineHeatmap manuscriptId={manuscriptId} />}
         {activeTab === 'network' && <CharacterNetwork manuscriptId={manuscriptId} />}
         {activeTab === 'emotion' && <EmotionalArc manuscriptId={manuscriptId} />}

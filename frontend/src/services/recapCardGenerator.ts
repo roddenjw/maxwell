@@ -135,7 +135,6 @@ export class RecapCardGenerator {
     // Secondary stats (in a box)
     const statsBoxY = yOffset;
     const statsBoxHeight = 280;
-    const statsBoxPadding = 40;
 
     // Semi-transparent box
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';

@@ -9,12 +9,63 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 import uuid
+import json
 
 from app.database import get_db
 from app.models.manuscript import Chapter
 
 
 router = APIRouter(prefix="/api/chapters", tags=["chapters"])
+
+
+def extract_text_from_lexical(lexical_state_str: str) -> str:
+    """
+    Extract plain text from Lexical editor state JSON
+    Recursively walks the node tree and concatenates text content
+    """
+    try:
+        if not lexical_state_str or lexical_state_str.strip() == "":
+            return ""
+
+        state = json.loads(lexical_state_str)
+
+        def walk_nodes(node):
+            """Recursively extract text from Lexical nodes"""
+            text_parts = []
+
+            # Handle root node
+            if isinstance(node, dict):
+                # Direct text content
+                if node.get("type") == "text" and "text" in node:
+                    text_parts.append(node["text"])
+
+                # Paragraph nodes add newlines
+                if node.get("type") == "paragraph" and node != state.get("root"):
+                    # Will add newline after processing children
+                    pass
+
+                # Process children
+                if "children" in node:
+                    for child in node["children"]:
+                        text_parts.append(walk_nodes(child))
+
+                    # Add newline after paragraph
+                    if node.get("type") == "paragraph":
+                        text_parts.append("\n")
+
+            return "".join(text_parts)
+
+        # Start from root
+        root = state.get("root", {})
+        text = walk_nodes(root)
+
+        # Clean up extra newlines
+        text = text.strip()
+
+        return text
+    except Exception as e:
+        print(f"⚠️  Failed to extract text from lexical state: {e}")
+        return ""
 
 
 # Pydantic schemas for request/response
@@ -87,6 +138,18 @@ async def create_chapter(
     db: Session = Depends(get_db)
 ):
     """Create a new chapter or folder"""
+    # Extract content from lexical state if provided
+    lexical_state = chapter.lexical_state or ""
+    content = chapter.content or ""
+
+    # If lexical state exists but no explicit content, extract it
+    if lexical_state and not content and not chapter.is_folder:
+        extracted_text = extract_text_from_lexical(lexical_state)
+        if extracted_text:
+            content = extracted_text
+
+    word_count = 0 if chapter.is_folder else len(content.split()) if content else 0
+
     db_chapter = Chapter(
         id=str(uuid.uuid4()),
         manuscript_id=chapter.manuscript_id,
@@ -94,9 +157,9 @@ async def create_chapter(
         title=chapter.title,
         is_folder=1 if chapter.is_folder else 0,
         order_index=chapter.order_index,
-        lexical_state=chapter.lexical_state or "",
-        content=chapter.content or "",
-        word_count=0
+        lexical_state=lexical_state,
+        content=content,
+        word_count=word_count
     )
     db.add(db_chapter)
     db.commit()
@@ -228,8 +291,17 @@ async def update_chapter(
         chapter.order_index = update_data['order_index']
     if 'lexical_state' in update_data:
         chapter.lexical_state = update_data['lexical_state']
+        # Auto-extract plain text from lexical state for search/analysis
+        if chapter.lexical_state and not chapter.is_folder:
+            extracted_text = extract_text_from_lexical(chapter.lexical_state)
+            if extracted_text:
+                chapter.content = extracted_text
+                chapter.word_count = len(extracted_text.split())
     if 'content' in update_data:
         chapter.content = update_data['content']
+        # Auto-calculate word count from content
+        if chapter.content and not chapter.is_folder:
+            chapter.word_count = len(chapter.content.split())
     if 'word_count' in update_data:
         chapter.word_count = update_data['word_count']
 

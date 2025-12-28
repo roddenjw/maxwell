@@ -19,7 +19,7 @@ interface TimelineStore {
   stats: TimelineStats | null;
   selectedEventId: string | null;
   isTimelineOpen: boolean;
-  activeTab: 'events' | 'inconsistencies' | 'graph' | 'heatmap' | 'network' | 'emotion';
+  activeTab: 'visual' | 'events' | 'inconsistencies' | 'graph' | 'heatmap' | 'network' | 'emotion';
 
   // Actions
   setEvents: (events: TimelineEvent[]) => void;
@@ -36,7 +36,7 @@ interface TimelineStore {
   setStats: (stats: TimelineStats) => void;
   setSelectedEvent: (eventId: string | null) => void;
   setTimelineOpen: (isOpen: boolean) => void;
-  setActiveTab: (tab: 'events' | 'inconsistencies' | 'graph' | 'heatmap' | 'network' | 'emotion') => void;
+  setActiveTab: (tab: 'visual' | 'events' | 'inconsistencies' | 'graph' | 'heatmap' | 'network' | 'emotion') => void;
 
   // Computed getters
   getEventById: (eventId: string) => TimelineEvent | undefined;
@@ -52,7 +52,7 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
   stats: null,
   selectedEventId: null,
   isTimelineOpen: false,
-  activeTab: 'events',
+  activeTab: 'visual',
 
   // Actions
   setEvents: (events) => set({ events }),

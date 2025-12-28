@@ -6,6 +6,8 @@ Handles automated detection of characters, locations, and relationships
 from typing import List, Dict, Any, Optional, Tuple
 from collections import defaultdict
 import re
+import os
+import json
 
 try:
     import spacy
@@ -16,14 +18,23 @@ except ImportError:
     Doc = None
     NLP_AVAILABLE = False
 
+try:
+    from anthropic import Anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    Anthropic = None
+    ANTHROPIC_AVAILABLE = False
+
 
 class NLPService:
     """Service for NLP-powered entity and relationship extraction"""
 
     def __init__(self):
-        """Initialize NLP service with spaCy model"""
+        """Initialize NLP service with spaCy model and Anthropic client"""
         self.nlp = None
         self.NLP_AVAILABLE = NLP_AVAILABLE
+        self.anthropic_client = None
+        self.ANTHROPIC_AVAILABLE = ANTHROPIC_AVAILABLE
 
         if NLP_AVAILABLE:
             try:
@@ -33,6 +44,19 @@ class NLPService:
                 # Model not downloaded yet
                 self.nlp = None
                 self.NLP_AVAILABLE = False
+
+        # Initialize Anthropic client for intelligent scene extraction
+        if ANTHROPIC_AVAILABLE:
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if api_key:
+                try:
+                    self.anthropic_client = Anthropic(api_key=api_key)
+                except Exception as e:
+                    print(f"⚠️  Failed to initialize Anthropic client: {e}")
+                    self.ANTHROPIC_AVAILABLE = False
+            else:
+                print("⚠️  ANTHROPIC_API_KEY not set - intelligent scene extraction unavailable")
+                self.ANTHROPIC_AVAILABLE = False
 
     def is_available(self) -> bool:
         """Check if NLP service is available"""
@@ -1130,11 +1154,23 @@ class NLPService:
         characters_in_para = set()
         detected_persons = []
 
-        # Common pronouns and titles to filter out
+        # Common pronouns, titles, and words to filter out
         FILTER_WORDS = {
-            'I', 'You', 'He', 'She', 'They', 'We', 'It',
-            'Mr', 'Mrs', 'Ms', 'Dr', 'Sir', 'Lady', 'Lord',
-            'The', 'A', 'An'
+            'I', 'You', 'He', 'She', 'They', 'We', 'It', 'Me', 'Him', 'Her', 'Us', 'Them',
+            'Mr', 'Mrs', 'Ms', 'Dr', 'Sir', 'Lady', 'Lord', 'Master', 'Miss',
+            'The', 'A', 'An', 'That', 'This', 'These', 'Those',
+            'Come', 'Run', 'Go', 'Get', 'Make', 'Take', 'Give', 'Tell', 'Ask',
+            'Jaw', 'Hand', 'Head', 'Face', 'Eye', 'Arm', 'Leg', 'Back', 'Heart',
+            'Time', 'Day', 'Night', 'Way', 'Thing', 'Man', 'Woman', 'Boy', 'Girl',
+            'God', 'Lord', 'Father', 'Mother', 'Brother', 'Sister', 'Son', 'Daughter'
+        }
+
+        # Common verbs that spaCy often mistakes as names
+        COMMON_VERBS = {
+            'run', 'come', 'go', 'get', 'make', 'take', 'give', 'tell', 'ask', 'see',
+            'know', 'think', 'want', 'look', 'use', 'find', 'work', 'call', 'try', 'feel',
+            'leave', 'put', 'mean', 'keep', 'let', 'begin', 'seem', 'help', 'talk', 'turn',
+            'start', 'show', 'hear', 'play', 'run', 'move', 'live', 'believe', 'bring', 'happen'
         }
 
         # First pass: Check registered entities
@@ -1149,12 +1185,30 @@ class NLPService:
         for ent in para_doc.ents:
             if ent.label_ == "PERSON":
                 person_name = ent.text.strip()
+                person_lower = person_name.lower()
 
-                # Filter out pronouns, single letters, and titles
-                if (len(person_name) > 1 and
+                # Clean up possessive forms (e.g., "Alnat's" -> "Alnat")
+                if person_name.endswith("'s"):
+                    person_name = person_name[:-2]
+                    person_lower = person_name.lower()
+
+                # More aggressive filtering:
+                # 1. Must be at least 2 characters
+                # 2. Not in filter words
+                # 3. Not a common verb
+                # 4. Not all uppercase (acronyms)
+                # 5. Must start with capital letter
+                # 6. If single word, must be at least 3 characters (avoids "Go", "Me", etc.)
+                is_valid = (
+                    len(person_name) >= 2 and
                     person_name not in FILTER_WORDS and
-                    not person_name.isupper()):  # Avoid all-caps acronyms
+                    person_lower not in COMMON_VERBS and
+                    not person_name.isupper() and
+                    person_name[0].isupper() and
+                    (len(person_name.split()) > 1 or len(person_name) >= 3)
+                )
 
+                if is_valid:
                     # Check if already in registered entities
                     is_registered = any(
                         person_name.lower() == name.lower()
@@ -1172,6 +1226,210 @@ class NLPService:
                             detected_persons.append(person_name)
 
         return characters_in_para, detected_persons
+
+    def extract_scenes_with_llm(
+        self,
+        text: str,
+        manuscript_id: str,
+        known_entities: Optional[List[Dict[str, Any]]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Extract timeline scenes using LLM for intelligent understanding
+
+        This method:
+        1. Chunks text into meaningful segments (chapters, section breaks, etc.)
+        2. Uses Claude API to understand and summarize each scene
+        3. Extracts characters, locations, and key events
+        4. Returns properly structured scene data
+
+        Args:
+            text: Full manuscript text
+            manuscript_id: ID of the manuscript
+            known_entities: List of registered characters and locations
+
+        Returns:
+            List of scene dictionaries with descriptions, characters, locations, etc.
+        """
+        if not self.ANTHROPIC_AVAILABLE or not self.anthropic_client:
+            print("⚠️  Anthropic API not available - falling back to basic extraction")
+            return self.extract_events(text, manuscript_id, known_entities)
+
+        print("🎬 Using intelligent LLM-based scene extraction...")
+
+        # Build character and location lists for the LLM
+        character_names = []
+        location_names = []
+        if known_entities:
+            for entity in known_entities:
+                if entity.get("type") == "CHARACTER":
+                    character_names.append(entity["name"])
+                elif entity.get("type") == "LOCATION":
+                    location_names.append(entity["name"])
+
+        # Split text into chunks (by chapter or section breaks)
+        chunks = self._chunk_text_into_scenes(text)
+        print(f"📚 Split manuscript into {len(chunks)} potential scenes")
+
+        scenes = []
+        order_index = 0
+
+        # Process each chunk with LLM
+        for chunk_idx, chunk in enumerate(chunks):
+            if not chunk.strip() or len(chunk.strip()) < 100:
+                continue
+
+            print(f"🔍 Analyzing chunk {chunk_idx + 1}/{len(chunks)}...")
+
+            try:
+                # Call Claude API to extract scene information
+                prompt = self._build_scene_extraction_prompt(
+                    chunk,
+                    character_names,
+                    location_names
+                )
+
+                response = self.anthropic_client.messages.create(
+                    model="claude-3-haiku-20240307",  # Using Haiku - fastest and most accessible
+                    max_tokens=1000,
+                    messages=[{
+                        "role": "user",
+                        "content": prompt
+                    }]
+                )
+
+                # Parse response
+                scene_data = self._parse_scene_response(response.content[0].text)
+
+                if scene_data and scene_data.get("description"):
+                    scene_data["order_index"] = order_index
+                    scene_data["metadata"] = scene_data.get("metadata", {})
+                    scene_data["metadata"]["auto_generated"] = True
+                    scene_data["metadata"]["chunk_index"] = chunk_idx
+                    scene_data["metadata"]["word_count"] = len(chunk.split())
+
+                    scenes.append(scene_data)
+                    order_index += 1
+
+            except Exception as e:
+                print(f"⚠️  Failed to process chunk {chunk_idx}: {e}")
+                continue
+
+        print(f"✅ Extracted {len(scenes)} scenes using LLM")
+        return scenes
+
+    def _chunk_text_into_scenes(self, text: str) -> List[str]:
+        """
+        Chunk text into potential scenes based on structural markers
+
+        Looks for:
+        - Chapter breaks
+        - Section breaks (*** or ---)
+        - Major paragraph breaks
+        """
+        chunks = []
+
+        # First, split by chapter markers
+        chapter_pattern = r'\n\s*(Chapter|CHAPTER|Ch\.?)\s+\d+[^\n]*\n'
+        chapters = re.split(chapter_pattern, text)
+
+        for chapter in chapters:
+            if not chapter.strip():
+                continue
+
+            # Look for section breaks within chapters
+            section_breaks = re.split(r'\n\s*[*\-]{3,}\s*\n', chapter)
+
+            for section in section_breaks:
+                if not section.strip():
+                    continue
+
+                # If section is very long (> 2000 words), split by large paragraph breaks
+                words = section.split()
+                if len(words) > 2000:
+                    # Split by double newlines and group paragraphs
+                    paragraphs = section.split('\n\n')
+                    current_chunk = []
+                    current_word_count = 0
+
+                    for para in paragraphs:
+                        para_words = len(para.split())
+                        if current_word_count + para_words > 1500 and current_chunk:
+                            # Save current chunk
+                            chunks.append('\n\n'.join(current_chunk))
+                            current_chunk = [para]
+                            current_word_count = para_words
+                        else:
+                            current_chunk.append(para)
+                            current_word_count += para_words
+
+                    if current_chunk:
+                        chunks.append('\n\n'.join(current_chunk))
+                else:
+                    # Section is reasonable size, use as-is
+                    chunks.append(section)
+
+        return chunks
+
+    def _build_scene_extraction_prompt(
+        self,
+        text: str,
+        character_names: List[str],
+        location_names: List[str]
+    ) -> str:
+        """Build prompt for Claude to extract scene information"""
+
+        char_list = ", ".join(character_names) if character_names else "None registered yet"
+        loc_list = ", ".join(location_names) if location_names else "None registered yet"
+
+        return f"""Analyze this story excerpt and extract the key scene information.
+
+EXCERPT:
+{text[:3000]}
+
+KNOWN CHARACTERS: {char_list}
+KNOWN LOCATIONS: {loc_list}
+
+Please provide a JSON response with:
+1. "description": A concise 1-2 sentence summary of what happens in this scene
+2. "characters": List of character names who appear (from known characters or detect new ones)
+3. "location": Where the scene takes place (if identifiable)
+4. "timestamp": When the scene occurs (e.g., "Morning", "Day 3", "1850", etc.) - only if explicitly mentioned
+5. "event_type": One of: "SCENE", "CHAPTER", "FLASHBACK", "DREAM", "MONTAGE"
+6. "key_events": List of 2-3 main actions/events that happen
+
+Respond ONLY with valid JSON, no other text:
+{{
+  "description": "...",
+  "characters": [...],
+  "location": "..." or null,
+  "timestamp": "..." or null,
+  "event_type": "SCENE",
+  "key_events": [...]
+}}"""
+
+    def _parse_scene_response(self, response_text: str) -> Optional[Dict[str, Any]]:
+        """Parse Claude's JSON response into scene data"""
+        try:
+            # Extract JSON from response (in case there's extra text)
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+
+                # Convert to expected format
+                return {
+                    "description": data.get("description", ""),
+                    "event_type": data.get("event_type", "SCENE"),
+                    "timestamp": data.get("timestamp"),
+                    "location": data.get("location"),
+                    "characters": data.get("characters", []),
+                    "metadata": {
+                        "key_events": data.get("key_events", [])
+                    }
+                }
+            return None
+        except Exception as e:
+            print(f"⚠️  Failed to parse scene response: {e}")
+            return None
 
     def extract_events(
         self,
@@ -1269,18 +1527,46 @@ class NLPService:
             # Extract timestamp
             timestamp = self._extract_timestamp(paragraph)
 
-            # Create event if it has meaningful content
-            if len(paragraph.strip()) > 50:  # Skip very short paragraphs
+            # Detect scene transition
+            prev_para = paragraphs[para_idx - 1] if para_idx > 0 else None
+            has_transition = self._detect_scene_transition(paragraph, prev_para)
+
+            # Check for location change (indicates new scene)
+            prev_location = None
+            if para_idx > 0 and len(events) > 0:
+                prev_location = events[-1].get("location")
+            location_changed = (location_in_para and prev_location and
+                              location_in_para != prev_location)
+
+            # Check for character set change (major cast change = new scene)
+            character_set_changed = False
+            if para_idx > 0 and len(events) > 0:
+                prev_chars = set(events[-1].get("characters", []))
+                current_chars = set(characters_in_para)
+                # If less than 30% overlap in characters, likely a new scene
+                if prev_chars and current_chars:
+                    overlap = len(prev_chars & current_chars) / max(len(prev_chars), len(current_chars))
+                    character_set_changed = overlap < 0.3
+
+            # SIMPLIFIED: Create events more liberally for usability
+            # Users can always delete unwanted events, but missing events is frustrating
+            is_scene_boundary = (
+                para_idx == 0 or  # First paragraph always
+                has_transition or  # Explicit transitions
+                location_changed or  # Location change
+                character_set_changed or  # Character change
+                timestamp is not None or  # Time jump
+                (para_idx % 5 == 0)  # Every 5th paragraph as checkpoint
+            )
+
+            # Create event if it has meaningful content AND is a scene boundary
+            if len(paragraph.strip()) > 50 and is_scene_boundary:
                 # Use first sentence as description
                 first_sentence = list(para_doc.sents)[0].text.strip() if list(para_doc.sents) else paragraph[:100]
 
                 # Extract actions and emotional context
                 actions = self._extract_actions(paragraph)
                 emotional_context = self._extract_emotional_context(paragraph)
-
-                # Detect scene transition
-                prev_para = paragraphs[para_idx - 1] if para_idx > 0 else None
-                has_transition = self._detect_scene_transition(paragraph, prev_para)
 
                 events.append({
                     "description": first_sentence[:200],
@@ -1301,6 +1587,8 @@ class NLPService:
                         "adjectives": emotional_context.get("adjectives", []),
                         "adverbs": emotional_context.get("adverbs", []),
                         "has_transition": has_transition,
+                        "location_changed": location_changed,
+                        "character_set_changed": character_set_changed,
                         "detected_persons": detected_persons  # Unregistered characters from NER
                     }
                 })
@@ -1383,8 +1671,8 @@ class NLPService:
         if not self.is_available():
             raise RuntimeError("NLP service not available")
 
-        # Extract events
-        events = self.extract_events(text, known_entities)
+        # Extract events using intelligent LLM-based extraction (falls back to basic if unavailable)
+        events = self.extract_scenes_with_llm(text, manuscript_id, known_entities)
 
         # Calculate statistics
         stats = {

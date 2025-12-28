@@ -185,6 +185,74 @@ async def delete_event(event_id: str):
     return {"success": True, "message": "Event deleted"}
 
 
+@router.delete("/events/auto-generated/{manuscript_id}")
+async def delete_auto_generated_events(manuscript_id: str):
+    """Delete all auto-generated events for a manuscript"""
+    try:
+        events = timeline_service.get_events(manuscript_id)
+        deleted_count = 0
+
+        for event in events:
+            # Check if event is auto-generated
+            if event.event_metadata.get("auto_generated"):
+                timeline_service.delete_event(event.id)
+                deleted_count += 1
+
+        return {
+            "success": True,
+            "message": f"Deleted {deleted_count} auto-generated events",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/events/mark-auto-generated/{manuscript_id}")
+async def mark_events_as_auto_generated(manuscript_id: str):
+    """Mark all existing events as auto-generated (migration helper)"""
+    try:
+        events = timeline_service.get_events(manuscript_id)
+        marked_count = 0
+
+        for event in events:
+            # Only mark if not already marked
+            if not event.event_metadata.get("auto_generated"):
+                event.event_metadata["auto_generated"] = True
+                timeline_service.update_event(
+                    event.id,
+                    metadata=event.event_metadata
+                )
+                marked_count += 1
+
+        return {
+            "success": True,
+            "message": f"Marked {marked_count} events as auto-generated",
+            "marked_count": marked_count
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/events/all/{manuscript_id}")
+async def delete_all_events(manuscript_id: str):
+    """Delete ALL events for a manuscript (use with caution)"""
+    try:
+        events = timeline_service.get_events(manuscript_id)
+        deleted_count = 0
+
+        for event in events:
+            timeline_service.delete_event(event.id)
+            deleted_count += 1
+
+        return {
+            "success": True,
+            "message": f"Deleted {deleted_count} events",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/events/reorder")
 async def reorder_events(request: ReorderEventsRequest):
     """Reorder events by providing list of IDs in desired order"""
@@ -244,8 +312,22 @@ async def _process_timeline_analysis(manuscript_id: str, text: str):
 
         print(f"📊 Found {len(results['events'])} events")
 
-        # Create timeline events
+        # Get existing events for deduplication
+        existing_events = timeline_service.get_events(manuscript_id)
+        existing_descriptions = {e.description.lower().strip() for e in existing_events}
+
+        # Create timeline events with deduplication
+        created_count = 0
+        skipped_count = 0
+
         for event_data in results["events"]:
+            # Deduplication check - skip if exact description already exists
+            event_desc = event_data["description"].strip()
+            if event_desc.lower() in existing_descriptions:
+                skipped_count += 1
+                print(f"⏭️  Skipping duplicate event: {event_desc[:50]}...")
+                continue
+
             # Map character names to IDs
             character_ids = []
             for char_name in event_data.get("characters", []):
@@ -260,17 +342,24 @@ async def _process_timeline_analysis(manuscript_id: str, text: str):
                 if loc_entity:
                     location_id = loc_entity.id
 
-            # Create event
+            # Create event with auto_generated flag
+            event_metadata = event_data.get("metadata", {})
+            event_metadata["auto_generated"] = True  # Mark as auto-generated
+
             timeline_service.create_event(
                 manuscript_id=manuscript_id,
-                description=event_data["description"],
+                description=event_desc,
                 event_type=event_data["event_type"],
                 order_index=event_data["order_index"],
                 timestamp=event_data.get("timestamp"),
                 location_id=location_id,
                 character_ids=character_ids,
-                metadata=event_data.get("metadata", {})
+                metadata=event_metadata
             )
+
+            # Add to our deduplication set
+            existing_descriptions.add(event_desc.lower())
+            created_count += 1
 
             # Track character locations if both character and location exist
             if location_id and character_ids:
@@ -285,7 +374,7 @@ async def _process_timeline_analysis(manuscript_id: str, text: str):
                     except Exception as e:
                         print(f"⚠️ Failed to track character location: {e}")
 
-        print(f"✅ Timeline analysis complete. Created {len(results['events'])} events.")
+        print(f"✅ Timeline analysis complete. Created {created_count} new events, skipped {skipped_count} duplicates.")
 
         # Run inconsistency detection
         try:

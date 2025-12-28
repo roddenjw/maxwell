@@ -30,7 +30,7 @@ export function useRealtimeNLP({
   enabled = true
 }: UseRealtimeNLPOptions) {
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const isConnectedRef = useRef(false);
 
   // Send text delta to server

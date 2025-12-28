@@ -34,7 +34,24 @@ export interface TimelineEvent {
   timestamp: string | null;
   location_id: string | null;
   character_ids: string[];
-  event_metadata: Record<string, any>;
+  event_metadata: {
+    auto_generated?: boolean;
+    paragraph_index?: number;
+    word_count?: number;
+    actions?: string[];
+    tone?: string;
+    emotions?: string[];
+    sentiment?: number;
+    intensity?: number;
+    emotion_scores?: Record<string, number>;
+    adjectives?: string[];
+    adverbs?: string[];
+    has_transition?: boolean;
+    location_changed?: boolean;
+    character_set_changed?: boolean;
+    detected_persons?: string[];
+    [key: string]: any;
+  };
   created_at: string;
   updated_at: string;
 }

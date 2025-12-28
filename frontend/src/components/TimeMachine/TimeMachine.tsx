@@ -18,7 +18,6 @@ interface TimeMachineProps {
 
 export default function TimeMachine({
   manuscriptId,
-  currentContent,
   onRestore,
   onClose,
 }: TimeMachineProps) {
