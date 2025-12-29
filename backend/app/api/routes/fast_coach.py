@@ -13,6 +13,7 @@ from app.services.nlp_service import nlp_service
 from app.services.fast_coach import (
     StyleAnalyzer,
     WordAnalyzer,
+    DialogueAnalyzer,
     ConsistencyChecker,
     Suggestion
 )
@@ -37,6 +38,7 @@ class AnalyzeResponse(BaseModel):
 # Initialize analyzers (singleton pattern)
 style_analyzer = StyleAnalyzer()
 word_analyzer = WordAnalyzer()
+dialogue_analyzer = DialogueAnalyzer()
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -67,6 +69,10 @@ async def analyze_text(
         # Run word analysis
         word_suggestions = word_analyzer.analyze(request.text)
         all_suggestions.extend(word_suggestions)
+
+        # Run dialogue analysis
+        dialogue_suggestions = dialogue_analyzer.analyze(request.text)
+        all_suggestions.extend(dialogue_suggestions)
 
         # Run consistency check if requested and manuscript_id provided
         if request.check_consistency and request.manuscript_id:
@@ -121,5 +127,5 @@ async def health_check():
     return {
         "status": "ok",
         "service": "fast-coach",
-        "analyzers": ["style", "word", "consistency"]
+        "analyzers": ["style", "word", "dialogue", "consistency"]
     }

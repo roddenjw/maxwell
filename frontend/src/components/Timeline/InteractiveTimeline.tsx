@@ -11,7 +11,9 @@ import { useState, useEffect } from 'react';
 import { timelineApi } from '@/lib/api';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useCodexStore } from '@/stores/codexStore';
+import { useChapterStore } from '@/stores/chapterStore';
 import type { TimelineEvent } from '@/types/timeline';
+import { getEventTypeColor, getEventTypeIcon, EventType } from '@/types/timeline';
 
 interface InteractiveTimelineProps {
   manuscriptId: string;
@@ -20,11 +22,23 @@ interface InteractiveTimelineProps {
 export default function InteractiveTimeline({ manuscriptId }: InteractiveTimelineProps) {
   const { events, setEvents } = useTimelineStore();
   const { entities } = useCodexStore();
+  const { setCurrentChapter } = useChapterStore();
   const [loading, setLoading] = useState(false);
   const [hoveredEvent, setHoveredEvent] = useState<TimelineEvent | null>(null);
   const [selectedCharacters, setSelectedCharacters] = useState<Set<string>>(new Set());
   const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState<'standard' | 'swimlanes'>('standard');
+
+  // Handle event click - navigate to chapter
+  const handleEventClick = (event: TimelineEvent) => {
+    const chapterId = event.event_metadata?.chapter_id;
+    if (chapterId) {
+      setCurrentChapter(chapterId);
+      // Show toast notification
+      alert(`📍 Chapter selected! Switch to the "Chapters" tab to view it.`);
+    }
+  };
 
   useEffect(() => {
     loadEvents();
@@ -130,7 +144,7 @@ export default function InteractiveTimeline({ manuscriptId }: InteractiveTimelin
         </h2>
 
         {/* Filter controls */}
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
           <button
             onClick={() => setShowFilters(!showFilters)}
             className="px-4 py-2 bg-bronze/10 border-2 border-bronze/30 text-bronze font-sans text-sm hover:bg-bronze/20 transition-colors rounded-sm flex items-center gap-2"
@@ -143,6 +157,30 @@ export default function InteractiveTimeline({ manuscriptId }: InteractiveTimelin
               </span>
             )}
           </button>
+
+          {/* View mode toggle */}
+          <div className="flex bg-bronze/10 border-2 border-bronze/30 rounded-sm overflow-hidden">
+            <button
+              onClick={() => setViewMode('standard')}
+              className={`px-3 py-2 text-xs font-sans transition-colors ${
+                viewMode === 'standard'
+                  ? 'bg-bronze text-white'
+                  : 'text-bronze hover:bg-bronze/10'
+              }`}
+            >
+              Standard
+            </button>
+            <button
+              onClick={() => setViewMode('swimlanes')}
+              className={`px-3 py-2 text-xs font-sans transition-colors ${
+                viewMode === 'swimlanes'
+                  ? 'bg-bronze text-white'
+                  : 'text-bronze hover:bg-bronze/10'
+              }`}
+            >
+              Swimlanes
+            </button>
+          </div>
 
           {(selectedCharacters.size > 0 || selectedLocations.size > 0) && (
             <button
@@ -203,17 +241,18 @@ export default function InteractiveTimeline({ manuscriptId }: InteractiveTimelin
       </div>
 
       {/* Horizontal scrollable timeline */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden relative bg-[#f5f1e8] p-8">
+      <div className={`flex-1 overflow-auto relative bg-[#f5f1e8] p-8 ${viewMode === 'swimlanes' ? 'overflow-y-auto' : 'overflow-y-hidden'}`}>
         {/* Parchment edge decoration at top */}
         <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-[#d4c4a8]/40 to-transparent pointer-events-none"></div>
 
-        <div className="relative h-full min-w-max flex items-center px-8">
-          {/* Timeline line */}
-          <div className="absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-bronze/40 via-bronze/60 to-bronze/40 shadow-sm"></div>
+        {viewMode === 'standard' ? (
+          <div className="relative h-full min-w-max flex items-center px-8">
+            {/* Timeline line */}
+            <div className="absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-bronze/40 via-bronze/60 to-bronze/40 shadow-sm"></div>
 
-          {/* Event dots */}
-          <div className="flex items-center gap-16 relative z-10">
-            {sortedEvents.map((event, index) => {
+            {/* Event dots */}
+            <div className="flex items-center gap-16 relative z-10">
+            {sortedEvents.map((event) => {
               const location = event.location_id
                 ? entities.find(e => e.id === event.location_id)
                 : null;
@@ -231,24 +270,25 @@ export default function InteractiveTimeline({ manuscriptId }: InteractiveTimelin
                   onMouseEnter={() => setHoveredEvent(event)}
                   onMouseLeave={() => setHoveredEvent(null)}
                 >
-                  {/* Event dot */}
+                  {/* Event dot - color-coded by type */}
                   <div
                     className={`
-                      w-6 h-6 rounded-full border-4 border-white shadow-lg cursor-pointer
-                      transition-all duration-200
+                      w-8 h-8 rounded-full border-4 border-white shadow-lg cursor-pointer
+                      transition-all duration-200 flex items-center justify-center
                       ${isHovered ? 'scale-150 shadow-2xl' : 'hover:scale-125'}
+                      ${event.event_metadata?.chapter_id ? 'hover:ring-2 hover:ring-bronze' : ''}
                     `}
                     style={{
-                      backgroundColor: '#a47551',
+                      backgroundColor: getEventTypeColor(event.event_type),
                       boxShadow: isHovered
-                        ? '0 0 20px rgba(164, 117, 81, 0.6), 0 4px 6px rgba(0,0,0,0.1)'
+                        ? `0 0 20px ${getEventTypeColor(event.event_type)}66, 0 4px 6px rgba(0,0,0,0.1)`
                         : '0 2px 4px rgba(0,0,0,0.1)'
                     }}
+                    title={event.event_metadata?.chapter_id ? `${event.event_type} - Click to navigate to chapter` : event.event_type}
+                    onClick={() => handleEventClick(event)}
                   >
-                    {/* Event number */}
-                    <div className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold">
-                      {index + 1}
-                    </div>
+                    {/* Event type icon */}
+                    <span className="text-sm">{getEventTypeIcon(event.event_type)}</span>
                   </div>
 
                   {/* Character indicators (small dots above) */}
@@ -332,15 +372,146 @@ export default function InteractiveTimeline({ manuscriptId }: InteractiveTimelin
                 </div>
               );
             })}
+            </div>
           </div>
-        </div>
+        ) : (
+          /* Swimlanes view - each character gets their own lane */
+          <div className="relative min-w-max py-8 px-8">
+            {allCharacters.length === 0 ? (
+              <div className="text-center text-faded-ink font-sans py-8">
+                No characters found. Swimlanes view requires character data.
+              </div>
+            ) : (
+              allCharacters.map((character) => {
+                // Get events for this character
+                const characterEvents = sortedEvents.filter(event =>
+                  event.character_ids.includes(character!.id)
+                );
+
+                if (characterEvents.length === 0) return null;
+
+                return (
+                  <div key={character!.id} className="mb-8 relative">
+                    {/* Character lane label */}
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-24 flex-shrink-0">
+                        <span className="text-sm font-serif font-semibold text-midnight">
+                          {character!.name}
+                        </span>
+                      </div>
+
+                      {/* Lane line */}
+                      <div className="flex-1 relative h-12">
+                        <div className="absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-bronze/30 via-bronze/40 to-bronze/30"></div>
+
+                        {/* Events on this lane */}
+                        <div className="absolute inset-0 flex items-center gap-4 pl-4">
+                          {characterEvents.map((event, eventIndex) => {
+                            const location = event.location_id
+                              ? entities.find(e => e.id === event.location_id)
+                              : null;
+
+                            const isHovered = hoveredEvent?.id === event.id;
+
+                            return (
+                              <div
+                                key={event.id}
+                                className="relative"
+                                onMouseEnter={() => setHoveredEvent(event)}
+                                onMouseLeave={() => setHoveredEvent(null)}
+                                style={{
+                                  marginLeft: eventIndex === 0 ? '0' : `${Math.max(20, event.order_index - characterEvents[eventIndex - 1].order_index) * 8}px`
+                                }}
+                              >
+                                {/* Event dot */}
+                                <div
+                                  className={`
+                                    w-6 h-6 rounded-full border-3 border-white shadow-md cursor-pointer
+                                    transition-all duration-200 flex items-center justify-center
+                                    ${isHovered ? 'scale-150 shadow-xl z-50' : 'hover:scale-125'}
+                                    ${event.event_metadata?.chapter_id ? 'hover:ring-2 hover:ring-bronze' : ''}
+                                  `}
+                                  style={{
+                                    backgroundColor: getEventTypeColor(event.event_type),
+                                    boxShadow: isHovered
+                                      ? `0 0 16px ${getEventTypeColor(event.event_type)}66`
+                                      : '0 2px 4px rgba(0,0,0,0.1)'
+                                  }}
+                                  title={event.event_metadata?.chapter_id ? `${event.event_type} - Click to navigate to chapter` : event.event_type}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEventClick(event);
+                                  }}
+                                >
+                                  <span className="text-xs">{getEventTypeIcon(event.event_type)}</span>
+                                </div>
+
+                                {/* Hover tooltip */}
+                                {isHovered && (
+                                  <div className="absolute top-full mt-4 w-72 bg-white/95 backdrop-blur-sm border-2 border-bronze/40 rounded-sm shadow-2xl p-3 z-50 -left-32">
+                                    <div className="space-y-2">
+                                      {event.timestamp && (
+                                        <div className="text-xs font-sans text-faded-ink">
+                                          🕐 {event.timestamp}
+                                        </div>
+                                      )}
+                                      <p className="font-serif text-sm text-midnight leading-relaxed">
+                                        {event.description}
+                                      </p>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="px-2 py-1 bg-bronze/20 text-bronze text-xs font-sans rounded-sm">
+                                          {event.event_type}
+                                        </span>
+                                        {location && (
+                                          <span className="px-2 py-1 bg-midnight/10 text-midnight text-xs font-serif rounded-sm">
+                                            📍 {location.name}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
 
         {/* Parchment edge decoration at bottom */}
         <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-[#d4c4a8]/40 to-transparent pointer-events-none"></div>
       </div>
 
-      {/* Scroll footer decoration */}
+      {/* Scroll footer decoration with legend */}
       <div className="border-t-4 border-double border-bronze/40 bg-gradient-to-t from-[#e8dcc8] to-[#f5f1e8] p-4">
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-3 bg-bronze/20 rounded-full shadow-inner"></div>
+
+        {/* Event type legend */}
+        <div className="pt-4">
+          <h3 className="text-xs font-sans uppercase text-faded-ink text-center mb-3">Event Types</h3>
+          <div className="flex items-center justify-center gap-4 flex-wrap">
+            {([EventType.SCENE, EventType.CHAPTER, EventType.FLASHBACK, EventType.DREAM, EventType.MONTAGE]).map(type => (
+              <div key={type} className="flex items-center gap-2">
+                <div
+                  className="w-4 h-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center"
+                  style={{ backgroundColor: getEventTypeColor(type) }}
+                >
+                  <span className="text-[10px]">{getEventTypeIcon(type)}</span>
+                </div>
+                <span className="text-xs font-serif text-midnight capitalize">
+                  {type.toLowerCase()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-24 h-3 bg-bronze/20 rounded-full shadow-inner"></div>
       </div>
     </div>

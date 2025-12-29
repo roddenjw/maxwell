@@ -3,10 +3,10 @@
  * Provides instant feedback as you type without AI API calls
  */
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { $getRoot } from 'lexical';
-import { useFastCoachStore, type Suggestion } from '@/stores/fastCoachStore';
+import { useFastCoachStore, type Suggestion, getSuggestionId } from '@/stores/fastCoachStore';
+import { jumpToTextPosition, getEditorPlainText, replaceTextAtPosition } from '@/lib/editorUtils';
 
 interface FastCoachProps {
   manuscriptId?: string;
@@ -15,7 +15,15 @@ interface FastCoachProps {
 
 export default function FastCoachPlugin({ manuscriptId, enabled = true }: FastCoachProps) {
   const [editor] = useLexicalComposerContext();
-  const { setSuggestions, setIsAnalyzing } = useFastCoachStore();
+  const {
+    setSuggestions,
+    setIsAnalyzing,
+    jumpRequest,
+    clearJumpRequest,
+    isSidebarOpen,
+    applyReplacementRequest,
+    clearApplyReplacementRequest
+  } = useFastCoachStore();
 
   // Debounced analysis
   const analyzText = useCallback(
@@ -51,8 +59,35 @@ export default function FastCoachPlugin({ manuscriptId, enabled = true }: FastCo
         setIsAnalyzing(false);
       }
     },
-    [manuscriptId, enabled]
+    [manuscriptId, enabled, setSuggestions, setIsAnalyzing]
   );
+
+  // Auto-analyze when sidebar opens (only once when it first opens)
+  const hasAnalyzedOnOpen = useRef(false);
+
+  useEffect(() => {
+    // Add a small delay to ensure editor content is fully rendered
+    if (enabled && isSidebarOpen && !hasAnalyzedOnOpen.current) {
+      const timeoutId = setTimeout(() => {
+        try {
+          const text = getEditorPlainText(editor);
+          if (text.length >= 50) {
+            analyzText(text);
+            hasAnalyzedOnOpen.current = true;
+          }
+        } catch (error) {
+          console.error('Fast Coach auto-analysis error:', error);
+        }
+      }, 100); // 100ms delay to ensure content is loaded
+
+      return () => clearTimeout(timeoutId);
+    }
+
+    // Reset when sidebar closes
+    if (!isSidebarOpen) {
+      hasAnalyzedOnOpen.current = false;
+    }
+  }, [enabled, isSidebarOpen, editor, analyzText]);
 
   // Register editor update listener
   useEffect(() => {
@@ -63,17 +98,15 @@ export default function FastCoachPlugin({ manuscriptId, enabled = true }: FastCo
 
     let timeoutId: ReturnType<typeof setTimeout>;
 
-    const removeUpdateListener = editor.registerUpdateListener(({ editorState }) => {
+    const removeUpdateListener = editor.registerUpdateListener(() => {
       // Clear previous timeout
       clearTimeout(timeoutId);
 
       // Debounce: wait 1 second after typing stops
       timeoutId = setTimeout(() => {
-        editorState.read(() => {
-          const root = $getRoot();
-          const text = root.getTextContent();
-          analyzText(text);
-        });
+        // Use consistent text extraction
+        const text = getEditorPlainText(editor);
+        analyzText(text);
       }, 1000);
     });
 
@@ -82,6 +115,54 @@ export default function FastCoachPlugin({ manuscriptId, enabled = true }: FastCo
       clearTimeout(timeoutId);
     };
   }, [editor, analyzText, enabled]);
+
+  // Handle jump-to-text requests from Fast Coach UI
+  useEffect(() => {
+    if (
+      jumpRequest &&
+      jumpRequest.startChar !== undefined &&
+      jumpRequest.endChar !== undefined &&
+      typeof jumpRequest.startChar === 'number' &&
+      typeof jumpRequest.endChar === 'number' &&
+      jumpRequest.startChar >= 0 &&
+      jumpRequest.endChar > jumpRequest.startChar
+    ) {
+      // Execute the jump
+      jumpToTextPosition(editor, jumpRequest.startChar, jumpRequest.endChar);
+
+      // Clear the request after handling
+      clearJumpRequest();
+    }
+  }, [jumpRequest, editor, clearJumpRequest]);
+
+  // Handle apply replacement requests from Fast Coach UI
+  useEffect(() => {
+    if (
+      applyReplacementRequest &&
+      applyReplacementRequest.startChar !== undefined &&
+      applyReplacementRequest.endChar !== undefined &&
+      applyReplacementRequest.replacement !== undefined &&
+      typeof applyReplacementRequest.startChar === 'number' &&
+      typeof applyReplacementRequest.endChar === 'number' &&
+      applyReplacementRequest.startChar >= 0 &&
+      applyReplacementRequest.endChar > applyReplacementRequest.startChar
+    ) {
+      try {
+        // Execute the replacement
+        replaceTextAtPosition(
+          editor,
+          applyReplacementRequest.startChar,
+          applyReplacementRequest.endChar,
+          applyReplacementRequest.replacement
+        );
+      } catch (error) {
+        console.error('Fast Coach replacement error:', error);
+      } finally {
+        // Always clear the request
+        clearApplyReplacementRequest();
+      }
+    }
+  }, [applyReplacementRequest, editor, clearApplyReplacementRequest]);
 
   // Don't render anything in the editor - suggestions shown in sidebar
   // This plugin only handles the analysis logic
@@ -94,11 +175,64 @@ export default function FastCoachPlugin({ manuscriptId, enabled = true }: FastCo
  */
 interface FastCoachSidebarProps {
   suggestions: Suggestion[];
-  onDismiss?: (index: number) => void;
 }
 
-export function FastCoachSidebar({ suggestions, onDismiss }: FastCoachSidebarProps) {
+export function FastCoachSidebar({ suggestions }: FastCoachSidebarProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const {
+    filterTypes,
+    filterSeverities,
+    collapsedSections,
+    sortBy,
+    dismissedSuggestionIds,
+    toggleFilterType,
+    toggleFilterSeverity,
+    clearFilters,
+    toggleSectionCollapsed,
+    setSortBy,
+    clearDismissed,
+  } = useFastCoachStore();
+
+  // Apply filters (including dismissed suggestions)
+  const filteredSuggestions = suggestions.filter((suggestion) => {
+    // Check if dismissed
+    const id = getSuggestionId(suggestion);
+    if (dismissedSuggestionIds.has(id)) {
+      return false;
+    }
+
+    // Type filter
+    if (filterTypes.size > 0 && !filterTypes.has(suggestion.type)) {
+      return false;
+    }
+    // Severity filter
+    if (filterSeverities.size > 0 && !filterSeverities.has(suggestion.severity)) {
+      return false;
+    }
+    return true;
+  });
+
+  // Get unique types and severities for filter controls
+  const availableTypes = Array.from(new Set(suggestions.map(s => s.type)));
+  const availableSeverities = ['ERROR', 'WARNING', 'INFO'].filter(sev =>
+    suggestions.some(s => s.severity === sev)
+  );
+
+  // Calculate stats
+  const dismissedCount = suggestions.filter(s => dismissedSuggestionIds.has(getSuggestionId(s))).length;
+  const stats = {
+    total: suggestions.length,
+    filtered: filteredSuggestions.length,
+    dismissed: dismissedCount,
+    byType: suggestions.reduce((acc, s) => {
+      acc[s.type] = (acc[s.type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+    bySeverity: suggestions.reduce((acc, s) => {
+      acc[s.severity] = (acc[s.severity] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+  };
 
   if (suggestions.length === 0) {
     return (
@@ -111,7 +245,7 @@ export function FastCoachSidebar({ suggestions, onDismiss }: FastCoachSidebarPro
   }
 
   // Group by type (requested by user)
-  const groupedByType = suggestions.reduce((acc, suggestion) => {
+  const groupedByType = filteredSuggestions.reduce((acc, suggestion) => {
     const type = suggestion.type;
     if (!acc[type]) {
       acc[type] = [];
@@ -120,69 +254,232 @@ export function FastCoachSidebar({ suggestions, onDismiss }: FastCoachSidebarPro
     return acc;
   }, {} as Record<string, Suggestion[]>);
 
-  // Sort groups by severity priority (ERROR > WARNING > INFO)
+  // Sort groups based on sortBy setting
   const sortedTypes = Object.keys(groupedByType).sort((a, b) => {
-    const severityOrder = { ERROR: 0, WARNING: 1, INFO: 2 };
-    const aSeverity = groupedByType[a][0]?.severity || 'INFO';
-    const bSeverity = groupedByType[b][0]?.severity || 'INFO';
-    return severityOrder[aSeverity as keyof typeof severityOrder] - severityOrder[bSeverity as keyof typeof severityOrder];
+    if (sortBy === 'severity') {
+      const severityOrder = { ERROR: 0, WARNING: 1, INFO: 2 };
+      const aSeverity = groupedByType[a][0]?.severity || 'INFO';
+      const bSeverity = groupedByType[b][0]?.severity || 'INFO';
+      return severityOrder[aSeverity as keyof typeof severityOrder] - severityOrder[bSeverity as keyof typeof severityOrder];
+    } else if (sortBy === 'type') {
+      return a.localeCompare(b);
+    } else {
+      // position - keep original order
+      return 0;
+    }
   });
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="p-4 border-b border-slate-ui bg-white sticky top-0 z-10">
-        <h3 className="font-garamond text-lg font-semibold text-midnight">
+      {/* Stats Summary Panel */}
+      <div className="p-4 border-b border-slate-ui bg-gradient-to-r from-bronze/5 to-transparent sticky top-0 z-20">
+        <h3 className="font-garamond text-lg font-semibold text-midnight mb-2">
           Writing Coach
         </h3>
-        <p className="text-xs font-sans text-faded-ink mt-1">
-          {suggestions.length} {suggestions.length === 1 ? 'suggestion' : 'suggestions'}
-        </p>
+
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="bg-white rounded p-2 border border-slate-ui">
+            <div className="text-xs font-sans text-faded-ink">Total</div>
+            <div className="text-lg font-garamond font-semibold text-midnight">{stats.total}</div>
+          </div>
+          <div className="bg-white rounded p-2 border border-slate-ui">
+            <div className="text-xs font-sans text-faded-ink">Showing</div>
+            <div className="text-lg font-garamond font-semibold text-bronze">{stats.filtered}</div>
+          </div>
+          <div className="bg-white rounded p-2 border border-slate-ui">
+            <div className="text-xs font-sans text-faded-ink">Dismissed</div>
+            <div className="text-lg font-garamond font-semibold text-faded-ink">{stats.dismissed}</div>
+          </div>
+        </div>
+
+        {/* Clear dismissed button */}
+        {stats.dismissed > 0 && (
+          <div className="mb-2">
+            <button
+              onClick={clearDismissed}
+              className="w-full text-xs font-sans text-bronze hover:text-bronze/80 bg-bronze/10 hover:bg-bronze/20 rounded px-3 py-2 transition-colors"
+            >
+              Restore {stats.dismissed} dismissed suggestion{stats.dismissed !== 1 ? 's' : ''}
+            </button>
+          </div>
+        )}
+
+        {/* Severity badges */}
+        <div className="flex gap-2 mb-2">
+          {stats.bySeverity.ERROR && (
+            <span className="text-xs font-sans bg-red-100 text-red-700 px-2 py-1 rounded">
+              🔴 {stats.bySeverity.ERROR} errors
+            </span>
+          )}
+          {stats.bySeverity.WARNING && (
+            <span className="text-xs font-sans bg-orange-100 text-orange-700 px-2 py-1 rounded">
+              ⚡ {stats.bySeverity.WARNING} warnings
+            </span>
+          )}
+          {stats.bySeverity.INFO && (
+            <span className="text-xs font-sans bg-blue-100 text-blue-700 px-2 py-1 rounded">
+              💡 {stats.bySeverity.INFO} tips
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="p-4 space-y-4">
-        {/* Group by type of tip */}
-        {sortedTypes.map((type, typeIdx) => {
-          const typeSuggestions = groupedByType[type];
-          const firstSeverity = typeSuggestions[0]?.severity || 'INFO';
+      {/* Filter Controls */}
+      <div className="p-4 border-b border-slate-ui bg-white sticky top-[180px] z-10">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-xs font-sans font-semibold text-midnight uppercase tracking-wide">Filters</h4>
+          {(filterTypes.size > 0 || filterSeverities.size > 0) && (
+            <button
+              onClick={clearFilters}
+              className="text-xs font-sans text-bronze hover:text-bronze/80 underline"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
 
-          // Icon and color based on severity
-          const severityConfig = {
-            ERROR: { icon: '🔴', color: 'text-red-600', label: 'Issues' },
-            WARNING: { icon: '⚡', color: 'text-orange-600', label: 'Warnings' },
-            INFO: { icon: '💡', color: 'text-blue-600', label: 'Tips' },
-          };
+        {/* Sort options */}
+        <div className="mb-3">
+          <label className="text-xs font-sans text-faded-ink block mb-1">Sort by:</label>
+          <div className="flex gap-1">
+            {(['severity', 'type', 'position'] as const).map((option) => (
+              <button
+                key={option}
+                onClick={() => setSortBy(option)}
+                className={`text-xs font-sans px-2 py-1 rounded transition-colors ${
+                  sortBy === option
+                    ? 'bg-bronze text-white'
+                    : 'bg-slate-100 text-faded-ink hover:bg-slate-200'
+                }`}
+              >
+                {option.charAt(0).toUpperCase() + option.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
 
-          const config = severityConfig[firstSeverity as keyof typeof severityConfig];
-          const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-
-          // Calculate global index offset for this group
-          const globalOffset = sortedTypes
-            .slice(0, typeIdx)
-            .reduce((sum, t) => sum + groupedByType[t].length, 0);
-
-          return (
-            <div key={type}>
-              <div className={`text-xs font-sans font-semibold ${config.color} mb-2 flex items-center gap-1`}>
-                <span>{config.icon}</span>
-                <span>{typeLabel}</span>
-                <span className="text-faded-ink">({typeSuggestions.length})</span>
-              </div>
-              {typeSuggestions.map((suggestion, idx) => {
-                const globalIdx = globalOffset + idx;
+        {/* Severity filters */}
+        {availableSeverities.length > 0 && (
+          <div className="mb-3">
+            <label className="text-xs font-sans text-faded-ink block mb-1">Severity:</label>
+            <div className="flex flex-wrap gap-1">
+              {availableSeverities.map((severity) => {
+                const isSelected = filterSeverities.has(severity);
+                const severityConfig = {
+                  ERROR: { bg: 'bg-red-100', text: 'text-red-700', icon: '🔴' },
+                  WARNING: { bg: 'bg-orange-100', text: 'text-orange-700', icon: '⚡' },
+                  INFO: { bg: 'bg-blue-100', text: 'text-blue-700', icon: '💡' },
+                };
+                const config = severityConfig[severity as keyof typeof severityConfig];
                 return (
-                  <SuggestionCard
-                    key={`${type}-${idx}`}
-                    suggestion={suggestion}
-                    index={globalIdx}
-                    isExpanded={expandedIndex === globalIdx}
-                    onToggle={() => setExpandedIndex(expandedIndex === globalIdx ? null : globalIdx)}
-                    onDismiss={onDismiss}
-                  />
+                  <button
+                    key={severity}
+                    onClick={() => toggleFilterSeverity(severity)}
+                    className={`text-xs font-sans px-2 py-1 rounded transition-all ${
+                      isSelected
+                        ? `${config.bg} ${config.text} ring-2 ring-offset-1 ring-current`
+                        : 'bg-slate-100 text-faded-ink hover:bg-slate-200'
+                    }`}
+                  >
+                    <span className="mr-1">{config.icon}</span>
+                    {severity}
+                  </button>
                 );
               })}
             </div>
-          );
-        })}
+          </div>
+        )}
+
+        {/* Type filters */}
+        {availableTypes.length > 0 && (
+          <div>
+            <label className="text-xs font-sans text-faded-ink block mb-1">Type:</label>
+            <div className="flex flex-wrap gap-1">
+              {availableTypes.map((type) => {
+                const isSelected = filterTypes.has(type);
+                const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                return (
+                  <button
+                    key={type}
+                    onClick={() => toggleFilterType(type)}
+                    className={`text-xs font-sans px-2 py-1 rounded transition-all ${
+                      isSelected
+                        ? 'bg-bronze text-white ring-2 ring-offset-1 ring-bronze'
+                        : 'bg-slate-100 text-faded-ink hover:bg-slate-200'
+                    }`}
+                  >
+                    {typeLabel}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Suggestions List */}
+      <div className="p-4 space-y-4">
+        {filteredSuggestions.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-sm font-sans text-faded-ink">
+              No suggestions match your filters.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Group by type of tip */}
+            {sortedTypes.map((type, typeIdx) => {
+              const typeSuggestions = groupedByType[type];
+              const firstSeverity = typeSuggestions[0]?.severity || 'INFO';
+              const isCollapsed = collapsedSections.has(type);
+
+              // Icon and color based on severity
+              const severityConfig = {
+                ERROR: { icon: '🔴', color: 'text-red-600', label: 'Issues' },
+                WARNING: { icon: '⚡', color: 'text-orange-600', label: 'Warnings' },
+                INFO: { icon: '💡', color: 'text-blue-600', label: 'Tips' },
+              };
+
+              const config = severityConfig[firstSeverity as keyof typeof severityConfig];
+              const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+              // Calculate global index offset for this group
+              const globalOffset = sortedTypes
+                .slice(0, typeIdx)
+                .reduce((sum, t) => sum + groupedByType[t].length, 0);
+
+              return (
+                <div key={type}>
+                  {/* Collapsible Section Header */}
+                  <button
+                    onClick={() => toggleSectionCollapsed(type)}
+                    className={`w-full text-xs font-sans font-semibold ${config.color} mb-2 flex items-center gap-2 hover:opacity-70 transition-opacity`}
+                  >
+                    <span className="transform transition-transform" style={{ display: 'inline-block', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
+                      ▼
+                    </span>
+                    <span>{config.icon}</span>
+                    <span>{typeLabel}</span>
+                    <span className="text-faded-ink">({typeSuggestions.length})</span>
+                  </button>
+
+                  {!isCollapsed && typeSuggestions.map((suggestion, idx) => {
+                    const globalIdx = globalOffset + idx;
+                    return (
+                      <SuggestionCard
+                        key={`${type}-${idx}`}
+                        suggestion={suggestion}
+                        index={globalIdx}
+                        isExpanded={expandedIndex === globalIdx}
+                        onToggle={() => setExpandedIndex(expandedIndex === globalIdx ? null : globalIdx)}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
     </div>
   );
@@ -193,10 +490,11 @@ interface SuggestionCardProps {
   index: number;
   isExpanded: boolean;
   onToggle: () => void;
-  onDismiss?: (index: number) => void;
 }
 
-function SuggestionCard({ suggestion, index, isExpanded, onToggle, onDismiss }: SuggestionCardProps) {
+function SuggestionCard({ suggestion, isExpanded, onToggle }: SuggestionCardProps) {
+  const { requestJumpToText, dismissSuggestion, requestApplyReplacement } = useFastCoachStore();
+
   const severityColors = {
     ERROR: 'border-red-200 bg-red-50',
     WARNING: 'border-orange-200 bg-orange-50',
@@ -207,6 +505,22 @@ function SuggestionCard({ suggestion, index, isExpanded, onToggle, onDismiss }: 
     ERROR: '🔴',
     WARNING: '🟠',
     INFO: '🔵',
+  };
+
+  const handleJumpToText = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Don't trigger card toggle
+    if (
+      suggestion.start_char !== undefined &&
+      suggestion.end_char !== undefined &&
+      suggestion.start_char !== null &&
+      suggestion.end_char !== null &&
+      typeof suggestion.start_char === 'number' &&
+      typeof suggestion.end_char === 'number' &&
+      suggestion.start_char >= 0 &&
+      suggestion.end_char > suggestion.start_char
+    ) {
+      requestJumpToText(suggestion.start_char, suggestion.end_char);
+    }
   };
 
   return (
@@ -227,18 +541,16 @@ function SuggestionCard({ suggestion, index, isExpanded, onToggle, onDismiss }: 
           </p>
         </div>
 
-        {onDismiss && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDismiss(index);
-            }}
-            className="text-faded-ink hover:text-midnight ml-2"
-            title="Dismiss"
-          >
-            ×
-          </button>
-        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            dismissSuggestion(suggestion);
+          }}
+          className="text-faded-ink hover:text-midnight ml-2"
+          title="Dismiss"
+        >
+          ×
+        </button>
       </div>
 
       {isExpanded && (
@@ -275,9 +587,59 @@ function SuggestionCard({ suggestion, index, isExpanded, onToggle, onDismiss }: 
             </div>
           )}
 
-          {/* TODO: Add "Jump to text" button here once we implement text location tracking */}
-          <div className="mt-3 text-xs text-faded-ink italic">
-            💭 Click the suggestion to view details. Text location tracking coming soon.
+          {/* Action buttons */}
+          <div className="mt-3 space-y-2">
+            {/* Apply Replacement button - only show if we have replacement text */}
+            {suggestion.replacement !== undefined &&
+             suggestion.replacement !== null &&
+             suggestion.start_char !== undefined &&
+             suggestion.end_char !== undefined &&
+             suggestion.start_char !== null &&
+             suggestion.end_char !== null &&
+             typeof suggestion.start_char === 'number' &&
+             typeof suggestion.end_char === 'number' &&
+             suggestion.start_char >= 0 &&
+             suggestion.end_char > suggestion.start_char && (
+              <div className="bg-slate-50 border border-slate-200 rounded p-3">
+                <div className="text-xs font-sans font-semibold text-midnight mb-1">
+                  Suggested replacement:
+                </div>
+                <div className="text-sm font-mono bg-white px-2 py-1 rounded border border-slate-200 mb-2 text-midnight">
+                  {suggestion.replacement === '' ? <span className="text-faded-ink italic">(remove)</span> : suggestion.replacement}
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (suggestion.start_char !== undefined && suggestion.end_char !== undefined && suggestion.replacement !== undefined) {
+                      requestApplyReplacement(suggestion.start_char, suggestion.end_char, suggestion.replacement);
+                      dismissSuggestion(suggestion);
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-sans font-medium flex items-center justify-center gap-2"
+                >
+                  <span>✓</span>
+                  <span>Apply Suggestion</span>
+                </button>
+              </div>
+            )}
+
+            {/* Jump to Text button - only show if we have valid position data */}
+            {suggestion.start_char !== undefined &&
+             suggestion.end_char !== undefined &&
+             suggestion.start_char !== null &&
+             suggestion.end_char !== null &&
+             typeof suggestion.start_char === 'number' &&
+             typeof suggestion.end_char === 'number' &&
+             suggestion.start_char >= 0 &&
+             suggestion.end_char > suggestion.start_char && (
+              <button
+                onClick={handleJumpToText}
+                className="w-full px-3 py-2 bg-bronze text-white rounded hover:bg-bronze/90 transition-colors text-sm font-sans font-medium flex items-center justify-center gap-2"
+              >
+                <span>📍</span>
+                <span>Jump to Text</span>
+              </button>
+            )}
           </div>
         </div>
       )}

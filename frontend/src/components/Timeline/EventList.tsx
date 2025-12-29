@@ -198,13 +198,12 @@ export default function EventList({ manuscriptId }: EventListProps) {
         return;
       }
 
-      // Fetch content for each chapter and combine
-      let combinedText = '';
+      // Fetch and analyze each chapter separately (tracks chapter_id)
       let processedCount = 0;
 
       for (let i = 0; i < allChapters.length; i++) {
         const chapter = allChapters[i];
-        setAnalysisProgress(`Reading chapter ${i + 1}/${allChapters.length}: ${chapter.title}`);
+        setAnalysisProgress(`Analyzing chapter ${i + 1}/${allChapters.length}: ${chapter.title}`);
 
         try {
           const chapterResponse = await fetch(`http://localhost:8000/api/chapters/${chapter.id}`);
@@ -213,29 +212,27 @@ export default function EventList({ manuscriptId }: EventListProps) {
             const content = chapterData.data.content || '';
 
             if (content.trim()) {
-              combinedText += `\n\n=== ${chapter.title} ===\n\n${content}`;
+              // Analyze this chapter individually with chapter_id tracking
+              await timelineApi.analyzeTimeline({
+                manuscript_id: manuscriptId,
+                text: content,
+                chapter_id: chapter.id,  // Track which chapter this came from
+              });
               processedCount++;
             }
           }
         } catch (err) {
-          console.error(`Failed to fetch chapter ${chapter.id}:`, err);
+          console.error(`Failed to analyze chapter ${chapter.id}:`, err);
         }
       }
 
-      if (!combinedText.trim()) {
+      if (processedCount === 0) {
         setError('No content found in manuscript chapters');
         setAnalyzing(false);
         return;
       }
 
-      console.log(`Extracted ${processedCount} chapters with ${combinedText.length} characters`);
-
-      // Send to timeline analyzer
-      setAnalysisProgress('Analyzing manuscript with AI...');
-      await timelineApi.analyzeTimeline({
-        manuscript_id: manuscriptId,
-        text: combinedText,
-      });
+      console.log(`Analyzed ${processedCount} chapters`);
 
       setAnalysisProgress('Extracting events...');
 

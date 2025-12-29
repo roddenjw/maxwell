@@ -3,7 +3,6 @@
  * Shows style, word usage, and consistency feedback
  */
 
-import { useState } from 'react';
 import { FastCoachSidebar as SuggestionsPanel } from '../Editor/plugins/FastCoachPlugin';
 import { useFastCoachStore } from '@/stores/fastCoachStore';
 
@@ -15,14 +14,6 @@ interface FastCoachSidebarProps {
 
 export default function FastCoachSidebar({ isOpen, onToggle }: FastCoachSidebarProps) {
   const { suggestions } = useFastCoachStore();
-  const [dismissedIndices, setDismissedIndices] = useState<Set<number>>(new Set());
-
-  const handleDismiss = (index: number) => {
-    setDismissedIndices(prev => new Set([...prev, index]));
-  };
-
-  // Filter out dismissed suggestions
-  const visibleSuggestions = suggestions.filter((_, idx) => !dismissedIndices.has(idx));
 
   if (!isOpen) {
     return null;
@@ -54,8 +45,7 @@ export default function FastCoachSidebar({ isOpen, onToggle }: FastCoachSidebarP
       {/* Suggestions panel */}
       <div className="flex-1 overflow-y-auto">
         <SuggestionsPanel
-          suggestions={visibleSuggestions}
-          onDismiss={handleDismiss}
+          suggestions={suggestions}
         />
       </div>
 
@@ -63,7 +53,7 @@ export default function FastCoachSidebar({ isOpen, onToggle }: FastCoachSidebarP
       <div className="p-3 border-t border-slate-ui bg-white text-xs font-sans text-faded-ink">
         <div className="flex items-center justify-between">
           <span>Powered by Fast Coach</span>
-          <span>{visibleSuggestions.length} active</span>
+          <span>{suggestions.length} active</span>
         </div>
       </div>
     </div>

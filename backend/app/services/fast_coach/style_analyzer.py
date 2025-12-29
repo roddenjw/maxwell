@@ -114,24 +114,37 @@ class StyleAnalyzer:
                 return suggestions
 
             passive_count = 0
+            first_passive_match = None
+
             for pattern in self.passive_patterns:
-                passive_count += len(re.findall(pattern, text, re.IGNORECASE))
+                matches = list(re.finditer(pattern, text, re.IGNORECASE))
+                passive_count += len(matches)
+                if matches and first_passive_match is None:
+                    first_passive_match = matches[0]
 
             passive_ratio = passive_count / len(sentences)
 
             # More than 30% passive voice is excessive
             if passive_ratio > 0.3:
-                suggestions.append(Suggestion(
-                    type=SuggestionType.VOICE,
-                    severity=SeverityLevel.WARNING,
-                    message=f"High passive voice usage ({passive_count} instances in {len(sentences)} sentences)",
-                    suggestion="Consider using active voice for stronger, more direct prose. Active voice often creates more engaging scenes.",
-                    metadata={
+                suggestion_data = {
+                    "type": SuggestionType.VOICE,
+                    "severity": SeverityLevel.WARNING,
+                    "message": f"High passive voice usage ({passive_count} instances in {len(sentences)} sentences)",
+                    "suggestion": "Consider using active voice for stronger, more direct prose. Active voice often creates more engaging scenes.",
+                    "metadata": {
                         "passive_count": passive_count,
                         "sentence_count": len(sentences),
                         "passive_ratio": float(passive_ratio)
                     }
-                ))
+                }
+
+                # Add position if we found a match
+                if first_passive_match:
+                    suggestion_data["start_char"] = first_passive_match.start()
+                    suggestion_data["end_char"] = first_passive_match.end()
+                    suggestion_data["highlight_word"] = first_passive_match.group()
+
+                suggestions.append(Suggestion(**suggestion_data))
 
         except Exception:
             pass
@@ -147,26 +160,36 @@ class StyleAnalyzer:
             if len(words) == 0:
                 return suggestions
 
-            adverbs = re.findall(self.adverb_pattern, text, re.IGNORECASE)
-            # Filter out common acceptable ones
+            # Find all adverb matches with positions
             acceptable = {'early', 'only', 'daily', 'weekly', 'monthly', 'yearly', 'friendly', 'lovely'}
-            adverbs = [adv for adv in adverbs if adv.lower() not in acceptable]
+            adverb_matches = [m for m in re.finditer(self.adverb_pattern, text, re.IGNORECASE)
+                            if m.group().lower() not in acceptable]
 
-            adverb_ratio = len(adverbs) / len(words)
+            adverb_ratio = len(adverb_matches) / len(words)
 
             # More than 5% adverbs is excessive
             if adverb_ratio > 0.05:
-                suggestions.append(Suggestion(
-                    type=SuggestionType.STYLE,
-                    severity=SeverityLevel.INFO,
-                    message=f"High adverb density ({len(adverbs)} -ly words)",
-                    suggestion="Too many adverbs can weaken prose. Consider replacing with stronger verbs or showing actions instead.",
-                    metadata={
-                        "adverb_count": len(adverbs),
+                # Use first adverb match for position
+                first_match = adverb_matches[0] if adverb_matches else None
+
+                suggestion_data = {
+                    "type": SuggestionType.STYLE,
+                    "severity": SeverityLevel.INFO,
+                    "message": f"High adverb density ({len(adverb_matches)} -ly words)",
+                    "suggestion": "Too many adverbs can weaken prose. Consider replacing with stronger verbs or showing actions instead.",
+                    "metadata": {
+                        "adverb_count": len(adverb_matches),
                         "word_count": len(words),
-                        "examples": adverbs[:5]  # Show first 5
+                        "examples": [m.group() for m in adverb_matches[:5]]  # Show first 5
                     }
-                ))
+                }
+
+                if first_match:
+                    suggestion_data["start_char"] = first_match.start()
+                    suggestion_data["end_char"] = first_match.end()
+                    suggestion_data["highlight_word"] = first_match.group()
+
+                suggestions.append(Suggestion(**suggestion_data))
 
         except Exception:
             pass
@@ -178,23 +201,42 @@ class StyleAnalyzer:
         suggestions = []
 
         try:
-            paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
+            # Split by newlines but track positions
+            current_pos = 0
+            for para_raw in text.split('\n'):
+                para = para_raw.strip()
 
-            for i, para in enumerate(paragraphs):
-                word_count = len(word_tokenize(para))
+                if para:  # Skip empty paragraphs
+                    word_count = len(word_tokenize(para))
 
-                # Paragraphs longer than 200 words can be daunting
-                if word_count > 200:
-                    suggestions.append(Suggestion(
-                        type=SuggestionType.STYLE,
-                        severity=SeverityLevel.INFO,
-                        message=f"Long paragraph ({word_count} words)",
-                        suggestion="Consider breaking this paragraph into smaller chunks for better readability.",
-                        metadata={
-                            "paragraph_index": i,
-                            "word_count": word_count
+                    # Paragraphs longer than 200 words can be daunting
+                    if word_count > 200:
+                        # Find the actual start position of this paragraph in the original text
+                        # Search for the paragraph starting from current_pos
+                        para_start = text.find(para, current_pos)
+                        para_end = para_start + len(para) if para_start != -1 else current_pos + len(para_raw)
+
+                        suggestion_data = {
+                            "type": SuggestionType.STYLE,
+                            "severity": SeverityLevel.INFO,
+                            "message": f"Long paragraph ({word_count} words)",
+                            "suggestion": "Consider breaking this paragraph into smaller chunks for better readability.",
+                            "metadata": {
+                                "word_count": word_count
+                            }
                         }
-                    ))
+
+                        # Add position if found
+                        if para_start != -1:
+                            # Highlight just the first ~100 chars for context
+                            highlight_end = min(para_start + 100, para_end)
+                            suggestion_data["start_char"] = para_start
+                            suggestion_data["end_char"] = highlight_end
+
+                        suggestions.append(Suggestion(**suggestion_data))
+
+                # Move position forward (include newline)
+                current_pos += len(para_raw) + 1
 
         except Exception:
             pass

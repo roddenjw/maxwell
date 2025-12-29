@@ -36,6 +36,7 @@ export interface TimelineEvent {
   character_ids: string[];
   event_metadata: {
     auto_generated?: boolean;
+    chapter_id?: string;
     paragraph_index?: number;
     word_count?: number;
     actions?: string[];
@@ -111,6 +112,7 @@ export interface UpdateEventRequest {
 export interface AnalyzeTimelineRequest {
   manuscript_id: string;
   text: string;
+  chapter_id?: string;
 }
 
 // Utility functions

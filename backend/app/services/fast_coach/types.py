@@ -16,6 +16,7 @@ class SuggestionType(str, Enum):
     VOICE = "VOICE"
     REPETITION = "REPETITION"
     SHOW_NOT_TELL = "SHOW_NOT_TELL"
+    DIALOGUE = "DIALOGUE"
 
 
 class SeverityLevel(str, Enum):
@@ -40,6 +41,9 @@ class Suggestion(BaseModel):
     # Optional highlight
     highlight_word: Optional[str] = None
 
+    # Optional replacement text (for quick-fix suggestions)
+    replacement: Optional[str] = None
+
     # Metadata
     metadata: Optional[Dict[str, Any]] = None
 
@@ -54,5 +58,6 @@ class Suggestion(BaseModel):
             "start_char": self.start_char,
             "end_char": self.end_char,
             "highlight_word": self.highlight_word,
+            "replacement": self.replacement,
             "metadata": self.metadata or {}
         }

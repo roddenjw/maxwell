@@ -62,6 +62,7 @@ class AnalyzeTimelineRequest(BaseModel):
     """Request to analyze text and extract timeline events"""
     manuscript_id: str
     text: str
+    chapter_id: Optional[str] = None  # Optional chapter ID to track source
 
 
 class ReorderEventsRequest(BaseModel):
@@ -281,7 +282,8 @@ async def analyze_timeline(request: AnalyzeTimelineRequest, background_tasks: Ba
     background_tasks.add_task(
         _process_timeline_analysis,
         request.manuscript_id,
-        request.text
+        request.text,
+        request.chapter_id
     )
 
     return {
@@ -291,10 +293,10 @@ async def analyze_timeline(request: AnalyzeTimelineRequest, background_tasks: Ba
     }
 
 
-async def _process_timeline_analysis(manuscript_id: str, text: str):
+async def _process_timeline_analysis(manuscript_id: str, text: str, chapter_id: Optional[str] = None):
     """Background task to process timeline analysis"""
     try:
-        print(f"🔍 Starting timeline analysis for manuscript {manuscript_id}...")
+        print(f"🔍 Starting timeline analysis for manuscript {manuscript_id}" + (f", chapter {chapter_id}" if chapter_id else "") + "...")
 
         # Get existing entities (for character/location detection)
         existing_entities = codex_service.get_entities(manuscript_id)
@@ -342,9 +344,11 @@ async def _process_timeline_analysis(manuscript_id: str, text: str):
                 if loc_entity:
                     location_id = loc_entity.id
 
-            # Create event with auto_generated flag
+            # Create event with auto_generated flag and chapter_id
             event_metadata = event_data.get("metadata", {})
             event_metadata["auto_generated"] = True  # Mark as auto-generated
+            if chapter_id:
+                event_metadata["chapter_id"] = chapter_id  # Track source chapter
 
             timeline_service.create_event(
                 manuscript_id=manuscript_id,

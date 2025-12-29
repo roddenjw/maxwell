@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ManuscriptEditor from './components/Editor/ManuscriptEditor'
 import ManuscriptLibrary from './components/ManuscriptLibrary'
 import { TimeMachine } from './components/TimeMachine'
@@ -272,6 +272,46 @@ function App() {
       toast.error(getErrorMessage(error))
     }
   }
+
+  // Reload chapter content when switching to views that show the editor
+  // This ensures the editor always has the latest saved content
+  useEffect(() => {
+    const viewsWithEditor = ['chapters', 'codex', 'coach'];
+
+    // Only reload if:
+    // 1. We're switching to a view that shows the editor
+    // 2. There's a current chapter selected
+    // 3. We're not already in a saving state (to avoid conflicts)
+    if (viewsWithEditor.includes(activeView) && currentChapterId && saveStatus !== 'saving') {
+      // Reload the chapter content from the database
+      const reloadChapterContent = async () => {
+        try {
+          const chapter = await chaptersApi.getChapter(currentChapterId);
+
+          const hasLexicalState = chapter.lexical_state && chapter.lexical_state.trim() !== '';
+          const hasPlainContent = chapter.content && chapter.content.trim() !== '';
+
+          let editorContent: string | undefined;
+
+          if (hasLexicalState) {
+            editorContent = chapter.lexical_state;
+          } else if (hasPlainContent) {
+            editorContent = convertPlainTextToLexical(chapter.content);
+          }
+
+          // Only update if content has actually changed to avoid unnecessary re-renders
+          if (editorContent !== currentChapterContent) {
+            setCurrentChapterContent(editorContent || '');
+            setEditorKey(prev => prev + 1); // Force editor remount with new content
+          }
+        } catch (error) {
+          console.error('Failed to reload chapter content:', error);
+        }
+      };
+
+      reloadChapterContent();
+    }
+  }, [activeView]); // Only run when activeView changes
 
   // Define keyboard shortcuts
   const shortcuts: KeyboardShortcut[] = [

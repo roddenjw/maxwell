@@ -24,6 +24,7 @@ import AutoSavePlugin from './plugins/AutoSavePlugin';
 import EntityMentionsPlugin from './plugins/EntityMentionsPlugin';
 import RealtimeNLPPlugin from './plugins/RealtimeNLPPlugin';
 import FastCoachPlugin from './plugins/FastCoachPlugin';
+import EntityDetectionPlugin from './plugins/EntityDetectionPlugin';
 import { versioningApi } from '@/lib/api';
 
 interface ManuscriptEditorProps {
@@ -209,6 +210,9 @@ export default function ManuscriptEditor({
 
             {/* Fast Coach plugin - real-time writing suggestions */}
             {manuscriptId && <FastCoachPlugin manuscriptId={manuscriptId} enabled={true} />}
+
+            {/* Entity Detection plugin - auto-detect entities for Codex */}
+            {manuscriptId && <EntityDetectionPlugin manuscriptId={manuscriptId} enabled={true} />}
           </div>
 
           {/* Status indicators - Maxwell Style */}
