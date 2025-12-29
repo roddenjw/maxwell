@@ -667,6 +667,129 @@ export const chaptersApi = {
 };
 
 /**
+ * Recap types
+ */
+export interface ChapterRecap {
+  recap_id: string;
+  recap_type: 'chapter' | 'arc';
+  content: {
+    summary: string;
+    key_events: string[];
+    character_developments: Array<{ character: string; development: string }>;
+    themes: string[];
+    emotional_tone: string;
+    narrative_arc: string;
+    memorable_moments: string[];
+    // Arc-specific fields
+    major_plot_points?: string[];
+    character_arcs?: Array<{ character: string; arc: string }>;
+    central_themes?: string[];
+    emotional_journey?: string;
+    arc_structure?: string;
+    climactic_moment?: string;
+    unresolved_threads?: string[];
+    chapter_ids?: string[];
+  };
+  created_at: string;
+  is_cached?: boolean;
+}
+
+/**
+ * Recap API
+ */
+export const recapApi = {
+  /**
+   * Generate or retrieve a chapter recap
+   */
+  async generateChapterRecap(chapterId: string, forceRegenerate = false): Promise<ChapterRecap> {
+    const response = await fetch(`${API_BASE_URL}/recap/chapter/${chapterId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ force_regenerate: forceRegenerate }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate recap');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get a cached chapter recap
+   */
+  async getChapterRecap(chapterId: string): Promise<ChapterRecap> {
+    const response = await fetch(`${API_BASE_URL}/recap/chapter/${chapterId}`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('No recap found for this chapter');
+      }
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get recap');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Generate an arc recap for multiple chapters
+   */
+  async generateArcRecap(data: {
+    arc_title: string;
+    chapter_ids: string[];
+  }): Promise<ChapterRecap> {
+    const response = await fetch(`${API_BASE_URL}/recap/arc`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate arc recap');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Delete a chapter recap
+   */
+  async deleteChapterRecap(chapterId: string): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/recap/chapter/${chapterId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to delete recap');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get all recaps for a manuscript
+   */
+  async getManuscriptRecaps(manuscriptId: string): Promise<{ recaps: ChapterRecap[] }> {
+    const response = await fetch(`${API_BASE_URL}/recap/manuscript/${manuscriptId}/recaps`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get recaps');
+    }
+
+    return response.json();
+  },
+};
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
@@ -680,5 +803,6 @@ export default {
   codex: codexApi,
   timeline: timelineApi,
   chapters: chaptersApi,
+  recap: recapApi,
   healthCheck,
 };

@@ -151,7 +151,10 @@ export default function ManuscriptEditor({
           {/* Toolbar - hidden in focus mode */}
           {!isFocusMode && (
             <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-              <EditorToolbar manuscriptId={manuscriptId} />
+              <EditorToolbar
+                manuscriptId={manuscriptId}
+                chapterId={chapterId}
+              />
             </div>
           )}
 
