@@ -790,6 +790,64 @@ export const recapApi = {
 };
 
 /**
+ * Analytics types
+ */
+export interface WritingAnalytics {
+  overview: {
+    total_words: number;
+    total_chapters: number;
+    words_this_period: number;
+    current_streak: number;
+    longest_streak: number;
+    days_active: number;
+    total_sessions: number;
+  };
+  daily_stats: Array<{
+    date: string;
+    word_count: number;
+    sessions: number;
+    snapshots: Array<{
+      id: string;
+      created_at: string;
+      word_count: number;
+      label: string;
+    }>;
+  }>;
+  recent_sessions: Array<{
+    id: string;
+    date: string;
+    word_count: number;
+    label: string;
+    trigger_type: string;
+  }>;
+  timeframe: {
+    start: string;
+    end: string;
+    days: number;
+  };
+}
+
+/**
+ * Analytics API
+ */
+export const analyticsApi = {
+  /**
+   * Get comprehensive analytics for a manuscript
+   */
+  async getAnalytics(manuscriptId: string, days = 30): Promise<WritingAnalytics> {
+    const response = await fetch(`${API_BASE_URL}/stats/analytics/${manuscriptId}?days=${days}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get analytics');
+    }
+
+    const data = await response.json();
+    return data.data;
+  },
+};
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
@@ -804,5 +862,6 @@ export default {
   timeline: timelineApi,
   chapters: chaptersApi,
   recap: recapApi,
+  analytics: analyticsApi,
   healthCheck,
 };
