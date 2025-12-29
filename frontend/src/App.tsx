@@ -10,6 +10,7 @@ import UnifiedSidebar from './components/Navigation/UnifiedSidebar'
 import ToastContainer from './components/common/ToastContainer'
 import KeyboardShortcutsModal from './components/common/KeyboardShortcutsModal'
 import AnalyticsDashboard from './components/Analytics/AnalyticsDashboard'
+import ExportModal from './components/Export/ExportModal'
 import { useManuscriptStore } from './stores/manuscriptStore'
 import { useCodexStore } from './stores/codexStore'
 import { useTimelineStore } from './stores/timelineStore'
@@ -29,7 +30,7 @@ function App() {
   const { isTimelineOpen, setTimelineOpen } = useTimelineStore()
   const { setCurrentChapter, currentChapterId } = useChapterStore()
   const { isSidebarOpen: isCoachOpen, toggleSidebar: toggleCoach } = useFastCoachStore()
-  const [activeView, setActiveView] = useState<'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics'>('chapters')
+  const [activeView, setActiveView] = useState<'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export'>('chapters')
   const [editorKey, setEditorKey] = useState(0) // Force editor re-mount on restore
   const [currentChapterContent, setCurrentChapterContent] = useState<string>('')
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
@@ -84,7 +85,7 @@ function App() {
     setActiveView('chapters') // Reset view
   }
 
-  const handleNavigate = (view: 'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics') => {
+  const handleNavigate = (view: 'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export') => {
     setActiveView(view)
 
     // Handle view-specific state updates
@@ -499,6 +500,14 @@ function App() {
               <div className="flex-1 overflow-auto">
                 <AnalyticsDashboard manuscriptId={currentManuscript.id} />
               </div>
+            )}
+
+            {/* Export View (Modal) */}
+            {activeView === 'export' && (
+              <ExportModal
+                manuscriptId={currentManuscript.id}
+                onClose={() => setActiveView('chapters')}
+              />
             )}
 
             {/* Recap View (Modal) */}
