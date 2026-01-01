@@ -25,6 +25,7 @@ import { toast } from './stores/toastStore'
 import { getErrorMessage } from './lib/retry'
 import { useUnsavedChanges } from './hooks/useUnsavedChanges'
 import RecapModal from './components/RecapModal'
+import analytics from './lib/analytics'
 
 function App() {
   const { currentManuscriptId, setCurrentManuscript, getCurrentManuscript } = useManuscriptStore()
@@ -63,6 +64,7 @@ function App() {
   const handleWelcomeComplete = async (sampleManuscriptId?: string) => {
     markWelcomeComplete()
     setShowWelcome(false)
+    analytics.onboardingCompleted(!!sampleManuscriptId)
 
     if (sampleManuscriptId) {
       // Open the sample manuscript
@@ -81,17 +83,20 @@ function App() {
   const handleWelcomeSkip = () => {
     markWelcomeComplete()
     setShowWelcome(false)
+    analytics.onboardingSkipped()
   }
 
   const handleTourComplete = () => {
     markTourComplete()
     setShowTour(false)
+    analytics.tourCompleted()
     toast.success('You\'re all set! Happy writing! ✨')
   }
 
   const handleTourSkip = () => {
     markTourComplete()
     setShowTour(false)
+    analytics.tourSkipped()
   }
 
   const handleOpenManuscript = async (manuscriptId: string) => {
@@ -99,6 +104,12 @@ function App() {
 
     if (!currentManuscriptId) {
       markFirstManuscriptCreated()
+    }
+
+    // Track manuscript opened
+    const manuscript = useManuscriptStore.getState().manuscripts.find(m => m.id === manuscriptId)
+    if (manuscript) {
+      analytics.manuscriptOpened(manuscriptId, manuscript.title)
     }
 
     // Auto-select first chapter if available
@@ -146,6 +157,30 @@ function App() {
 
   const handleNavigate = (view: 'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export') => {
     setActiveView(view)
+
+    // Track feature usage
+    if (currentManuscriptId) {
+      switch (view) {
+        case 'codex':
+          analytics.codexOpened(currentManuscriptId)
+          break
+        case 'timeline':
+          analytics.timelineOpened(currentManuscriptId)
+          break
+        case 'analytics':
+          analytics.analyticsOpened(currentManuscriptId)
+          break
+        case 'coach':
+          analytics.fastCoachOpened(currentManuscriptId)
+          break
+        case 'recap':
+          analytics.recapOpened(currentManuscriptId)
+          break
+        case 'timemachine':
+          analytics.timeMachineOpened(currentManuscriptId)
+          break
+      }
+    }
 
     // Handle view-specific state updates
     if (view === 'chapters') {

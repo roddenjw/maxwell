@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from '@/stores/toastStore';
+import analytics from '@/lib/analytics';
 
 interface ExportModalProps {
   manuscriptId: string;
@@ -89,6 +90,10 @@ export default function ExportModal({ manuscriptId, onClose }: ExportModalProps)
 
     try {
       setExporting(true);
+
+      // Track export started
+      analytics.exportStarted(manuscriptId, selectedFormat);
+
       const endpoint = selectedFormat === 'docx'
         ? `http://localhost:8000/api/export/docx/${manuscriptId}`
         : `http://localhost:8000/api/export/pdf/${manuscriptId}`;
@@ -124,6 +129,10 @@ export default function ExportModal({ manuscriptId, onClose }: ExportModalProps)
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+
+      // Track export completed
+      const wordCount = preview?.total_words || 0;
+      analytics.exportCompleted(manuscriptId, selectedFormat, wordCount);
 
       toast.success(`Exported to ${selectedFormat.toUpperCase()} successfully!`);
       onClose();

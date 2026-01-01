@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { useManuscriptStore } from '../stores/manuscriptStore';
+import analytics from '../lib/analytics';
 
 interface ManuscriptLibraryProps {
   onOpenManuscript: (manuscriptId: string) => void;
@@ -16,7 +17,12 @@ export default function ManuscriptLibrary({ onOpenManuscript }: ManuscriptLibrar
   const [newTitle, setNewTitle] = useState('');
 
   const handleCreate = () => {
-    const manuscript = createManuscript(newTitle || 'Untitled Manuscript');
+    const title = newTitle || 'Untitled Manuscript';
+    const manuscript = createManuscript(title);
+
+    // Track manuscript creation
+    analytics.manuscriptCreated(manuscript.id, title);
+
     setNewTitle('');
     setShowCreateDialog(false);
     onOpenManuscript(manuscript.id);
@@ -34,6 +40,9 @@ export default function ManuscriptLibrary({ onOpenManuscript }: ManuscriptLibrar
   const handleDelete = (id: string, title: string) => {
     if (confirm(`Delete "${title}"? This cannot be undone.`)) {
       deleteManuscript(id);
+
+      // Track manuscript deletion
+      analytics.manuscriptDeleted(id);
     }
   };
 
