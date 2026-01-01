@@ -11,7 +11,10 @@ import ToastContainer from './components/common/ToastContainer'
 import KeyboardShortcutsModal from './components/common/KeyboardShortcutsModal'
 import AnalyticsDashboard from './components/Analytics/AnalyticsDashboard'
 import ExportModal from './components/Export/ExportModal'
+import WelcomeModal from './components/Onboarding/WelcomeModal'
+import FeatureTour from './components/Onboarding/FeatureTour'
 import { useManuscriptStore } from './stores/manuscriptStore'
+import { useOnboardingStore } from './stores/onboardingStore'
 import { useCodexStore } from './stores/codexStore'
 import { useTimelineStore } from './stores/timelineStore'
 import { useChapterStore } from './stores/chapterStore'
@@ -36,11 +39,67 @@ function App() {
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
 
+  // Onboarding state
+  const {
+    hasCompletedTour,
+    shouldShowOnboarding,
+    markWelcomeComplete,
+    markTourComplete,
+    markFirstManuscriptCreated
+  } = useOnboardingStore()
+  const [showWelcome, setShowWelcome] = useState(false)
+  const [showTour, setShowTour] = useState(false)
+
   // Track unsaved changes and warn before closing
   const { checkNavigateAway } = useUnsavedChanges(saveStatus === 'unsaved' || saveStatus === 'saving')
 
+  // Check if should show onboarding on mount
+  useEffect(() => {
+    if (shouldShowOnboarding()) {
+      setShowWelcome(true)
+    }
+  }, [])
+
+  const handleWelcomeComplete = async (sampleManuscriptId?: string) => {
+    markWelcomeComplete()
+    setShowWelcome(false)
+
+    if (sampleManuscriptId) {
+      // Open the sample manuscript
+      await handleOpenManuscript(sampleManuscriptId)
+      markFirstManuscriptCreated()
+
+      // Show feature tour after opening manuscript
+      setTimeout(() => {
+        if (!hasCompletedTour) {
+          setShowTour(true)
+        }
+      }, 500)
+    }
+  }
+
+  const handleWelcomeSkip = () => {
+    markWelcomeComplete()
+    setShowWelcome(false)
+  }
+
+  const handleTourComplete = () => {
+    markTourComplete()
+    setShowTour(false)
+    toast.success('You\'re all set! Happy writing! ✨')
+  }
+
+  const handleTourSkip = () => {
+    markTourComplete()
+    setShowTour(false)
+  }
+
   const handleOpenManuscript = async (manuscriptId: string) => {
     setCurrentManuscript(manuscriptId)
+
+    if (!currentManuscriptId) {
+      markFirstManuscriptCreated()
+    }
 
     // Auto-select first chapter if available
     try {
@@ -392,13 +451,13 @@ function App() {
             {/* Chapters View */}
             {activeView === 'chapters' && (
               <>
-                <div className="w-64 flex-shrink-0">
+                <div className="w-64 flex-shrink-0" data-tour="chapters-nav">
                   <DocumentNavigator
                     manuscriptId={currentManuscript.id}
                     onChapterSelect={handleChapterSelect}
                   />
                 </div>
-                <div className="flex-1 overflow-auto">
+                <div className="flex-1 overflow-auto" data-tour="editor">
                   {currentChapterId ? (
                     <ManuscriptEditor
                       key={editorKey}
@@ -530,6 +589,14 @@ function App() {
 
         {/* Toast Notifications */}
         <ToastContainer />
+
+        {/* Onboarding Modals */}
+        {showWelcome && (
+          <WelcomeModal onComplete={handleWelcomeComplete} onSkip={handleWelcomeSkip} />
+        )}
+        {showTour && (
+          <FeatureTour onComplete={handleTourComplete} onSkip={handleTourSkip} />
+        )}
       </div>
     )
   }
@@ -539,6 +606,14 @@ function App() {
     <>
       <ManuscriptLibrary onOpenManuscript={handleOpenManuscript} />
       <ToastContainer />
+
+      {/* Onboarding Modals */}
+      {showWelcome && (
+        <WelcomeModal onComplete={handleWelcomeComplete} onSkip={handleWelcomeSkip} />
+      )}
+      {showTour && (
+        <FeatureTour onComplete={handleTourComplete} onSkip={handleTourSkip} />
+      )}
     </>
   )
 }

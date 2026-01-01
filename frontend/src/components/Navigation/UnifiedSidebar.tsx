@@ -94,6 +94,7 @@ export default function UnifiedSidebar({
             <button
               key={item.id}
               onClick={() => onNavigate(item.id as any)}
+              data-tour={`${item.id}-button`}
               className={`
                 w-full flex items-center gap-3 px-3 py-3 rounded-sm transition-all
                 ${isActive
