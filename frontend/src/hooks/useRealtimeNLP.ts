@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { toast } from '../stores/toastStore';
+import analytics from '../lib/analytics';
 
 interface DetectedEntity {
   name: string;
@@ -77,12 +78,17 @@ export function useRealtimeNLP({
             // Trigger callback
             onEntityDetected?.(suggestion.new_entities);
 
+            // Track entity detection
+            suggestion.new_entities.forEach((entity) => {
+              analytics.entityAnalyzed(manuscriptId, entity.type);
+            });
+
             // Show toast notification for each detected entity
             suggestion.new_entities.forEach((entity) => {
               toast.info(
-                `Detected ${entity.type.toLowerCase()}: "${entity.name}"`,
+                `✨ Detected ${entity.type.toLowerCase()}: "${entity.name}"`,
                 {
-                  duration: 8000,
+                  duration: 10000,
                   action: {
                     label: 'Add to Codex',
                     onClick: async () => {
@@ -101,7 +107,9 @@ export function useRealtimeNLP({
                         });
 
                         if (response.ok) {
-                          toast.success(`Added "${entity.name}" to Codex`);
+                          // Track entity approval
+                          analytics.entityApproved(manuscriptId, entity.type);
+                          toast.success(`✅ Added "${entity.name}" to Codex`);
                         } else {
                           const errorData = await response.json();
                           toast.error(`Failed to add entity: ${errorData.detail || 'Unknown error'}`);
