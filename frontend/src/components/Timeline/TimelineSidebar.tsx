@@ -10,6 +10,8 @@ import InteractiveTimeline from './InteractiveTimeline';
 import TimelineHeatmap from './TimelineHeatmap';
 import CharacterNetwork from './CharacterNetwork';
 import EmotionalArc from './EmotionalArc';
+import CharacterLocationTracker from './CharacterLocationTracker';
+import ConflictTracker from './ConflictTracker';
 
 interface TimelineSidebarProps {
   manuscriptId: string;
@@ -30,6 +32,8 @@ export default function TimelineSidebar({
     { id: 'visual' as const, label: 'Visual', icon: '📜' },
     { id: 'events' as const, label: 'Events', icon: '🎬' },
     { id: 'inconsistencies' as const, label: 'Issues', icon: '⚠️', badge: pendingCount },
+    { id: 'locations' as const, label: 'Locations', icon: '🗺️' },
+    { id: 'conflicts' as const, label: 'Conflicts', icon: '⚔️' },
     { id: 'heatmap' as const, label: 'Heatmap', icon: '🔥' },
     { id: 'network' as const, label: 'Network', icon: '🕸️' },
     { id: 'emotion' as const, label: 'Emotion', icon: '💭' },
@@ -119,6 +123,8 @@ export default function TimelineSidebar({
         {activeTab === 'visual' && <InteractiveTimeline manuscriptId={manuscriptId} />}
         {activeTab === 'events' && <EventList manuscriptId={manuscriptId} />}
         {activeTab === 'inconsistencies' && <InconsistencyList manuscriptId={manuscriptId} />}
+        {activeTab === 'locations' && <CharacterLocationTracker manuscriptId={manuscriptId} />}
+        {activeTab === 'conflicts' && <ConflictTracker manuscriptId={manuscriptId} />}
         {activeTab === 'heatmap' && <TimelineHeatmap manuscriptId={manuscriptId} />}
         {activeTab === 'network' && <CharacterNetwork manuscriptId={manuscriptId} />}
         {activeTab === 'emotion' && <EmotionalArc manuscriptId={manuscriptId} />}
