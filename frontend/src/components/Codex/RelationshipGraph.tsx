@@ -1,12 +1,16 @@
 /**
  * RelationshipGraph - Visual network diagram of entity relationships
+ * Enhanced with PNG export and improved visualization
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
+import { toPng } from 'html-to-image';
 import { getEntityTypeColor, getRelationshipTypeLabel } from '@/types/codex';
 import { codexApi } from '@/lib/api';
 import { useCodexStore } from '@/stores/codexStore';
+import { toast } from '@/stores/toastStore';
+import analytics from '@/lib/analytics';
 
 interface RelationshipGraphProps {
   manuscriptId: string;
@@ -30,6 +34,11 @@ export default function RelationshipGraph({ manuscriptId }: RelationshipGraphPro
   const { entities, relationships, setRelationships } = useCodexStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const [nodeSize, setNodeSize] = useState(6);
+  const graphRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({
     nodes: [],
     links: [],
@@ -96,6 +105,52 @@ export default function RelationshipGraph({ manuscriptId }: RelationshipGraphPro
     console.log('Node clicked:', node);
   }, []);
 
+  const exportToPNG = async () => {
+    if (!containerRef.current) return;
+
+    try {
+      setExporting(true);
+      toast.info('Generating image...');
+
+      // Wait a bit for any animations to settle
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const dataUrl = await toPng(containerRef.current, {
+        quality: 1.0,
+        pixelRatio: 2, // Higher quality
+        backgroundColor: '#F9F7F1', // Maxwell vellum color
+      });
+
+      // Download the image
+      const link = document.createElement('a');
+      link.download = `relationship-graph-${new Date().getTime()}.png`;
+      link.href = dataUrl;
+      link.click();
+
+      // Track export
+      analytics.exportCompleted(manuscriptId, 'png', entities.length);
+      toast.success('Graph exported as PNG!');
+    } catch (err) {
+      console.error('Failed to export graph:', err);
+      toast.error('Failed to export graph. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const centerGraph = () => {
+    if (graphRef.current) {
+      graphRef.current.zoomToFit(400);
+    }
+  };
+
+  const resetView = () => {
+    if (graphRef.current) {
+      graphRef.current.zoom(1);
+      graphRef.current.centerAt(0, 0);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -156,13 +211,62 @@ export default function RelationshipGraph({ manuscriptId }: RelationshipGraphPro
           <h3 className="font-garamond font-semibold text-midnight">
             Relationship Network
           </h3>
-          <button
-            onClick={loadRelationships}
-            className="text-sm font-sans text-bronze hover:underline"
-            title="Reload relationships from server"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadRelationships}
+              className="text-sm font-sans text-bronze hover:underline"
+              title="Reload relationships from server"
+            >
+              Refresh
+            </button>
+            <button
+              onClick={exportToPNG}
+              disabled={exporting}
+              className="px-3 py-1 bg-bronze text-white text-sm font-sans hover:bg-bronze/90 transition-colors disabled:opacity-50"
+              style={{ borderRadius: '2px' }}
+              title="Export as PNG image"
+            >
+              {exporting ? 'Exporting...' : '📸 Export PNG'}
+            </button>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={centerGraph}
+              className="text-xs font-sans text-faded-ink hover:text-bronze transition-colors"
+            >
+              Center Graph
+            </button>
+            <button
+              onClick={resetView}
+              className="text-xs font-sans text-faded-ink hover:text-bronze transition-colors"
+            >
+              Reset Zoom
+            </button>
+            <label className="flex items-center gap-2 text-xs font-sans text-faded-ink">
+              <input
+                type="checkbox"
+                checked={showLabels}
+                onChange={(e) => setShowLabels(e.target.checked)}
+                className="rounded"
+              />
+              Show Labels
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-sans text-faded-ink">Node Size:</span>
+            <input
+              type="range"
+              min="4"
+              max="10"
+              value={nodeSize}
+              onChange={(e) => setNodeSize(Number(e.target.value))}
+              className="w-20"
+            />
+          </div>
         </div>
 
         {/* Legend */}
@@ -180,12 +284,13 @@ export default function RelationshipGraph({ manuscriptId }: RelationshipGraphPro
       </div>
 
       {/* Graph */}
-      <div className="flex-1 bg-white relative">
+      <div ref={containerRef} className="flex-1 bg-white relative">
         <ForceGraph2D
+          ref={graphRef}
           graphData={graphData}
           nodeLabel="name"
           nodeColor="color"
-          nodeRelSize={6}
+          nodeRelSize={nodeSize}
           linkLabel="label"
           linkWidth={(link: any) => Math.sqrt(link.strength)}
           linkDirectionalParticles={2}
@@ -200,14 +305,21 @@ export default function RelationshipGraph({ manuscriptId }: RelationshipGraphPro
             // Draw circle
             ctx.fillStyle = node.color;
             ctx.beginPath();
-            ctx.arc(node.x, node.y, 5, 0, 2 * Math.PI);
+            ctx.arc(node.x, node.y, nodeSize, 0, 2 * Math.PI);
             ctx.fill();
 
-            // Draw label
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.fillStyle = '#1E293B'; // midnight
-            ctx.fillText(label, node.x, node.y + 7);
+            // Draw border
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2 / globalScale;
+            ctx.stroke();
+
+            // Draw label if enabled
+            if (showLabels) {
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'top';
+              ctx.fillStyle = '#1E293B'; // midnight
+              ctx.fillText(label, node.x, node.y + nodeSize + 2);
+            }
           }}
           linkCanvasObject={(link: any, ctx) => {
             // Draw link with label
@@ -218,30 +330,32 @@ export default function RelationshipGraph({ manuscriptId }: RelationshipGraphPro
 
             // Draw line
             ctx.strokeStyle = '#94A3B8'; // slate
-            ctx.lineWidth = Math.sqrt(link.strength);
+            ctx.lineWidth = Math.max(1, Math.sqrt(link.strength));
             ctx.beginPath();
             ctx.moveTo(start.x, start.y);
             ctx.lineTo(end.x, end.y);
             ctx.stroke();
 
-            // Draw label at midpoint
-            const midX = (start.x + end.x) / 2;
-            const midY = (start.y + end.y) / 2;
+            // Draw label at midpoint if labels are enabled
+            if (showLabels) {
+              const midX = (start.x + end.x) / 2;
+              const midY = (start.y + end.y) / 2;
 
-            ctx.font = '10px Inter';
-            ctx.fillStyle = '#64748B'; // faded-ink
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+              ctx.font = '10px Inter';
+              ctx.fillStyle = '#64748B'; // faded-ink
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
 
-            // Background for label
-            const text = link.label;
-            const textWidth = ctx.measureText(text).width;
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(midX - textWidth / 2 - 2, midY - 6, textWidth + 4, 12);
+              // Background for label
+              const text = link.label;
+              const textWidth = ctx.measureText(text).width;
+              ctx.fillStyle = '#FFFFFF';
+              ctx.fillRect(midX - textWidth / 2 - 2, midY - 6, textWidth + 4, 12);
 
-            // Text
-            ctx.fillStyle = '#64748B';
-            ctx.fillText(text, midX, midY);
+              // Text
+              ctx.fillStyle = '#64748B';
+              ctx.fillText(text, midX, midY);
+            }
           }}
           cooldownTicks={100}
           enableZoomInteraction={true}

@@ -114,14 +114,14 @@ export const analytics = {
   },
 
   // Export events
-  exportStarted: (manuscriptId: string, format: 'docx' | 'pdf') => {
+  exportStarted: (manuscriptId: string, format: 'docx' | 'pdf' | 'png') => {
     posthog.capture('export_started', {
       manuscript_id: manuscriptId,
       format,
     });
   },
 
-  exportCompleted: (manuscriptId: string, format: 'docx' | 'pdf', wordCount: number) => {
+  exportCompleted: (manuscriptId: string, format: 'docx' | 'pdf' | 'png', wordCount: number) => {
     posthog.capture('export_completed', {
       manuscript_id: manuscriptId,
       format,
