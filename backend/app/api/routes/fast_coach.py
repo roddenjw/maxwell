@@ -17,6 +17,7 @@ from app.services.fast_coach import (
     ConsistencyChecker,
     Suggestion
 )
+from app.services.openrouter_service import OpenRouterService
 
 
 router = APIRouter(prefix="/api/fast-coach", tags=["fast-coach"])
@@ -33,6 +34,24 @@ class AnalyzeResponse(BaseModel):
     """Response with suggestions"""
     suggestions: List[Dict[str, Any]]
     stats: Dict[str, Any]
+
+
+class AIAnalyzeRequest(BaseModel):
+    """Request for AI-enhanced analysis"""
+    text: str
+    api_key: str
+    manuscript_id: str | None = None
+    context: str = ""
+    suggestion_type: str = "general"
+
+
+class AIAnalyzeResponse(BaseModel):
+    """Response with AI-enhanced suggestions"""
+    success: bool
+    suggestion: str | None = None
+    usage: Dict[str, int] | None = None
+    cost: float | None = None
+    error: str | None = None
 
 
 # Initialize analyzers (singleton pattern)
@@ -121,11 +140,98 @@ def _count_by_severity(suggestions: List[Suggestion]) -> Dict[str, int]:
     return counts
 
 
+@router.post("/ai-analyze", response_model=AIAnalyzeResponse)
+async def ai_analyze_text(
+    request: AIAnalyzeRequest,
+    db: Session = Depends(get_db)
+) -> AIAnalyzeResponse:
+    """
+    Get AI-powered writing suggestion using OpenRouter
+
+    Args:
+        request: AI analysis request with text, API key, and options
+        db: Database session
+
+    Returns:
+        AI suggestion with usage and cost info
+    """
+    if not request.text or len(request.text.strip()) < 10:
+        return AIAnalyzeResponse(
+            success=False,
+            error="Text too short for analysis"
+        )
+
+    if not request.api_key:
+        return AIAnalyzeResponse(
+            success=False,
+            error="API key required"
+        )
+
+    try:
+        # Initialize OpenRouter service with user's key
+        openrouter = OpenRouterService(request.api_key)
+
+        # Get AI suggestion
+        result = await openrouter.get_writing_suggestion(
+            text=request.text,
+            context=request.context,
+            suggestion_type=request.suggestion_type,
+            max_tokens=500
+        )
+
+        if not result["success"]:
+            return AIAnalyzeResponse(
+                success=False,
+                error=result.get("error", "Unknown error")
+            )
+
+        # Calculate cost
+        usage = result.get("usage", {})
+        cost = OpenRouterService.calculate_cost(usage, result.get("model", ""))
+
+        return AIAnalyzeResponse(
+            success=True,
+            suggestion=result["suggestion"],
+            usage=usage,
+            cost=cost
+        )
+
+    except Exception as e:
+        print(f"AI analysis error: {e}")
+        return AIAnalyzeResponse(
+            success=False,
+            error=str(e)
+        )
+
+
+@router.post("/test-api-key")
+async def test_api_key(api_key: str) -> Dict[str, Any]:
+    """
+    Test OpenRouter API key validity
+
+    Args:
+        api_key: User's OpenRouter API key
+
+    Returns:
+        Validation status and credit info
+    """
+    try:
+        openrouter = OpenRouterService(api_key)
+        result = await openrouter.validate_api_key()
+        return result
+    except Exception as e:
+        return {
+            "valid": False,
+            "error": str(e)
+        }
+
+
 @router.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {
         "status": "ok",
         "service": "fast-coach",
-        "analyzers": ["style", "word", "dialogue", "consistency"]
+        "analyzers": ["style", "word", "dialogue", "consistency"],
+        "ai_enabled": True
     }

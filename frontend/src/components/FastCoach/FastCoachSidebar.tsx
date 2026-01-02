@@ -1,19 +1,29 @@
 /**
  * FastCoachSidebar - Sidebar displaying real-time writing suggestions
  * Shows style, word usage, and consistency feedback
+ * Enhanced with AI-powered suggestions via OpenRouter
  */
 
 import { FastCoachSidebar as SuggestionsPanel } from '../Editor/plugins/FastCoachPlugin';
 import { useFastCoachStore } from '@/stores/fastCoachStore';
+import AISuggestionsPanel from './AISuggestionsPanel';
+import { useState, useEffect } from 'react';
 
 interface FastCoachSidebarProps {
   manuscriptId: string;
   isOpen: boolean;
   onToggle: () => void;
+  currentText?: string;
 }
 
-export default function FastCoachSidebar({ isOpen, onToggle }: FastCoachSidebarProps) {
+export default function FastCoachSidebar({ manuscriptId, isOpen, onToggle, currentText = '' }: FastCoachSidebarProps) {
   const { suggestions } = useFastCoachStore();
+  const [editorText, setEditorText] = useState(currentText);
+
+  // Update editor text when currentText changes
+  useEffect(() => {
+    setEditorText(currentText);
+  }, [currentText]);
 
   if (!isOpen) {
     return null;
@@ -42,7 +52,15 @@ export default function FastCoachSidebar({ isOpen, onToggle }: FastCoachSidebarP
         </button>
       </div>
 
-      {/* Suggestions panel */}
+      {/* AI Suggestions Panel */}
+      <div className="overflow-y-auto border-b-2 border-purple-200">
+        <AISuggestionsPanel
+          text={editorText}
+          manuscriptId={manuscriptId}
+        />
+      </div>
+
+      {/* Rule-based Suggestions panel */}
       <div className="flex-1 overflow-y-auto">
         <SuggestionsPanel
           suggestions={suggestions}

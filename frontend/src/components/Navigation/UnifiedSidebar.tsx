@@ -10,6 +10,7 @@ interface UnifiedSidebarProps {
   manuscriptTitle: string;
   onNavigate: (view: 'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export') => void;
   onCloseEditor: () => void;
+  onSettingsClick?: () => void;
   activeView?: string;
 }
 
@@ -18,6 +19,7 @@ export default function UnifiedSidebar({
   manuscriptTitle,
   onNavigate,
   onCloseEditor,
+  onSettingsClick,
   activeView
 }: UnifiedSidebarProps) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -118,6 +120,29 @@ export default function UnifiedSidebar({
           );
         })}
       </nav>
+
+      {/* Settings */}
+      {onSettingsClick && (
+        <div className="border-t-2 border-bronze/30 p-3">
+          <button
+            onClick={onSettingsClick}
+            className={`
+              w-full flex items-center gap-3 px-3 py-3 rounded-sm transition-all
+              text-midnight hover:bg-white/50
+              ${!isExpanded && 'justify-center'}
+            `}
+            title={!isExpanded ? 'Settings' : undefined}
+          >
+            <span className="text-xl">⚙️</span>
+            {isExpanded && (
+              <div className="flex-1 text-left">
+                <div className="font-sans font-semibold text-sm">Settings</div>
+                <div className="text-xs opacity-70">API keys & preferences</div>
+              </div>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Footer decoration */}
       <div className="border-t-2 border-bronze/30 p-3">

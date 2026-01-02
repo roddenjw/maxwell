@@ -13,6 +13,7 @@ import AnalyticsDashboard from './components/Analytics/AnalyticsDashboard'
 import ExportModal from './components/Export/ExportModal'
 import WelcomeModal from './components/Onboarding/WelcomeModal'
 import FeatureTour from './components/Onboarding/FeatureTour'
+import SettingsModal from './components/Settings/SettingsModal'
 import { useManuscriptStore } from './stores/manuscriptStore'
 import { useOnboardingStore } from './stores/onboardingStore'
 import { useCodexStore } from './stores/codexStore'
@@ -38,6 +39,7 @@ function App() {
   const [editorKey, setEditorKey] = useState(0) // Force editor re-mount on restore
   const [currentChapterContent, setCurrentChapterContent] = useState<string>('')
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
 
   // Onboarding state
@@ -464,6 +466,7 @@ function App() {
           manuscriptTitle={currentManuscript.title}
           onNavigate={handleNavigate}
           onCloseEditor={handleCloseEditor}
+          onSettingsClick={() => setShowSettings(true)}
           activeView={activeView}
         />
 
@@ -619,6 +622,14 @@ function App() {
           <KeyboardShortcutsModal
             shortcuts={shortcuts}
             onClose={() => setShowKeyboardShortcuts(false)}
+          />
+        )}
+
+        {/* Settings Modal */}
+        {showSettings && (
+          <SettingsModal
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
           />
         )}
 
