@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { toast } from '@/stores/toastStore';
 
 interface WelcomeModalProps {
-  onComplete: (manuscriptId?: string) => void;
+  onComplete: (manuscriptId?: string, manuscriptData?: {title: string; wordCount: number}) => void;
   onSkip: () => void;
 }
 
@@ -184,10 +184,16 @@ export default function WelcomeModal({ onComplete, onSkip }: WelcomeModalProps) 
 
       const data = await response.json();
       toast.success('Sample manuscript created! Explore and enjoy.');
-      onComplete(data.data.manuscript_id);
+
+      // Pass both manuscript ID and metadata to onComplete
+      onComplete(data.data.manuscript_id, {
+        title: data.data.title,
+        wordCount: data.data.total_words
+      });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to create sample';
       toast.error(errorMsg);
+      console.error('Sample creation error:', error);
     } finally {
       setLoading(false);
     }

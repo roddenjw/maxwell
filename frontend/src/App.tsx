@@ -63,22 +63,33 @@ function App() {
     }
   }, [])
 
-  const handleWelcomeComplete = async (sampleManuscriptId?: string) => {
+  const handleWelcomeComplete = async (sampleManuscriptId?: string, manuscriptData?: {title: string; wordCount: number}) => {
     markWelcomeComplete()
     setShowWelcome(false)
     analytics.onboardingCompleted(!!sampleManuscriptId)
 
-    if (sampleManuscriptId) {
+    if (sampleManuscriptId && manuscriptData) {
+      // Add sample manuscript to store (bridge backend to frontend)
+      const { addManuscript } = useManuscriptStore.getState()
+      addManuscript({
+        id: sampleManuscriptId,
+        title: manuscriptData.title,
+        content: '',
+        wordCount: manuscriptData.wordCount,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+
       // Open the sample manuscript
       await handleOpenManuscript(sampleManuscriptId)
       markFirstManuscriptCreated()
 
-      // Show feature tour after opening manuscript
+      // Show feature tour after opening manuscript (delayed for proper mounting)
       setTimeout(() => {
         if (!hasCompletedTour) {
           setShowTour(true)
         }
-      }, 500)
+      }, 1000)
     }
   }
 
@@ -650,8 +661,19 @@ function App() {
   // Show manuscript library by default
   return (
     <>
-      <ManuscriptLibrary onOpenManuscript={handleOpenManuscript} />
+      <ManuscriptLibrary
+        onOpenManuscript={handleOpenManuscript}
+        onSettingsClick={() => setShowSettings(true)}
+      />
       <ToastContainer />
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <SettingsModal
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
 
       {/* Onboarding Modals */}
       {showWelcome && (

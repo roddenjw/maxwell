@@ -21,6 +21,7 @@ interface ManuscriptStore {
 
   // Actions
   createManuscript: (title: string) => Manuscript;
+  addManuscript: (manuscript: Manuscript) => void;
   updateManuscript: (id: string, updates: Partial<Manuscript>) => void;
   deleteManuscript: (id: string) => void;
   getManuscript: (id: string) => Manuscript | undefined;
@@ -50,6 +51,26 @@ export const useManuscriptStore = create<ManuscriptStore>()(
         }));
 
         return newManuscript;
+      },
+
+      addManuscript: (manuscript: Manuscript) => {
+        set((state) => {
+          // Check if manuscript already exists
+          const exists = state.manuscripts.some((ms) => ms.id === manuscript.id);
+          if (exists) {
+            // Update existing manuscript
+            return {
+              manuscripts: state.manuscripts.map((ms) =>
+                ms.id === manuscript.id ? manuscript : ms
+              ),
+            };
+          } else {
+            // Add new manuscript
+            return {
+              manuscripts: [...state.manuscripts, manuscript],
+            };
+          }
+        });
       },
 
       updateManuscript: (id: string, updates: Partial<Manuscript>) => {

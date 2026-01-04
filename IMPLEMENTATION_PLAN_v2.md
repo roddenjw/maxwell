@@ -1003,3 +1003,891 @@ Phase 1 ──> Phase 2 ──> Phase 3 ──> Phase 4
 **Last Updated:** December 24, 2025
 **Next Review:** End of Phase 1 (March 2026)
 **Document Owner:** Implementation Team
+
+---
+
+## EXTENDED ROADMAP: THE CREATION ENGINE
+**Vision:** Transform Maxwell from writing tool → complete creative development platform
+**Based on:** User feedback January 2026
+**Timeline:** Phases 4-6+ (Q2 2026 onwards)
+
+---
+
+## Phase 4: Story Structure & Outline Engine
+**Timeline:** Months 10-13 (April - July 2026)
+**Goal:** AI-powered story structure guidance and outline generation
+**Key Feature:** Manuscript Creation Wizard with genre-specific templates
+
+### 4.1 Outline Engine Foundation (Weeks 1-2)
+**Database Schema:**
+```sql
+CREATE TABLE outlines (
+    id TEXT PRIMARY KEY,
+    manuscript_id TEXT NOT NULL REFERENCES manuscripts(id),
+    structure_type TEXT NOT NULL,  -- '3-act', 'save-the-cat', 'km-weiland', etc.
+    genre TEXT,  -- 'fantasy', 'thriller', 'romance', etc.
+    target_word_count INTEGER,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE TABLE plot_beats (
+    id TEXT PRIMARY KEY,
+    outline_id TEXT NOT NULL REFERENCES outlines(id),
+    beat_name TEXT NOT NULL,  -- 'hook', 'inciting-event', 'midpoint', etc.
+    beat_description TEXT,
+    target_position_percent REAL,  -- 0.0 to 1.0 (12% = 0.12)
+    target_word_count INTEGER,
+    actual_word_count INTEGER,
+    chapter_id TEXT REFERENCES chapters(id),
+    is_completed BOOLEAN DEFAULT FALSE,
+    notes TEXT,
+    order_index INTEGER,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+```
+
+**API Endpoints:**
+```
+POST   /api/outlines                  - Create outline
+GET    /api/outlines/:id              - Get outline with beats
+PUT    /api/outlines/:id              - Update outline
+DELETE /api/outlines/:id              - Delete outline
+POST   /api/outlines/:id/beats        - Add plot beat
+PUT    /api/outlines/:id/beats/:beatId - Update beat
+```
+
+**UI Components:**
+- OutlineSidebar (similar to CodexSidebar)
+- PlotBeatCard (shows beat, target %, actual %, status)
+- StructureTimeline (visual progress bar with beats)
+- OutlineEditor (freeform outline editing)
+
+**Estimate:** 2 weeks
+
+---
+
+### 4.2 Story Structure Templates (Weeks 3-4)
+**Research & Implement:**
+
+**1. KM Weiland's Structure:**
+```typescript
+const KM_WEILAND_STRUCTURE = {
+  name: "KM Weiland's Story Structure",
+  beats: [
+    { name: "Hook", position: 0.01, description: "Open with action, intrigue, or character voice that grabs readers" },
+    { name: "Inciting Event", position: 0.12, description: "Call to adventure - protagonist's world changes" },
+    { name: "First Plot Point", position: 0.25, description: "No turning back - protagonist commits to journey" },
+    { name: "First Pinch Point", position: 0.375, description: "Antagonistic force applies pressure" },
+    { name: "Midpoint", position: 0.50, description: "Major revelation - protagonist moves from reaction to action" },
+    { name: "Second Pinch Point", position: 0.625, description: "Antagonist strikes again - stakes raised" },
+    { name: "Third Plot Point", position: 0.75, description: "All is lost - protagonist's lowest point" },
+    { name: "Climax", position: 0.88, description: "Final confrontation - protagonist faces antagonist" },
+    { name: "Resolution", position: 0.99, description: "New normal - show how world has changed" },
+  ]
+};
+```
+
+**2. Save the Cat:**
+```typescript
+const SAVE_THE_CAT_STRUCTURE = {
+  name: "Save the Cat",
+  beats: [
+    { name: "Opening Image", position: 0.01, description: "Snapshot of protagonist's flawed life" },
+    { name: "Theme Stated", position: 0.05, description: "Lesson protagonist will learn stated by another character" },
+    { name: "Setup", position: 0.01-0.10, description: "Introduce protagonist, stakes, and goals" },
+    { name: "Catalyst", position: 0.10, description: "Inciting incident - life-changing event" },
+    { name: "Debate", position: 0.10-0.20, description: "Protagonist hesitates - should they go?" },
+    { name: "Break into Two", position: 0.20, description: "Protagonist leaves old world, enters new" },
+    { name: "B Story", position: 0.22, description: "Love story or relationship that will teach theme" },
+    { name: "Fun and Games", position: 0.20-0.50, description: "Promise of the premise - story delivers" },
+    { name: "Midpoint", position: 0.50, description: "False victory or false defeat" },
+    { name: "Bad Guys Close In", position: 0.50-0.75, description: "Complications and obstacles multiply" },
+    { name: "All Is Lost", position: 0.75, description: "Lowest point - opposite of midpoint" },
+    { name: "Dark Night of the Soul", position: 0.75-0.80, description: "Protagonist processes loss" },
+    { name: "Break into Three", position: 0.80, description: "Protagonist finds solution - combines A and B stories" },
+    { name: "Finale", position: 0.80-0.99, description: "Protagonist executes plan, faces antagonist" },
+    { name: "Final Image", position: 0.99, description: "Opposite of opening image - show transformation" },
+  ]
+};
+```
+
+**3. Hero's Journey:**
+```typescript
+const HEROS_JOURNEY_STRUCTURE = {
+  name: "Hero's Journey (Campbell/Vogler)",
+  beats: [
+    { name: "Ordinary World", position: 0.01-0.10, description: "Hero's normal life before adventure" },
+    { name: "Call to Adventure", position: 0.10, description: "Problem/challenge presented" },
+    { name: "Refusal of Call", position: 0.12, description: "Hero hesitates, afraid" },
+    { name: "Meeting the Mentor", position: 0.15, description: "Wise figure gives advice/gift" },
+    { name: "Crossing Threshold", position: 0.20, description: "Hero commits, enters special world" },
+    { name: "Tests, Allies, Enemies", position: 0.20-0.50, description: "Hero faces challenges, builds team" },
+    { name: "Approach Inmost Cave", position: 0.50, description: "Hero prepares for major challenge" },
+    { name: "Ordeal", position: 0.60, description: "Hero faces greatest fear/death" },
+    { name: "Reward", position: 0.65, description: "Hero seizes treasure/knowledge" },
+    { name: "Road Back", position: 0.75, description: "Hero must return to ordinary world" },
+    { name: "Resurrection", position: 0.85, description: "Final test - hero transformed" },
+    { name: "Return with Elixir", position: 0.95, description: "Hero returns home changed, with gift for world" },
+  ]
+};
+```
+
+**Genre-Specific Templates:**
+```typescript
+const GENRE_DEFAULTS = {
+  fantasy: {
+    wordCount: 90000,
+    recommendedStructures: ['hero-journey', 'km-weiland'],
+    specificBeats: ['magic-system-reveal', 'world-rules-established']
+  },
+  thriller: {
+    wordCount: 75000,
+    recommendedStructures: ['save-the-cat', 'km-weiland'],
+    specificBeats: ['ticking-clock', 'false-lead']
+  },
+  romance: {
+    wordCount: 70000,
+    recommendedStructures: ['save-the-cat', 'romance-arc'],
+    specificBeats: ['meet-cute', 'first-kiss', 'black-moment', 'grand-gesture']
+  },
+  scifi: {
+    wordCount: 85000,
+    recommendedStructures: ['hero-journey', 'km-weiland'],
+    specificBeats: ['tech-reveal', 'world-building-info-dump']
+  },
+  mystery: {
+    wordCount: 70000,
+    recommendedStructures: ['save-the-cat', 'mystery-structure'],
+    specificBeats: ['crime-discovered', 'red-herring', 'true-villain-revealed']
+  }
+};
+```
+
+**Estimate:** 2 weeks
+
+---
+
+### 4.3 Manuscript Creation Wizard (Weeks 5-6)
+**User Flow:**
+
+**Step 1: Genre Selection**
+```
+What type of story are you writing?
+[ ] Fantasy
+[ ] Science Fiction
+[ ] Thriller/Suspense
+[ ] Romance
+[ ] Mystery/Detective
+[ ] Historical Fiction
+[ ] Literary Fiction
+[ ] Horror
+[ ] Young Adult
+[ ] Other
+
+<Info box>
+Genre helps Maxwell suggest appropriate story structures,
+pacing, and word count targets.
+</Info box>
+```
+
+**Step 2: Structure Selection**
+```
+Choose a story structure template:
+
+⭐ Recommended for Fantasy:
+
+○ Hero's Journey (Classic Adventure)
+  12 stages | Perfect for epic quests
+  Examples: Lord of the Rings, Star Wars
+
+○ KM Weiland's Structure (Detailed Blueprint)
+  9 major beats | Precise percentages
+  Examples: Most bestsellers
+
+[ ] I'll create my own structure
+[ ] Skip - I prefer to freewrite
+
+<Preview button> See template details
+```
+
+**Step 3: AI Outline Generation**
+```
+Let's build your story outline!
+
+Maxwell will ask you questions about your story and
+generate plot beat suggestions.
+
+Ready to begin? [Start Outline Wizard]
+```
+
+**Step 4: AI-Powered Q&A** (uses OpenRouter)
+```
+Question 1/5: What's your protagonist's goal?
+
+<textarea>
+Example: "Destroy the One Ring to save Middle-earth"
+Example: "Solve her sister's murder before the killer strikes again"
+</textarea>
+
+[🤖 AI Suggestions] Based on your genre (Fantasy), here are
+common protagonist goals:
+- Defeat an ancient evil threatening the kingdom
+- Master forbidden magic to save loved ones
+- Unite warring factions against common enemy
+- Discover true identity/heritage
+
+[Next Question]
+```
+
+**Step 5: Generate Outline**
+```
+Creating your outline...
+
+✓ Analyzing your inputs
+✓ Applying Hero's Journey structure
+✓ Generating plot beat suggestions
+
+Your outline is ready! [View Outline] [Start Writing]
+```
+
+**Implementation:**
+```typescript
+// OutlineWizard.tsx
+const OutlineWizard = ({ onComplete }) => {
+  const [step, setStep] = useState(1);
+  const [genre, setGenre] = useState('');
+  const [structure, setStructure] = useState('');
+  const [answers, setAnswers] = useState({});
+
+  const questions = [
+    {
+      id: 'protagonist-goal',
+      text: "What's your protagonist's main goal?",
+      aiPrompt: `Based on ${genre} genre, suggest 4 common protagonist goals`
+    },
+    {
+      id: 'antagonist',
+      text: "Who or what opposes your protagonist?",
+      aiPrompt: `Based on ${genre} and protagonist goal "${answers['protagonist-goal']}", suggest antagonist types`
+    },
+    {
+      id: 'stakes',
+      text: "What happens if your protagonist fails?",
+      aiPrompt: `Suggest high-stakes consequences for ${genre} story`
+    },
+    {
+      id: 'setting',
+      text: "Where and when does your story take place?",
+      aiPrompt: `Suggest interesting ${genre} settings`
+    },
+    {
+      id: 'unique-element',
+      text: "What makes your story unique?",
+      aiPrompt: `Suggest unique twists for ${genre} with these elements: ${JSON.stringify(answers)}`
+    }
+  ];
+
+  const generateOutline = async () => {
+    const apiKey = localStorage.getItem('openrouter_api_key');
+    const model = localStorage.getItem('openrouter_model') || 'anthropic/claude-3.5-sonnet';
+
+    // Call AI to generate plot beats
+    const response = await fetch('/api/outlines/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        genre,
+        structure,
+        answers,
+        apiKey,
+        model
+      })
+    });
+
+    const outline = await response.json();
+    onComplete(outline);
+  };
+};
+```
+
+**Backend Outline Generation:**
+```python
+# /backend/app/api/routes/outlines.py
+@router.post("/generate")
+async def generate_outline(request: GenerateOutlineRequest):
+    """Use AI to generate plot beat suggestions"""
+
+    openrouter = OpenRouterService(request.api_key)
+
+    system_prompt = f"""You are a story structure expert helping a writer
+create an outline for their {request.genre} novel using the
+{request.structure} structure.
+
+Based on their answers, generate specific, creative suggestions for
+each plot beat."""
+
+    user_prompt = f"""
+Story Details:
+- Genre: {request.genre}
+- Structure: {request.structure}
+- Protagonist Goal: {request.answers['protagonist-goal']}
+- Antagonist: {request.answers['antagonist']}
+- Stakes: {request.answers['stakes']}
+- Setting: {request.answers['setting']}
+- Unique Element: {request.answers['unique-element']}
+
+Generate specific plot beat suggestions for this story using the
+{request.structure} structure. For each beat, provide:
+1. Beat name
+2. Suggested scene/event
+3. How it relates to protagonist's goal
+
+Format as JSON with this structure:
+{{
+  "beats": [
+    {{
+      "name": "Hook",
+      "suggestion": "Open with protagonist in middle of...",
+      "position": 0.01
+    }},
+    ...
+  ]
+}}
+"""
+
+    result = await openrouter.get_writing_suggestion(
+        text=user_prompt,
+        context=system_prompt,
+        suggestion_type='outline',
+        max_tokens=2000
+    )
+
+    if result['success']:
+        # Parse AI response and create outline
+        beats_data = json.loads(result['suggestion'])
+
+        # Create outline in database
+        outline = create_outline(
+            manuscript_id=request.manuscript_id,
+            genre=request.genre,
+            structure=request.structure,
+            beats=beats_data['beats']
+        )
+
+        return outline
+```
+
+**Estimate:** 2 weeks
+
+---
+
+### 4.4 Story Structure Checkpoints (Weeks 7-8)
+**Real-time guidance based on word count**
+
+**Progress Dashboard:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Your Progress: "The Shadow Kingdom"                        │
+│ Genre: Fantasy | Structure: Hero's Journey                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ Words: 32,450 / 90,000 (36%)                              │
+│ ████████████░░░░░░░░░░░░░░░░░░░░░░░░                      │
+│                                                             │
+│ ✓ Hook (1%)           - Completed                          │
+│ ✓ Ordinary World (10%) - Completed                         │
+│ ✓ Call to Adventure (12%) - Completed                      │
+│ ⚠ Crossing Threshold (20%) - Approaching (18,000 words)   │
+│ ○ Approach Inmost Cave (50%) - Upcoming                    │
+│ ○ Ordeal (60%) - Upcoming                                  │
+│ ○ Resurrection (85%) - Upcoming                            │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+[View Full Outline] [Mark Beat Complete] [Get AI Suggestions]
+```
+
+**Checkpoint Notifications:**
+```typescript
+// CheckpointNotifier.tsx
+const CheckpointNotifier = ({ outline, currentWordCount }) => {
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    const targetWordCount = outline.target_word_count;
+    const currentPercent = currentWordCount / targetWordCount;
+
+    // Find upcoming checkpoint
+    const nextBeat = outline.beats.find(beat =>
+      !beat.is_completed &&
+      beat.target_position_percent > currentPercent &&
+      beat.target_position_percent - currentPercent < 0.05 // Within 5%
+    );
+
+    if (nextBeat) {
+      showNotification({
+        title: `Approaching: ${nextBeat.beat_name}`,
+        message: `You're at ${(currentPercent * 100).toFixed(0)}%, approaching ${nextBeat.beat_name} (${(nextBeat.target_position_percent * 100).toFixed(0)}%). Expected around ${nextBeat.target_word_count} words.`,
+        description: nextBeat.beat_description,
+        action: 'Get AI Suggestions'
+      });
+    }
+
+    // Check for missed checkpoints
+    const missedBeats = outline.beats.filter(beat =>
+      !beat.is_completed &&
+      currentPercent > beat.target_position_percent + 0.10 // 10% past
+    );
+
+    if (missedBeats.length > 0) {
+      showWarning({
+        title: 'Checkpoint Missed',
+        message: `You may have missed the "${missedBeats[0].beat_name}" beat (expected at ${(missedBeats[0].target_position_percent * 100).toFixed(0)}%, you're at ${(currentPercent * 100).toFixed(0)}%).`,
+        suggestion: 'Consider adding a flashback or scene to include this story beat, or mark it as intentionally skipped.'
+      });
+    }
+  }, [currentWordCount, outline]);
+};
+```
+
+**AI Beat Analysis:**
+```
+[User clicks "Get AI Suggestions" at 36% mark]
+
+🤖 AI Analysis
+
+Based on your story so far (32,450 words), you're approaching the
+"Crossing the Threshold" beat (expected ~18,000 words / 20%).
+
+Your protagonist should:
+✓ Make an irrevocable decision
+✓ Enter the "special world" of the adventure
+✓ Leave behind the ordinary world
+
+Suggestions for your story:
+1. Have [Protagonist] cross the magical barrier into the Shadow Realm
+2. Show the moment they accept the quest from the Council
+3. Create a scene where burning bridges with [home/family] is final
+
+Would you like me to:
+[ ] Generate a detailed scene outline
+[ ] Suggest dialogue for this moment
+[ ] Analyze if you've already included this beat
+
+[Generate Ideas]
+```
+
+**Estimate:** 2 weeks
+
+---
+
+### 4.5 Outline-to-Chapters Generator (Week 9)
+**Auto-generate chapter structure from outline**
+
+**UI:**
+```
+Your outline has 12 plot beats. Would you like Maxwell to
+suggest a chapter structure?
+
+Target: 90,000 words / 30 chapters = ~3,000 words per chapter
+
+Suggested Structure:
+
+Act 1 (25% / 22,500 words)
+  Chapter 1-2: Hook + Ordinary World (6,000 words)
+  Chapter 3-4: Call to Adventure + Refusal (6,000 words)
+  Chapter 5-7: Meeting Mentor + Crossing Threshold (10,500 words)
+
+Act 2A (25% / 22,500 words)
+  Chapter 8-12: Tests, Allies, Enemies (15,000 words)
+  Chapter 13-14: Approach Inmost Cave (7,500 words)
+
+Act 2B (25% / 22,500 words)
+  Chapter 15-16: Ordeal (6,000 words)
+  Chapter 17-19: Reward + Road Back (10,500 words)
+  Chapter 20-21: All Is Lost (6,000 words)
+
+Act 3 (25% / 22,500 words)
+  Chapter 22-25: Resurrection (12,000 words)
+  Chapter 26-30: Return with Elixir + Resolution (10,500 words)
+
+[Generate Chapters] [Customize] [Skip]
+```
+
+**Implementation:**
+```typescript
+const generateChapterStructure = async (outline: Outline) => {
+  const totalWords = outline.target_word_count;
+  const avgChapterWords = 3000;
+  const estimatedChapters = Math.round(totalWords / avgChapterWords);
+
+  // Distribute chapters across beats
+  const beats = outline.beats;
+  const chaptersPerBeat = estimatedChapters / beats.length;
+
+  for (let beat of beats) {
+    const beatWords = totalWords * (beat.target_position_percent);
+    const beatChapters = Math.round(chaptersPerBeat);
+
+    for (let i = 0; i < beatChapters; i++) {
+      await chaptersApi.create({
+        manuscript_id: outline.manuscript_id,
+        title: `Chapter ${chapterCount} - ${beat.beat_name}`,
+        is_folder: false,
+        plot_beat_id: beat.id,
+        order_index: chapterCount++
+      });
+    }
+  }
+};
+```
+
+**Estimate:** 1 week
+
+---
+
+### Phase 4 Success Metrics
+- [ ] 70% of new users complete outline wizard
+- [ ] Average outline completion time < 15 minutes
+- [ ] 50% of outlines generate chapter structures
+- [ ] Checkpoint notifications increase daily writing by 20%
+- [ ] Users with outlines have 2x higher manuscript completion rate
+
+**Total Phase 4 Estimate:** 9 weeks
+
+---
+
+## Phase 5: Brainstorming & Ideation Tools
+**Timeline:** Months 14-17 (August - November 2026)
+**Goal:** Help writers generate ideas, develop characters, and overcome creative blocks
+**Research Foundation:** Brandon Sanderson lectures, KM Weiland resources
+
+### 5.1 Idea Generator (Weeks 1-2)
+**Prompt Library:**
+```typescript
+const IDEA_PROMPTS = {
+  character: [
+    "What if your protagonist had the opposite flaw you'd expect?",
+    "Combine two character archetypes that never go together",
+    "Give your villain a sympathetic motivation",
+    "What secret would destroy your protagonist if revealed?"
+  ],
+  plot: [
+    "What's the worst thing that could happen to your protagonist?",
+    "Flip your ending - what if the antagonist won?",
+    "Add a ticking clock element",
+    "What if the mentor betrays the protagonist?"
+  ],
+  world: [
+    "What if magic had a physical cost?",
+    "Invert one law of physics in your world",
+    "What if a modern technology existed in a historical setting?",
+    "Create a society with an unusual taboo"
+  ],
+  conflict: [
+    "Force your protagonist to choose between two good options",
+    "Create a moral dilemma with no right answer",
+    "What external conflict reflects internal conflict?",
+    "Add a deadline that forces immediate action"
+  ]
+};
+```
+
+**AI Idea Generation:**
+```
+💡 Brainstorming: Character Ideas
+
+[User clicks "Generate Ideas"]
+
+🤖 Based on your fantasy setting:
+
+1. **The Guilt-Ridden Healer**
+   A medic who can heal any wound but absorbs the pain
+   themselves. Struggles with addiction to pain-numbing potions.
+
+2. **The Literal-Minded Fae**
+   An ancient creature who interprets human speech exactly as
+   spoken, leading to dangerous misunderstandings.
+
+3. **The Exiled Royal Inventor**
+   Banished for creating dangerous technology, now forced to
+   help rebels overthrow their own family.
+
+4. **The Amnesiac Oracle**
+   Can see everyone's future except their own past.
+
+[Save to Codex] [Combine Ideas] [Generate More] [Customize]
+
+Which character interests you most?
+I can develop their backstory, relationships, and arc.
+```
+
+**Estimate:** 2 weeks
+
+---
+
+### 5.2 Mind Mapping Tool (Weeks 3-4)
+**Visual idea connections**
+
+```
+[Brainstorming Mind Map]
+
+                     [Main Character]
+                           |
+            +--------------+---------------+
+            |              |               |
+        [Goal]       [Flaw]           [Strength]
+            |              |               |
+      "Save Sister"  "Too Trusting"   "Clever"
+            |
+            +--[Obstacle]
+                    |
+              "Villain Lies"
+                    |
+              [How villain uses flaw]
+```
+
+**Features:**
+- Drag-and-drop nodes
+- Connect related ideas
+- Export to Codex entities
+- AI suggestion for missing connections
+- Collaborative brainstorming (future)
+
+**Estimate:** 2 weeks
+
+---
+
+### 5.3 Character Development Worksheets (Week 5)
+**Brandon Sanderson-inspired exercises**
+
+```
+Character Profile: [Character Name]
+
+## Core Attributes
+What they Want: ___________________________________
+What they Need: ___________________________________
+Their Flaw: ______________________________________
+Their Strength: __________________________________
+
+## Brandon Sanderson's Triangle
+     Goal
+      /\
+     /  \
+    /    \
+   /      \
+  / Flaw  Strength \
+ /__________________\
+
+Conflict: How flaw prevents achieving goal
+Arc: How strength + lessons learned = achievement
+
+## Quick Questions
+- What do they lie about?
+- What makes them laugh?
+- What's their greatest fear?
+- What would they die for?
+- What's their secret shame?
+
+[🤖 AI Analysis]
+Based on your answers, this character is a:
+[Reluctant Hero] archetype with [Trust Issues] as primary obstacle.
+
+Suggested arc: Learns to accept help → allies prove trustworthy →
+               overcomes final challenge with team
+```
+
+**Estimate:** 1 week
+
+---
+
+### 5.4 World-Building Templates (Weeks 6-8)
+**Structured world development**
+
+```
+🗺️ World Builder: Fantasy Kingdoms
+
+## Geography
+Climate: [Temperate / Tropical / Arctic / Desert]
+Terrain: [Mountains / Plains / Islands / Underground]
+Key Locations:
+  - Capital City: ___________________________
+  - Forbidden Zone: _________________________
+  - Sacred Site: ____________________________
+
+## Society
+Government: [Monarchy / Republic / Theocracy / Anarchy]
+Social Classes: ______________________________
+Currency: ___________________________________
+Major Conflicts: ____________________________
+
+## Magic System (Sanderson's Laws)
+Source of Power: ____________________________
+Limitations: ________________________________
+Cost/Price: _________________________________
+Who can use it: _____________________________
+Societal Impact: ____________________________
+
+## Culture
+Religion: ___________________________________
+Taboos: _____________________________________
+Holidays: ___________________________________
+Coming-of-age ritual: _______________________
+
+[🤖 AI Assistant]
+Need help filling in gaps? I can:
+- Suggest magic system limitations
+- Generate cultural details
+- Create naming conventions for your world
+- Identify potential plot conflicts from world rules
+```
+
+**Estimate:** 3 weeks
+
+---
+
+### Phase 5 Success Metrics
+- [ ] 60% of users use Idea Generator
+- [ ] Mind maps created: 500+/month
+- [ ] Character worksheets completed: 1,000+/month
+- [ ] Users report "less writer's block" (survey)
+
+**Total Phase 5 Estimate:** 8 weeks
+
+---
+
+## Phase 6: The Full Creation Engine
+**Timeline:** Months 18+ (December 2026 onwards)
+**Goal:** Comprehensive creative platform from idea → finished novel
+**This is the NORTH STAR - continuous development**
+
+### 6.1 Advanced World Builder (Months 18-20)
+- Interactive maps (drag-and-drop locations)
+- Timeline of historical events
+- Political relationship graphs
+- Economic systems modeling
+- Culture generators
+
+### 6.2 Magic System Designer (Months 21-22)
+- Sanderson's Laws compliance checker
+- Power scaling calculator
+- Visual effect descriptions
+- Cultural integration analyzer
+- Limitation/cost tracker
+
+### 6.3 Character Relationship Network (Month 23)
+- Dynamic relationship graph (like Codex, but advanced)
+- Relationship evolution over time
+- Conflict tracker between characters
+- Automatic relationship consistency checking
+
+### 6.4 Advanced AI Creative Assistant (Months 24-30)
+- Context-aware gap filling
+- "What if?" scenario generator
+- Character voice consistency checker
+- Plot hole detector
+- Foreshadowing tracker
+- Theme consistency analyzer
+
+### 6.5 Scene-Level Guidance (Months 31-36)
+- Real-time scene structure feedback
+- Pacing analysis (MRUs - Motivation-Reaction Units)
+- Dialogue attribution best practices
+- Show vs. tell detector
+- Sensory details suggester
+
+### 6.6 Integration & Polish (Ongoing)
+- **Inline Reference Panel:** Show relevant outline sections while writing
+- **Quick Access Codex:** Character/world details in sidebar
+- **Contextual AI Suggestions:** Based on outline + world rules + character voices
+- **Automatic Continuity Checking:** Flag inconsistencies with established lore
+
+---
+
+## Updated Timeline Overview
+
+| Phase | Timeline | Key Deliverable | Status |
+|-------|----------|----------------|--------|
+| Phase 1 | Months 1-3 (Q1 2026) | MVP Launch | ✅ Complete |
+| Phase 2 | Months 4-6 (Q1-Q2) | PLG Growth | ✅ Complete |
+| Phase 3 | Months 7-9 (Q2-Q3) | AI Integration (BYOK) | ✅ Complete |
+| **Phase 4** | **Months 10-13 (Q3)** | **Story Structure Engine** | 🔄 Planned |
+| **Phase 5** | **Months 14-17 (Q4)** | **Brainstorming Tools** | 📋 Planned |
+| **Phase 6+** | **Months 18+ (2027)** | **Full Creation Engine** | 🎯 Vision |
+
+---
+
+## Success Criteria: The Full Creation Engine
+
+**When Maxwell becomes indispensable:**
+1. ✅ Writers can brainstorm ideas → AI helps generate options
+2. ✅ Writers can outline → AI suggests plot beats
+3. ✅ Writers can draft → Real-time structure guidance
+4. ✅ Writers can revise → Consistency checking across entire manuscript
+5. ✅ Writers can finish → Export, publish, share
+
+**Metrics:**
+- Time from idea → first draft: 30% faster
+- Manuscript completion rate: 3x industry average
+- User retention: 80%+ after 6 months
+- NPS Score: 70+
+
+---
+
+## Research Resources (Must Study)
+
+### Story Structure
+- [ ] KM Weiland: "Structuring Your Novel"
+- [ ] Blake Snyder: "Save the Cat"
+- [ ] Christopher Vogler: "The Writer's Journey"
+- [ ] Shawn Coyne: "The Story Grid"
+
+### Brainstorming & Craft
+- [ ] Brandon Sanderson: BYU Creative Writing Lectures (YouTube)
+- [ ] Brandon Sanderson: "Sanderson's Laws of Magic"
+- [ ] James Scott Bell: "Plot & Structure"
+- [ ] Donald Maass: "The Emotional Craft of Fiction"
+
+### Worldbuilding
+- [ ] Brandon Sanderson: Worldbuilding Lectures
+- [ ] Timothy Hickson: "On Writing and Worldbuilding"
+- [ ] r/worldbuilding community resources
+
+### Competitor Analysis
+- [ ] Sudowrite - AI creative assistant patterns
+- [ ] NovelAI - AI storytelling UX
+- [ ] Plottr - Outline/timeline visualization
+- [ ] Campfire - World-building tools
+
+---
+
+## Open Questions for Phase 4-6
+
+1. **Outline Ownership:** Should outlines be mandatory or optional?
+   - **Recommendation:** Optional. Some writers are discovery writers (pantsers).
+   - **Solution:** Offer "Guided" vs "Freeform" manuscript creation paths.
+
+2. **AI Cost Management:** Complex outline generation uses many tokens
+   - **Recommendation:** Budget estimates in wizard ("This will cost ~$0.10-0.50")
+   - **Alternative:** Offer pre-generated templates for free, custom AI generation paid
+
+3. **Template Licensing:** Can we include copyrighted story structures?
+   - **Recommendation:** Use public domain structures (Hero's Journey, 3-Act)
+   - **Solution:** Paraphrase commercial structures (Save the Cat, KM Weiland) without copying text
+
+4. **Integration Complexity:** How do outline, codex, timeline, brainstorming all connect?
+   - **Recommendation:** Unified "Project" view showing all creative documents
+   - **Solution:** Phase 6+ unification layer
+
+---
+
+**Last Updated:** January 3, 2026
+**Next Review:** End of Phase 3 (March 2026)
+**Document Owner:** Implementation Team
+
+**Changes from v2.0:**
+- Added Phases 4-6+ (Creation Engine roadmap)
+- Incorporated user feedback (Story structure, brainstorming, world-building)
+- Research resources identified
+- Timeline extended through 2027+

@@ -9,9 +9,10 @@ import analytics from '../lib/analytics';
 
 interface ManuscriptLibraryProps {
   onOpenManuscript: (manuscriptId: string) => void;
+  onSettingsClick?: () => void;
 }
 
-export default function ManuscriptLibrary({ onOpenManuscript }: ManuscriptLibraryProps) {
+export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick }: ManuscriptLibraryProps) {
   const { manuscripts, createManuscript, deleteManuscript } = useManuscriptStore();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -59,6 +60,16 @@ export default function ManuscriptLibrary({ onOpenManuscript }: ManuscriptLibrar
               The Author's Study
             </span>
           </div>
+          {onSettingsClick && (
+            <button
+              onClick={onSettingsClick}
+              className="flex items-center gap-2 px-4 py-2 text-faded-ink hover:text-midnight hover:bg-slate-ui/20 transition-colors rounded-sm"
+              title="Settings"
+            >
+              <span className="text-xl">⚙️</span>
+              <span className="font-sans text-sm font-medium">Settings</span>
+            </button>
+          )}
         </div>
       </header>
 
