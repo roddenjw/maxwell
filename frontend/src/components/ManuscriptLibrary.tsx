@@ -10,9 +10,10 @@ import analytics from '../lib/analytics';
 interface ManuscriptLibraryProps {
   onOpenManuscript: (manuscriptId: string) => void;
   onSettingsClick?: () => void;
+  onCreateWithWizard?: () => void;
 }
 
-export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick }: ManuscriptLibraryProps) {
+export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, onCreateWithWizard }: ManuscriptLibraryProps) {
   const { manuscripts, createManuscript, deleteManuscript } = useManuscriptStore();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -162,44 +163,73 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick }:
       {showCreateDialog && (
         <div className="fixed inset-0 bg-midnight bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div
-            className="bg-white p-8 max-w-md w-full shadow-book"
+            className="bg-white p-8 max-w-2xl w-full shadow-book"
             style={{ borderRadius: '2px' }}
           >
             <h3 className="text-2xl font-serif font-bold text-midnight mb-4">
-              New Manuscript
+              Create New Manuscript
             </h3>
             <p className="text-faded-ink font-sans mb-6 text-sm">
-              Give your manuscript a title. You can always change it later.
+              Choose how you'd like to start your manuscript
             </p>
-            <input
-              type="text"
-              placeholder="Untitled Manuscript"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-              className="w-full px-4 py-3 border border-slate-ui text-midnight font-sans mb-6 focus:outline-none focus:border-bronze"
-              style={{ borderRadius: '2px' }}
-              autoFocus
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={handleCreate}
-                className="flex-1 px-6 py-3 bg-bronze hover:bg-bronze-dark text-white font-sans font-medium uppercase tracking-button transition-colors"
-                style={{ borderRadius: '2px' }}
-              >
-                Create
-              </button>
+
+            <div className="grid md:grid-cols-2 gap-4 mb-6">
+              {/* Quick Create */}
               <button
                 onClick={() => {
                   setShowCreateDialog(false);
-                  setNewTitle('');
+                  // Show simple title input
+                  const title = prompt('Manuscript title (optional):');
+                  const manuscript = createManuscript(title || 'Untitled Manuscript');
+                  analytics.manuscriptCreated(manuscript.id, manuscript.title);
+                  onOpenManuscript(manuscript.id);
                 }}
-                className="px-6 py-3 border border-slate-ui text-midnight hover:bg-slate-ui font-sans font-medium uppercase tracking-button transition-colors"
-                style={{ borderRadius: '2px' }}
+                className="p-6 border-2 border-slate-ui hover:border-bronze hover:shadow-lg transition-all text-left rounded-sm"
               >
-                Cancel
+                <div className="text-4xl mb-3">⚡</div>
+                <h4 className="font-sans font-bold text-midnight text-lg mb-2">
+                  Quick Create
+                </h4>
+                <p className="text-sm text-faded-ink">
+                  Start with a blank manuscript. Perfect for experienced writers who already have a plan.
+                </p>
               </button>
+
+              {/* Guided Setup */}
+              {onCreateWithWizard && (
+                <button
+                  onClick={() => {
+                    setShowCreateDialog(false);
+                    onCreateWithWizard();
+                  }}
+                  className="p-6 border-2 border-bronze bg-bronze/5 hover:border-bronze-dark hover:shadow-lg transition-all text-left rounded-sm"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="text-4xl">🎯</div>
+                    <div className="text-xs bg-bronze text-white px-2 py-1 rounded-sm font-semibold">
+                      RECOMMENDED
+                    </div>
+                  </div>
+                  <h4 className="font-sans font-bold text-midnight text-lg mb-2">
+                    Guided Setup
+                  </h4>
+                  <p className="text-sm text-faded-ink">
+                    Create with story structure templates (Hero's Journey, Save the Cat, etc.). Get plot beats and guidance.
+                  </p>
+                </button>
+              )}
             </div>
+
+            <button
+              onClick={() => {
+                setShowCreateDialog(false);
+                setNewTitle('');
+              }}
+              className="w-full px-6 py-3 border border-slate-ui text-midnight hover:bg-slate-ui font-sans font-medium uppercase tracking-button transition-colors"
+              style={{ borderRadius: '2px' }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

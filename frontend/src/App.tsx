@@ -14,6 +14,7 @@ import ExportModal from './components/Export/ExportModal'
 import WelcomeModal from './components/Onboarding/WelcomeModal'
 import FeatureTour from './components/Onboarding/FeatureTour'
 import SettingsModal from './components/Settings/SettingsModal'
+import ManuscriptWizard from './components/Outline/ManuscriptWizard'
 import { useManuscriptStore } from './stores/manuscriptStore'
 import { useOnboardingStore } from './stores/onboardingStore'
 import { useCodexStore } from './stores/codexStore'
@@ -52,6 +53,7 @@ function App() {
   } = useOnboardingStore()
   const [showWelcome, setShowWelcome] = useState(false)
   const [showTour, setShowTour] = useState(false)
+  const [showWizard, setShowWizard] = useState(false)
 
   // Track unsaved changes and warn before closing
   const { checkNavigateAway } = useUnsavedChanges(saveStatus === 'unsaved' || saveStatus === 'saving')
@@ -110,6 +112,37 @@ function App() {
     markTourComplete()
     setShowTour(false)
     analytics.tourSkipped()
+  }
+
+  const handleWizardComplete = async (manuscriptId: string, outlineId: string) => {
+    setShowWizard(false)
+
+    // Fetch the created manuscript to add to store
+    try {
+      const response = await fetch(`http://localhost:8000/api/manuscripts/${manuscriptId}`)
+      const manuscriptData = await response.json()
+
+      // Add manuscript to store
+      const { addManuscript } = useManuscriptStore.getState()
+      addManuscript({
+        id: manuscriptData.id,
+        title: manuscriptData.title,
+        content: '',
+        wordCount: manuscriptData.word_count || 0,
+        createdAt: manuscriptData.created_at,
+        updatedAt: manuscriptData.updated_at,
+      })
+
+      // Open the manuscript
+      await handleOpenManuscript(manuscriptId)
+
+      // Track creation with outline
+      analytics.manuscriptCreated(manuscriptId, manuscriptData.title)
+      toast.success('Manuscript created with story structure! Start writing your first beat.')
+    } catch (error) {
+      console.error('Failed to load created manuscript:', error)
+      toast.error('Manuscript created but failed to open. Please refresh.')
+    }
   }
 
   const handleOpenManuscript = async (manuscriptId: string) => {
@@ -664,6 +697,7 @@ function App() {
       <ManuscriptLibrary
         onOpenManuscript={handleOpenManuscript}
         onSettingsClick={() => setShowSettings(true)}
+        onCreateWithWizard={() => setShowWizard(true)}
       />
       <ToastContainer />
 
@@ -672,6 +706,14 @@ function App() {
         <SettingsModal
           isOpen={showSettings}
           onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {/* Manuscript Creation Wizard */}
+      {showWizard && (
+        <ManuscriptWizard
+          onComplete={handleWizardComplete}
+          onCancel={() => setShowWizard(false)}
         />
       )}
 

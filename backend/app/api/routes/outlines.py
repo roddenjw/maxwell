@@ -151,6 +151,99 @@ async def create_outline(
     return new_outline
 
 
+# Story Structure Template Endpoints (MUST be before /{outline_id} to avoid route conflicts)
+
+@router.get("/structures")
+async def list_story_structures():
+    """Get list of available story structure templates"""
+    return {
+        "success": True,
+        "structures": get_available_structures()
+    }
+
+
+@router.get("/structures/{structure_type}")
+async def get_story_structure(structure_type: str):
+    """Get detailed information about a specific story structure"""
+    try:
+        template = get_structure_template(structure_type)
+        return {
+            "success": True,
+            "structure": {
+                "id": structure_type,
+                "name": template["name"],
+                "description": template["description"],
+                "recommended_for": template["recommended_for"],
+                "word_count_range": template["word_count_range"],
+                "beats": [beat.to_dict() for beat in template["beats"]]
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/from-template", response_model=OutlineResponse)
+async def create_outline_from_template(
+    manuscript_id: str,
+    structure_type: str,
+    genre: Optional[str] = None,
+    target_word_count: int = 80000,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new outline from a story structure template
+    Automatically generates plot beats based on the chosen structure
+    """
+    # Check if manuscript exists
+    from app.models.manuscript import Manuscript
+    manuscript = db.query(Manuscript).filter(Manuscript.id == manuscript_id).first()
+    if not manuscript:
+        raise HTTPException(status_code=404, detail="Manuscript not found")
+
+    # Validate structure type
+    try:
+        template = get_structure_template(structure_type)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Deactivate other outlines for this manuscript
+    db.query(Outline).filter(
+        Outline.manuscript_id == manuscript_id,
+        Outline.is_active == True
+    ).update({"is_active": False})
+
+    # Create new outline
+    new_outline = Outline(
+        id=str(uuid.uuid4()),
+        manuscript_id=manuscript_id,
+        structure_type=structure_type,
+        genre=genre,
+        target_word_count=target_word_count,
+        is_active=True
+    )
+
+    db.add(new_outline)
+    db.flush()  # Get the outline ID
+
+    # Create plot beats from template
+    beat_templates = create_plot_beats_from_template(structure_type, target_word_count)
+
+    for beat_data in beat_templates:
+        new_beat = PlotBeat(
+            id=str(uuid.uuid4()),
+            outline_id=new_outline.id,
+            **beat_data
+        )
+        db.add(new_beat)
+
+    db.commit()
+    db.refresh(new_outline)
+
+    return new_outline
+
+
+# Regular CRUD Endpoints (generic routes like /{outline_id} go after specific routes)
+
 @router.get("/{outline_id}", response_model=OutlineResponse)
 async def get_outline(
     outline_id: str,
@@ -330,94 +423,3 @@ async def get_outline_progress(
         "target_word_count": outline.target_word_count,
         "actual_word_count": sum(beat.actual_word_count for beat in beats),
     }
-
-
-# Story Structure Template Endpoints
-
-@router.get("/structures")
-async def list_story_structures():
-    """Get list of available story structure templates"""
-    return {
-        "success": True,
-        "structures": get_available_structures()
-    }
-
-
-@router.get("/structures/{structure_type}")
-async def get_story_structure(structure_type: str):
-    """Get detailed information about a specific story structure"""
-    try:
-        template = get_structure_template(structure_type)
-        return {
-            "success": True,
-            "structure": {
-                "id": structure_type,
-                "name": template["name"],
-                "description": template["description"],
-                "recommended_for": template["recommended_for"],
-                "word_count_range": template["word_count_range"],
-                "beats": [beat.to_dict() for beat in template["beats"]]
-            }
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
-@router.post("/from-template", response_model=OutlineResponse)
-async def create_outline_from_template(
-    manuscript_id: str,
-    structure_type: str,
-    genre: Optional[str] = None,
-    target_word_count: int = 80000,
-    db: Session = Depends(get_db)
-):
-    """
-    Create a new outline from a story structure template
-    Automatically generates plot beats based on the chosen structure
-    """
-    # Check if manuscript exists
-    from app.models.manuscript import Manuscript
-    manuscript = db.query(Manuscript).filter(Manuscript.id == manuscript_id).first()
-    if not manuscript:
-        raise HTTPException(status_code=404, detail="Manuscript not found")
-
-    # Validate structure type
-    try:
-        template = get_structure_template(structure_type)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    # Deactivate other outlines for this manuscript
-    db.query(Outline).filter(
-        Outline.manuscript_id == manuscript_id,
-        Outline.is_active == True
-    ).update({"is_active": False})
-
-    # Create new outline
-    new_outline = Outline(
-        id=str(uuid.uuid4()),
-        manuscript_id=manuscript_id,
-        structure_type=structure_type,
-        genre=genre,
-        target_word_count=target_word_count,
-        is_active=True
-    )
-
-    db.add(new_outline)
-    db.flush()  # Get the outline ID
-
-    # Create plot beats from template
-    beat_templates = create_plot_beats_from_template(structure_type, target_word_count)
-
-    for beat_data in beat_templates:
-        new_beat = PlotBeat(
-            id=str(uuid.uuid4()),
-            outline_id=new_outline.id,
-            **beat_data
-        )
-        db.add(new_beat)
-
-    db.commit()
-    db.refresh(new_outline)
-
-    return new_outline
