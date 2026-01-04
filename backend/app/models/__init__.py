@@ -7,6 +7,7 @@ from app.models.entity import Entity, Relationship, EntitySuggestion
 from app.models.versioning import Snapshot
 from app.models.coach import WritingProfile, CoachingHistory, FeedbackPattern
 from app.models.recap import Recap
+from app.models.outline import Outline, PlotBeat
 
 __all__ = [
     "Manuscript",
@@ -21,4 +22,6 @@ __all__ = [
     "CoachingHistory",
     "FeedbackPattern",
     "Recap",
+    "Outline",
+    "PlotBeat",
 ]
