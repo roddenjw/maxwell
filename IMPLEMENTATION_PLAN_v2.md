@@ -1805,6 +1805,319 @@ Need help filling in gaps? I can:
 
 ---
 
+## Continuous Enhancements & Polish (All Phases)
+**Priority:** Implement incrementally alongside major phases
+**Goal:** Professional-grade user experience and feature completeness
+
+### Export Engine Improvements
+**Can be implemented:** Alongside any phase
+
+1. **Custom Formatting Options**
+   - Font selection (serif/sans-serif presets)
+   - Margin controls (1", 1.25", custom)
+   - Line spacing (single, 1.5, double)
+   - Page size options (Letter, A4, custom)
+
+2. **Chapter Numbering Styles**
+   - Roman numerals (I, II, III)
+   - Arabic numbers (1, 2, 3)
+   - Spelled out (One, Two, Three)
+   - Custom prefixes ("Chapter 1", "Part I", etc.)
+
+3. **Front Matter Templates**
+   - Title page generator
+   - Dedication page
+   - Copyright page with year/ISBN
+   - Acknowledgments section
+
+4. **Table of Contents**
+   - Auto-generate for PDF with page numbers
+   - Nested chapter/folder structure
+   - Customizable styling
+
+5. **Additional Export Formats**
+   - EPUB for ebook distribution (Amazon KDP, Apple Books)
+   - Markdown for version control workflows
+   - HTML for web publishing
+   - RTF for maximum compatibility
+
+6. **Export Presets**
+   - Industry standard manuscript format
+   - Kindle format (6x9", specific margins)
+   - Print-ready PDF (CreateSpace specs)
+   - Agent submission format
+
+### Writing Analytics Enhancements
+**Can be implemented:** Alongside Phase 2 or Phase 4
+
+1. **Session Tracking**
+   - Individual writing session logs (start/end times)
+   - Session duration and word count
+   - Session notes/reflections
+   - "Resume session" quick access
+
+2. **Goal Setting System**
+   - Daily word count goals with progress bars
+   - Weekly/monthly aggregate goals
+   - Goal achievement notifications
+   - Flexible goal adjustment
+
+3. **Productivity Heatmap**
+   - Calendar view showing writing activity
+   - Color-coded intensity (words written per day)
+   - Streak visualization
+   - Export to image for sharing
+
+4. **Writing Speed Metrics**
+   - Words per minute during active typing
+   - Average speed over time
+   - "Personal best" tracking
+   - Speed comparison by chapter/session
+
+5. **Streak Achievements**
+   - Gamification with badges
+   - 7-day, 30-day, 90-day, 365-day streaks
+   - Streak recovery grace period (1 day)
+   - Visual achievement showcase
+
+6. **Chapter-Level Analytics**
+   - Word count distribution by chapter
+   - Identify underwritten chapters
+   - Completion percentage per chapter
+   - Time spent per chapter
+
+### Editor Experience Enhancements
+**Can be implemented:** Alongside Phase 1 or incrementally
+
+1. **Focus Mode**
+   - Dim everything except current paragraph
+   - Sentence-level focus option
+   - Customizable dimming intensity
+   - Keyboard shortcut toggle (Cmd+Shift+F)
+
+2. **Typewriter Mode**
+   - Keep cursor vertically centered
+   - Smooth scrolling as you type
+   - Toggle on/off easily
+   - Works with focus mode
+
+3. **Word Count Goals in Editor**
+   - Persistent progress bar in editor
+   - Session goal vs. daily goal display
+   - Celebratory animation on goal completion
+   - Quick goal adjustment
+
+4. **Custom Themes**
+   - Dark mode (true black and soft dark)
+   - Sepia/parchment mode
+   - High contrast mode (accessibility)
+   - Custom color picker for backgrounds
+   - Save/load custom themes
+
+5. **Keyboard Shortcuts Panel**
+   - Full shortcuts reference (Cmd+?)
+   - Customizable key bindings
+   - Import/export shortcut configs
+   - Conflict detection
+
+6. **Auto-save Indicators**
+   - Visual feedback for save status
+   - "Last saved" timestamp
+   - Unsaved changes indicator
+   - Manual save button option
+
+### Fast Coach AI Improvements
+**Can be implemented:** Alongside Phase 3 enhancements
+
+1. **Additional Suggestion Types**
+   - Pacing analysis (scene length, action vs. reflection)
+   - Tension tracking (is tension escalating?)
+   - Dialogue tag overuse detection
+   - Show vs. tell indicators
+   - Sensory detail density
+
+2. **Context-Aware Suggestions**
+   - Different feedback for dialogue vs. narration
+   - Genre-specific suggestions (fantasy vs. thriller)
+   - POV-aware feedback (first vs. third person)
+   - Scene type detection (action, emotional, exposition)
+
+3. **Style Consistency Tracking**
+   - Monitor narrative voice consistency
+   - Detect tense shifts
+   - Track character voice patterns
+   - Flag style drift over manuscript
+
+4. **Multi-Model Comparison**
+   - Get suggestions from 2 models side-by-side
+   - Compare Claude vs. GPT-4 feedback
+   - Vote on preferred suggestions
+   - Learn which model works best for you
+
+5. **Suggestion History**
+   - Review all past AI suggestions
+   - Track which suggestions you applied
+   - Re-apply previous suggestions
+   - Export suggestion log
+
+6. **Custom Prompt Templates**
+   - User-created AI prompt library
+   - Save favorite prompts
+   - Share prompts with community
+   - Genre-specific prompt packs
+
+### Codex Enhancements
+**Can be implemented:** Alongside Phase 2 or Phase 4
+
+1. **Character Images**
+   - Upload/attach character portraits
+   - AI-generated character images (optional)
+   - Image gallery per character
+   - Reference art storage
+
+2. **Location Maps**
+   - Visual map integration
+   - Pin locations on map
+   - Distance/travel time calculator
+   - Custom map uploads
+
+3. **Family Trees**
+   - Visual relationship diagrams
+   - Generational view
+   - Marriage/partnership connections
+   - Export as PNG/PDF
+
+4. **Export Codex**
+   - Generate character/location wiki
+   - PDF reference guide
+   - Markdown export for websites
+   - Shareable HTML site
+
+5. **Search & Filter**
+   - Find all scenes with specific characters
+   - Filter by location
+   - Search relationship types
+   - Tag-based organization
+
+6. **Character Arcs**
+   - Track character development across chapters
+   - Beginning vs. ending state comparison
+   - Key transformation moments
+   - Arc completion percentage
+
+### Timeline Improvements
+**Can be implemented:** Alongside Phase 2 or Phase 4
+
+1. **Multiple Timelines**
+   - Separate timelines for different plot threads
+   - Parallel storyline tracking
+   - Cross-timeline event linking
+   - Color-coded by storyline
+
+2. **Timeline Visualization**
+   - Gantt-style view of parallel events
+   - Zoom in/out (day/month/year view)
+   - Event duration bars
+   - Visual overlap detection
+
+3. **Conflict Detection**
+   - Automatic timeline inconsistency flagging
+   - Travel time validation
+   - Character location conflicts
+   - Age/date math checking
+
+4. **Calendar Integration**
+   - Map story events to actual calendar dates
+   - Real-world date accuracy (day of week, seasons)
+   - Historical event integration
+   - Lunar phase calculator (for fantasy/werewolf stories)
+
+5. **POV Timeline**
+   - See events from each character's perspective
+   - Filter timeline by character knowledge
+   - Track what each character knows/when
+   - Information revelation tracking
+
+### Performance & UX Improvements
+**Priority:** Ongoing throughout all phases
+
+1. **Manuscript Loading Optimization**
+   - Lazy load chapters (don't load all at once)
+   - Virtual scrolling for large chapter lists
+   - Progressive enhancement
+   - Loading indicators
+
+2. **Better Error Handling**
+   - User-friendly error messages
+   - Suggested solutions for common errors
+   - Error reporting to developers (optional)
+   - Graceful degradation
+
+3. **Offline Mode**
+   - Full functionality without internet
+   - Queue API calls when offline
+   - Sync when connection restored
+   - Offline indicator
+
+4. **Backup & Restore**
+   - Export all manuscripts + data
+   - One-click backup to file
+   - Restore from backup
+   - Automatic backup scheduling (daily/weekly)
+
+5. **Cross-Device Sync (Future)**
+   - Optional cloud storage integration
+   - Conflict resolution UI
+   - Selective sync (choose manuscripts)
+   - Privacy-first (encrypted)
+
+6. **Undo/Redo Improvements**
+   - Better history management (beyond Lexical default)
+   - Persistent across sessions
+   - Visual history timeline
+   - Selective undo (revert specific changes)
+
+### Quality of Life Features
+**Can be implemented:** Incrementally across all phases
+
+1. **Global Search**
+   - Search across all manuscripts
+   - Filter by manuscript/chapter
+   - Regex support
+   - Search and replace
+
+2. **Templates System**
+   - Save manuscript structures as templates
+   - Pre-built templates (Novel, Short Story, Screenplay)
+   - Share templates with community
+   - Import/export templates
+
+3. **Notes & Comments**
+   - Add private notes to chapters
+   - Inline comments (like Google Docs)
+   - Resolved/unresolved tracking
+   - Note categories (TODO, RESEARCH, IDEA)
+
+4. **Version Comparison**
+   - Compare different chapter versions
+   - Side-by-side diff view
+   - Merge changes from versions
+   - Version naming/tagging
+
+5. **Reading Mode**
+   - Clean view for proofreading
+   - No distractions
+   - Continuous scroll through chapters
+   - Adjustable reading width
+
+6. **Print Preview**
+   - See exactly how exports will look
+   - Page break visualization
+   - Adjust before exporting
+   - Multiple format previews
+
+---
+
 ## Updated Timeline Overview
 
 | Phase | Timeline | Key Deliverable | Status |
