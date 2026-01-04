@@ -5,9 +5,9 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from '@/stores/toastStore';
+import { useFastCoachStore } from '@/stores/fastCoachStore';
 
 interface AISuggestionsPanelProps {
-  text: string;
   manuscriptId: string;
 }
 
@@ -16,16 +16,23 @@ interface AIUsage {
   cost: number;
 }
 
-export default function AISuggestionsPanel({ text, manuscriptId }: AISuggestionsPanelProps) {
+export default function AISuggestionsPanel({ manuscriptId }: AISuggestionsPanelProps) {
+  const { currentEditorText } = useFastCoachStore();
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState('anthropic/claude-3.5-sonnet');
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [usage, setUsage] = useState<AIUsage | null>(null);
 
-  // Load API key from localStorage
+  // Load API key and model from localStorage
   useEffect(() => {
     const savedKey = localStorage.getItem('openrouter_api_key');
     setApiKey(savedKey);
+
+    const savedModel = localStorage.getItem('openrouter_model');
+    if (savedModel) {
+      setSelectedModel(savedModel);
+    }
   }, []);
 
   // Load usage stats from localStorage
@@ -46,7 +53,7 @@ export default function AISuggestionsPanel({ text, manuscriptId }: AISuggestions
       return;
     }
 
-    if (!text || text.length < 50) {
+    if (!currentEditorText || currentEditorText.length < 50) {
       toast.error('Please write at least 50 characters to get AI suggestions');
       return;
     }
@@ -61,7 +68,7 @@ export default function AISuggestionsPanel({ text, manuscriptId }: AISuggestions
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          text: text.slice(-1000), // Analyze last 1000 chars
+          text: currentEditorText.slice(-1000), // Analyze last 1000 chars
           api_key: apiKey,
           manuscript_id: manuscriptId,
           context: `Fiction manuscript writing session`,
@@ -141,7 +148,7 @@ export default function AISuggestionsPanel({ text, manuscriptId }: AISuggestions
         </div>
         <button
           onClick={handleGetSuggestion}
-          disabled={loading || !text || text.length < 50}
+          disabled={loading || !currentEditorText || currentEditorText.length < 50}
           className="px-4 py-2 bg-purple-600 text-white text-sm font-sans font-medium rounded hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? '🔄 Analyzing...' : '✨ Get AI Suggestion'}

@@ -18,6 +18,7 @@ export default function FastCoachPlugin({ manuscriptId, enabled = true }: FastCo
   const {
     setSuggestions,
     setIsAnalyzing,
+    setCurrentEditorText,
     jumpRequest,
     clearJumpRequest,
     isSidebarOpen,
@@ -93,19 +94,22 @@ export default function FastCoachPlugin({ manuscriptId, enabled = true }: FastCo
   useEffect(() => {
     if (!enabled) {
       setSuggestions([]);
+      setCurrentEditorText('');
       return;
     }
 
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const removeUpdateListener = editor.registerUpdateListener(() => {
+      // Extract text immediately for AI panel
+      const text = getEditorPlainText(editor);
+      setCurrentEditorText(text);
+
       // Clear previous timeout
       clearTimeout(timeoutId);
 
-      // Debounce: wait 1 second after typing stops
+      // Debounce: wait 1 second after typing stops for analysis
       timeoutId = setTimeout(() => {
-        // Use consistent text extraction
-        const text = getEditorPlainText(editor);
         analyzText(text);
       }, 1000);
     });
@@ -114,7 +118,7 @@ export default function FastCoachPlugin({ manuscriptId, enabled = true }: FastCo
       removeUpdateListener();
       clearTimeout(timeoutId);
     };
-  }, [editor, analyzText, enabled]);
+  }, [editor, analyzText, enabled, setCurrentEditorText]);
 
   // Handle jump-to-text requests from Fast Coach UI
   useEffect(() => {

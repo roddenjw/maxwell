@@ -41,8 +41,8 @@ export default function WelcomeModal({ onComplete, onSkip }: WelcomeModalProps) 
           <div className="bg-white border-2 border-bronze/30 rounded-sm p-4">
             <h4 className="font-sans font-semibold text-midnight mb-2">Chapters & Folders</h4>
             <p className="text-sm text-faded-ink">
-              Organize your manuscript with drag-and-drop chapters and folders.
-              Just like Scrivener's binder, but better.
+              Organize your manuscript with intuitive drag-and-drop chapters and folders.
+              Keep your story structure exactly how you envision it.
             </p>
           </div>
           <div className="bg-white border-2 border-bronze/30 rounded-sm p-4">

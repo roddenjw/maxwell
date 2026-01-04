@@ -37,6 +37,7 @@ interface FastCoachStore {
   isAnalyzing: boolean;
   jumpRequest: JumpRequest | null;
   applyReplacementRequest: ApplyReplacementRequest | null;
+  currentEditorText: string; // Current plain text from editor
 
   // Filters
   filterTypes: Set<string>; // Empty = all types shown
@@ -51,6 +52,7 @@ interface FastCoachStore {
   setSidebarOpen: (open: boolean) => void;
   setSuggestions: (suggestions: Suggestion[]) => void;
   setIsAnalyzing: (isAnalyzing: boolean) => void;
+  setCurrentEditorText: (text: string) => void;
   requestJumpToText: (startChar: number, endChar: number) => void;
   clearJumpRequest: () => void;
   requestApplyReplacement: (startChar: number, endChar: number, replacement: string) => void;
@@ -88,6 +90,7 @@ export const useFastCoachStore = create<FastCoachStore>((set) => ({
   isAnalyzing: false,
   jumpRequest: null,
   applyReplacementRequest: null,
+  currentEditorText: '',
 
   // Filter defaults
   filterTypes: new Set(),
@@ -103,6 +106,8 @@ export const useFastCoachStore = create<FastCoachStore>((set) => ({
   setSuggestions: (suggestions) => set({ suggestions }),
 
   setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
+
+  setCurrentEditorText: (text) => set({ currentEditorText: text }),
 
   requestJumpToText: (startChar, endChar) =>
     set({ jumpRequest: { startChar, endChar, timestamp: Date.now() } }),

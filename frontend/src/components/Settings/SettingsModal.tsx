@@ -12,18 +12,32 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+const AI_MODELS = [
+  { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', cost: 'Medium', quality: 'Excellent' },
+  { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', cost: 'Low', quality: 'Good' },
+  { id: 'openai/gpt-4-turbo', name: 'GPT-4 Turbo', cost: 'High', quality: 'Excellent' },
+  { id: 'openai/gpt-3.5-turbo', name: 'GPT-3.5 Turbo', cost: 'Very Low', quality: 'Good' },
+  { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B', cost: 'Low', quality: 'Very Good' },
+];
+
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [openRouterKey, setOpenRouterKey] = useState('');
+  const [selectedModel, setSelectedModel] = useState('anthropic/claude-3.5-sonnet');
   const [showKey, setShowKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [usage, setUsage] = useState<{tokens: number; cost: number} | null>(null);
 
-  // Load saved API key on mount
+  // Load saved API key and model on mount
   useEffect(() => {
     if (isOpen) {
       const savedKey = localStorage.getItem('openrouter_api_key');
       if (savedKey) {
         setOpenRouterKey(savedKey);
+      }
+
+      const savedModel = localStorage.getItem('openrouter_model');
+      if (savedModel) {
+        setSelectedModel(savedModel);
       }
 
       // Load usage stats
@@ -43,7 +57,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
     try {
       if (openRouterKey.trim()) {
-        // Save to localStorage
+        // Save API key to localStorage
         localStorage.setItem('openrouter_api_key', openRouterKey.trim());
         analytics.exportCompleted('settings', 'api_key_saved', 0); // Track feature adoption
         toast.success('✅ API key saved! AI features enabled.');
@@ -53,12 +67,15 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         toast.info('API key removed. AI features disabled.');
       }
 
+      // Save selected model
+      localStorage.setItem('openrouter_model', selectedModel);
+
       // Close modal after brief delay
       setTimeout(() => {
         onClose();
       }, 500);
     } catch (error) {
-      console.error('Failed to save API key:', error);
+      console.error('Failed to save settings:', error);
       toast.error('Failed to save settings');
     } finally {
       setIsSaving(false);
@@ -216,14 +233,45 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </div>
           )}
 
-          {/* Model Selection (Future Enhancement) */}
-          <div className="p-4 bg-slate-50 border border-slate-200 rounded-sm">
-            <h4 className="text-sm font-sans font-semibold text-midnight mb-2">
-              🎛️ Model Selection (Coming Soon)
-            </h4>
-            <p className="text-xs font-sans text-faded-ink">
-              Choose from Claude, GPT-4, Llama, and more. Optimize for quality or cost.
+          {/* Model Selection */}
+          <div>
+            <h3 className="text-lg font-garamond font-semibold text-midnight mb-2">
+              🎛️ Model Selection
+            </h3>
+            <p className="text-sm font-sans text-faded-ink mb-4">
+              Choose from different AI models. Balance quality and cost for your needs.
             </p>
+
+            <label className="block">
+              <span className="text-sm font-sans font-semibold text-midnight mb-2 block">
+                AI Model
+              </span>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-ui rounded-sm font-sans text-sm focus:outline-none focus:ring-2 focus:ring-bronze bg-white"
+              >
+                {AI_MODELS.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name} - Cost: {model.cost}, Quality: {model.quality}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Model Info */}
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-sm">
+              <p className="text-xs font-sans text-blue-900 mb-1">
+                <strong>Selected: {AI_MODELS.find(m => m.id === selectedModel)?.name}</strong>
+              </p>
+              <p className="text-xs font-sans text-blue-800">
+                {selectedModel === 'anthropic/claude-3.5-sonnet' && '✨ Best overall quality. Great for creative writing and nuanced feedback. ~$0.01 per suggestion.'}
+                {selectedModel === 'anthropic/claude-3-haiku' && '⚡ Fast and affordable. Good for quick suggestions. ~$0.001 per suggestion.'}
+                {selectedModel === 'openai/gpt-4-turbo' && '🚀 Excellent quality, higher cost. Very creative. ~$0.02 per suggestion.'}
+                {selectedModel === 'openai/gpt-3.5-turbo' && '💰 Very affordable. Great for drafting. ~$0.0005 per suggestion.'}
+                {selectedModel === 'meta-llama/llama-3.1-70b-instruct' && '🦙 Open-source, good quality, low cost. ~$0.003 per suggestion.'}
+              </p>
+            </div>
           </div>
         </div>
 
