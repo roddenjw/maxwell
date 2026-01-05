@@ -26,6 +26,7 @@ class PlotBeatTemplate:
         self.tips = tips
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert to dict for API responses (includes tips for display)"""
         return {
             "beat_name": self.beat_name,
             "beat_label": self.beat_label,
@@ -33,6 +34,16 @@ class PlotBeatTemplate:
             "target_position_percent": self.position_percent,
             "order_index": self.order_index,
             "tips": self.tips
+        }
+
+    def to_db_dict(self) -> Dict[str, Any]:
+        """Convert to dict for database insertion (excludes tips)"""
+        return {
+            "beat_name": self.beat_name,
+            "beat_label": self.beat_label,
+            "beat_description": self.description,
+            "target_position_percent": self.position_percent,
+            "order_index": self.order_index,
         }
 
 
@@ -489,7 +500,7 @@ def create_plot_beats_from_template(structure_type: str, target_word_count: int 
     beats = []
 
     for beat_template in template["beats"]:
-        beat_dict = beat_template.to_dict()
+        beat_dict = beat_template.to_db_dict()  # Use to_db_dict() for database insertion
         beat_dict["target_word_count"] = int(target_word_count * beat_template.position_percent)
         beat_dict["actual_word_count"] = 0
         beat_dict["is_completed"] = False
