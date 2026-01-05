@@ -18,7 +18,7 @@ class Outline(Base):
     manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=False)
 
     # Structure configuration
-    structure_type = Column(String, nullable=False)  # 'km-weiland', 'save-the-cat', 'heros-journey', '3-act', 'custom'
+    structure_type = Column(String, nullable=False)  # 'story-arc-9', 'screenplay-15', 'mythic-quest', '3-act', 'custom'
     genre = Column(String, nullable=True)  # 'fantasy', 'thriller', 'romance', 'mystery', 'sci-fi', etc.
 
     # Target metrics
@@ -73,6 +73,9 @@ class PlotBeat(Base):
     # Linking to manuscript
     chapter_id = Column(String, ForeignKey("chapters.id"), nullable=True)  # Which chapter contains this beat?
     is_completed = Column(Boolean, default=False)  # Has this beat been written?
+
+    # Brainstorming integration
+    brainstorm_source_id = Column(String, ForeignKey("brainstorm_ideas.id"), nullable=True)  # Which brainstorm idea generated this?
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

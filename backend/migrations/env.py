@@ -18,6 +18,8 @@ from app.models import (
     Snapshot,
     WritingProfile, CoachingHistory, FeedbackPattern
 )
+from app.models.outline import Outline, PlotBeat
+from app.models.brainstorm import BrainstormSession, BrainstormIdea
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
