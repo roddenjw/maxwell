@@ -13,3 +13,12 @@ export { default as TimelineHeatmap } from './TimelineHeatmap';
 export { default as CharacterNetwork } from './CharacterNetwork';
 export { default as EmotionalArc } from './EmotionalArc';
 export { default as TimelineSidebar } from './TimelineSidebar';
+
+// Timeline Orchestrator Components
+export { default as TimelineOrchestrator } from './TimelineOrchestrator';
+export { default as TimelineControls } from './TimelineControls';
+export { default as TimelineIssuesPanel } from './TimelineIssuesPanel';
+export { default as TimelineTeachingPanel } from './TimelineTeachingPanel';
+export { default as TimelineVisualization } from './TimelineVisualization';
+export { default as TimelineEventCard } from './TimelineEventCard';
+export { default as TimelineEventForm } from './TimelineEventForm';

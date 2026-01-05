@@ -19,6 +19,16 @@ export enum InconsistencyType {
   PACING_ISSUE = "PACING_ISSUE",
 }
 
+// Timeline Orchestrator inconsistency types
+export enum OrchestratorInconsistencyType {
+  IMPOSSIBLE_TRAVEL = "IMPOSSIBLE_TRAVEL",
+  DEPENDENCY_VIOLATION = "DEPENDENCY_VIOLATION",
+  CHARACTER_NEVER_APPEARS = "CHARACTER_NEVER_APPEARS",
+  ONE_SCENE_WONDER = "ONE_SCENE_WONDER",
+  TIMING_GAP = "TIMING_GAP",
+  TEMPORAL_PARADOX = "TEMPORAL_PARADOX",
+}
+
 export enum Severity {
   HIGH = "HIGH",
   MEDIUM = "MEDIUM",
@@ -53,6 +63,9 @@ export interface TimelineEvent {
     detected_persons?: string[];
     [key: string]: any;
   };
+  // Timeline Orchestrator fields
+  narrative_importance: number; // 1-10 scale
+  prerequisite_ids: string[]; // Event IDs that must occur before this event
   created_at: string;
   updated_at: string;
 }
@@ -60,11 +73,17 @@ export interface TimelineEvent {
 export interface TimelineInconsistency {
   id: string;
   manuscript_id: string;
-  inconsistency_type: InconsistencyType;
+  inconsistency_type: InconsistencyType | OrchestratorInconsistencyType;
   description: string;
   severity: Severity;
   affected_event_ids: string[];
   extra_data: Record<string, any>;
+  // Timeline Orchestrator fields
+  suggestion?: string | null;
+  teaching_point?: string | null;
+  is_resolved: boolean;
+  resolved_at?: string | null;
+  resolution_notes?: string | null;
   created_at: string;
 }
 
@@ -174,4 +193,44 @@ export function getSeverityIcon(severity: Severity): string {
     default:
       return "⚪";
   }
+}
+
+// ==================== Timeline Orchestrator Types ====================
+
+export interface TravelLeg {
+  id: string;
+  character_id: string;
+  from_location_id: string;
+  to_location_id: string;
+  departure_event_id: string;
+  arrival_event_id: string;
+  travel_mode: string;
+  distance_km: number | null;
+  speed_kmh: number | null;
+  required_hours: number | null;
+  available_hours: number | null;
+  is_feasible: boolean;
+  metadata: Record<string, any>;
+}
+
+export interface TravelSpeedProfile {
+  speeds: Record<string, number>;
+  default_speed: number;
+}
+
+export interface LocationDistance {
+  location_a_id: string;
+  location_b_id: string;
+  distance_km: number;
+  metadata: Record<string, any>;
+}
+
+export interface ComprehensiveTimelineData {
+  events: TimelineEvent[];
+  inconsistencies: TimelineInconsistency[];
+  character_locations: CharacterLocation[];
+  travel_legs: TravelLeg[];
+  travel_profile: TravelSpeedProfile;
+  location_distances: LocationDistance[];
+  stats: TimelineStats;
 }

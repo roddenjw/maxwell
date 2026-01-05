@@ -45,6 +45,10 @@ class TimelineEvent(Base):
     # Event metadata (renamed from 'metadata' to avoid SQLAlchemy reserved word)
     event_metadata = Column(JSON, nullable=False, default=dict)  # Additional data (word_count, dialogue_count, etc.)
 
+    # Timeline Orchestrator fields
+    narrative_importance = Column(Integer, nullable=False, default=5)  # 1-10 scale for teaching priority
+    prerequisite_ids = Column(JSON, nullable=False, default=list)  # Event IDs that must occur before this event
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -100,5 +104,106 @@ class TimelineInconsistency(Base):
     # Additional data (renamed from 'metadata' to avoid SQLAlchemy reserved word)
     extra_data = Column(JSON, nullable=False, default=dict)  # Context-specific data
 
+    # Timeline Orchestrator fields
+    suggestion = Column(Text, nullable=True)  # 3-4 non-prescriptive options for fixing the issue
+    teaching_point = Column(Text, nullable=True)  # Reader psychology explanation
+    is_resolved = Column(Integer, default=0)  # 0 = pending, 1 = resolved
+    resolved_at = Column(DateTime, nullable=True)
+    resolution_notes = Column(Text, nullable=True)  # How author addressed the issue
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class TravelLeg(Base):
+    """
+    Tracks character travel between locations
+
+    Used by Timeline Orchestrator to:
+    - Record character journeys with departure/arrival dates
+    - Calculate travel feasibility (distance vs. available time)
+    - Detect impossible travel scenarios
+    """
+    __tablename__ = "travel_legs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    manuscript_id = Column(String, nullable=False, index=True)
+
+    # Journey details
+    character_id = Column(String, ForeignKey("entities.id"), nullable=False)
+    from_location_id = Column(String, ForeignKey("entities.id"), nullable=False)
+    to_location_id = Column(String, ForeignKey("entities.id"), nullable=False)
+
+    # Timeline anchoring
+    departure_event_id = Column(String, ForeignKey("timeline_events.id"), nullable=False)
+    arrival_event_id = Column(String, ForeignKey("timeline_events.id"), nullable=False)
+
+    # Travel mode (references TravelSpeedProfile)
+    travel_mode = Column(String, nullable=False)  # "walking", "horse", "ship", "teleport", etc.
+
+    # Auto-calculated fields (populated by validator)
+    distance_km = Column(Integer, nullable=True)  # Distance between locations
+    speed_kmh = Column(Integer, nullable=True)  # Speed from profile
+    required_hours = Column(Integer, nullable=True)  # Calculated: distance / speed
+    available_hours = Column(Integer, nullable=True)  # Time between events
+    is_feasible = Column(Integer, default=1)  # 0 = impossible, 1 = feasible
+
+    # Metadata
+    leg_metadata = Column(JSON, nullable=False, default=dict)  # Route notes, rest stops, etc.
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class TravelSpeedProfile(Base):
+    """
+    World-specific travel speeds for different modes of transport
+
+    One profile per manuscript - allows for fantasy/sci-fi customization
+    (e.g., dragons fly faster than horses, magic portals are instant)
+    """
+    __tablename__ = "travel_speed_profiles"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    manuscript_id = Column(String, nullable=False, index=True, unique=True)
+
+    # Speed definitions (stored as JSON dict for flexibility)
+    # Example: {"walking": 5, "horse": 15, "carriage": 10, "ship": 20, "dragon": 80, "teleport": 999999}
+    speeds = Column(JSON, nullable=False, default=dict)
+
+    # Default speed if mode not specified (km/h)
+    default_speed = Column(Integer, nullable=False, default=5)  # Walking speed
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class LocationDistance(Base):
+    """
+    Distance matrix between locations
+
+    Allows authors to define world geography
+    (e.g., King's Landing to Winterfell = 900km)
+    """
+    __tablename__ = "location_distances"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    manuscript_id = Column(String, nullable=False, index=True)
+
+    # Location pair (bidirectional: A->B and B->A should have same distance)
+    # Stored with smaller ID first for consistency
+    location_a_id = Column(String, ForeignKey("entities.id"), nullable=False)
+    location_b_id = Column(String, ForeignKey("entities.id"), nullable=False)
+
+    # Distance in kilometers
+    distance_km = Column(Integer, nullable=False)
+
+    # Optional metadata
+    distance_metadata = Column(JSON, nullable=False, default=dict)
+    # Example: {"terrain": "mountain", "road_quality": "poor", "notes": "Dangerous pass"}
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

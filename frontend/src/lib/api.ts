@@ -692,48 +692,95 @@ export const outlineApi = {
    * Get the active outline for a manuscript
    */
   async getActiveOutline(manuscriptId: string): Promise<Outline> {
-    return apiFetch<Outline>(`/outlines/manuscript/${manuscriptId}/active`);
+    const response = await fetch(`${API_BASE_URL}/outlines/manuscript/${manuscriptId}/active`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('No active outline found for manuscript');
+      }
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get outline');
+    }
+
+    return response.json();
   },
 
   /**
    * Get outline by ID
    */
   async getOutline(outlineId: string): Promise<Outline> {
-    return apiFetch<Outline>(`/outlines/${outlineId}`);
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get outline');
+    }
+
+    return response.json();
   },
 
   /**
    * Get all outlines for a manuscript
    */
   async listOutlines(manuscriptId: string): Promise<Outline[]> {
-    return apiFetch<Outline[]>(`/outlines/manuscript/${manuscriptId}`);
+    const response = await fetch(`${API_BASE_URL}/outlines/manuscript/${manuscriptId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to list outlines');
+    }
+
+    return response.json();
   },
 
   /**
    * Update an outline
    */
   async updateOutline(outlineId: string, data: OutlineUpdate): Promise<Outline> {
-    return apiFetch<Outline>(`/outlines/${outlineId}`, {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}`, {
       method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update outline');
+    }
+
+    return response.json();
   },
 
   /**
    * Update a plot beat
    */
   async updateBeat(beatId: string, data: PlotBeatUpdate): Promise<PlotBeat> {
-    return apiFetch<PlotBeat>(`/outlines/beats/${beatId}`, {
+    const response = await fetch(`${API_BASE_URL}/outlines/beats/${beatId}`, {
       method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update beat');
+    }
+
+    return response.json();
   },
 
   /**
    * Get outline progress/completion stats
    */
   async getProgress(outlineId: string): Promise<OutlineProgress> {
-    return apiFetch<OutlineProgress>(`/outlines/${outlineId}/progress`);
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/progress`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get progress');
+    }
+
+    return response.json();
   },
 
   /**
@@ -747,19 +794,80 @@ export const outlineApi = {
     order_index: number;
     user_notes?: string;
   }): Promise<PlotBeat> {
-    return apiFetch<PlotBeat>(`/outlines/${outlineId}/beats`, {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/beats`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create beat');
+    }
+
+    return response.json();
   },
 
   /**
    * Delete a plot beat
    */
   async deleteBeat(beatId: string): Promise<{ success: boolean; message: string }> {
-    return apiFetch(`/outlines/beats/${beatId}`, {
+    const response = await fetch(`${API_BASE_URL}/outlines/beats/${beatId}`, {
       method: 'DELETE',
     });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to delete beat');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Generate premise and logline from brainstorm text using AI
+   */
+  async generatePremise(data: {
+    brainstorm_text: string;
+    api_key: string;
+    genre?: string;
+  }): Promise<{ success: boolean; premise: string; logline: string; usage: any }> {
+    const response = await fetch(`${API_BASE_URL}/outlines/generate-premise`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate premise');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Switch to a different story structure (two-phase process)
+   * Phase 1: Get suggested beat mappings (don't provide beat_mappings)
+   * Phase 2: Apply mappings and create new outline (provide beat_mappings)
+   */
+  async switchStructure(data: {
+    current_outline_id: string;
+    new_structure_type: string;
+    beat_mappings?: Record<string, string>;
+  }): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/outlines/switch-structure`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to switch structure');
+    }
+
+    return response.json();
   },
 };
 
