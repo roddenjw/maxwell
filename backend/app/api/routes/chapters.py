@@ -126,6 +126,31 @@ class ChapterTreeResponse(BaseModel):
 ChapterTreeResponse.model_rebuild()
 
 
+def serialize_chapter(chapter: Chapter) -> dict:
+    """
+    Serialize a Chapter SQLAlchemy object to a clean dict
+
+    This function prevents SQLAlchemy metadata (_sa_instance_state) from
+    leaking into API responses, which was causing text disappearance in the frontend.
+
+    Uses explicit field mapping to ensure only expected fields are included.
+    """
+    return {
+        "id": chapter.id,
+        "manuscript_id": chapter.manuscript_id,
+        "parent_id": chapter.parent_id,
+        "title": chapter.title,
+        "is_folder": bool(chapter.is_folder),
+        "order_index": chapter.order_index,
+        "lexical_state": chapter.lexical_state or "",
+        "content": chapter.content or "",
+        "word_count": chapter.word_count,
+        "created_at": chapter.created_at.isoformat() if chapter.created_at else None,
+        "updated_at": chapter.updated_at.isoformat() if chapter.updated_at else None,
+        "children": []
+    }
+
+
 class ReorderRequest(BaseModel):
     chapter_ids: List[str]
 
@@ -167,11 +192,7 @@ async def create_chapter(
 
     return {
         "success": True,
-        "data": {
-            **db_chapter.__dict__,
-            "is_folder": bool(db_chapter.is_folder),
-            "children": []
-        }
+        "data": serialize_chapter(db_chapter)
     }
 
 
@@ -194,14 +215,7 @@ async def list_chapters(
 
     return {
         "success": True,
-        "data": [
-            {
-                **chapter.__dict__,
-                "is_folder": bool(chapter.is_folder),
-                "children": []
-            }
-            for chapter in chapters
-        ]
+        "data": [serialize_chapter(chapter) for chapter in chapters]
     }
 
 
@@ -257,11 +271,7 @@ async def get_chapter(
 
     return {
         "success": True,
-        "data": {
-            **chapter.__dict__,
-            "is_folder": bool(chapter.is_folder),
-            "children": []
-        }
+        "data": serialize_chapter(chapter)
     }
 
 
@@ -311,11 +321,7 @@ async def update_chapter(
 
     return {
         "success": True,
-        "data": {
-            **chapter.__dict__,
-            "is_folder": bool(chapter.is_folder),
-            "children": []
-        }
+        "data": serialize_chapter(chapter)
     }
 
 

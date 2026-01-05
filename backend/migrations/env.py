@@ -20,6 +20,8 @@ from app.models import (
 )
 from app.models.outline import Outline, PlotBeat
 from app.models.brainstorm import BrainstormSession, BrainstormIdea
+from app.models.timeline import TimelineEvent, CharacterLocation, TimelineInconsistency
+from app.models.scene import ChapterScene, EntityAppearance
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

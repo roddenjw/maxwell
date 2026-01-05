@@ -65,6 +65,7 @@ class Chapter(Base):
     # Relationships
     manuscript = relationship("Manuscript", back_populates="chapters")
     parent = relationship("Chapter", remote_side=[id], backref="children")
+    # chapter_scenes = relationship("ChapterScene", back_populates="chapter", cascade="all, delete-orphan")  # Commented out to fix import issue
 
     def __repr__(self):
         type_str = "Folder" if self.is_folder else "Chapter"
@@ -90,6 +91,7 @@ class Scene(Base):
     title = Column(String, default="")
     beats = Column(JSON, default=list)  # Story beats for this scene
     setting_id = Column(String, ForeignKey("entities.id"), nullable=True)  # Location
+    pov_character_id = Column(String, ForeignKey("entities.id"), nullable=True)  # POV character
 
     # Metrics
     word_count = Column(Integer, default=0)

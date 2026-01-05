@@ -7,8 +7,10 @@ import type { Entity } from '@/types/codex';
 import { EntityType } from '@/types/codex';
 import { codexApi } from '@/lib/api';
 import { useCodexStore } from '@/stores/codexStore';
+import { useBrainstormStore } from '@/stores/brainstormStore';
 import EntityCard from './EntityCard';
 import EntityDetail from './EntityDetail';
+import MergeEntitiesModal from './MergeEntitiesModal';
 
 interface EntityListProps {
   manuscriptId: string;
@@ -31,10 +33,18 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set());
+  const [showMergeModal, setShowMergeModal] = useState(false);
 
   // Create form state
   const [newEntityName, setNewEntityName] = useState('');
   const [newEntityType, setNewEntityType] = useState<EntityType>(EntityType.CHARACTER);
+
+  // Brainstorming
+  const { openModal } = useBrainstormStore();
+
+  const handleBrainstorm = () => {
+    openModal(manuscriptId, undefined, 'character');
+  };
 
   // Load entities on mount
   useEffect(() => {
@@ -158,30 +168,24 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
     }
   };
 
-  const handleMergeEntities = async () => {
+  const handleMergeEntities = () => {
     if (selectedEntityIds.size < 2) {
       alert('Select at least 2 entities to merge');
       return;
     }
 
+    setShowMergeModal(true);
+  };
+
+  const handleConfirmMerge = async (primaryEntityId: string) => {
     const selectedEntities = entities.filter(e => selectedEntityIds.has(e.id));
+    const primaryEntity = selectedEntities.find(e => e.id === primaryEntityId);
+    const otherEntities = selectedEntities.filter(e => e.id !== primaryEntityId);
 
-    // Ask user which entity should be the primary one
-    const entityNames = selectedEntities.map((e, i) => `${i + 1}. ${e.name} (${e.type})`).join('\n');
-    const choice = prompt(
-      `Merge ${selectedEntityIds.size} entities into which one?\n\n${entityNames}\n\nEnter the number (1-${selectedEntityIds.size}):`
-    );
-
-    if (!choice) return;
-
-    const choiceNum = parseInt(choice, 10);
-    if (isNaN(choiceNum) || choiceNum < 1 || choiceNum > selectedEntityIds.size) {
-      alert('Invalid choice');
+    if (!primaryEntity) {
+      alert('Primary entity not found');
       return;
     }
-
-    const primaryEntity = selectedEntities[choiceNum - 1];
-    const otherEntities = selectedEntities.filter(e => e.id !== primaryEntity.id);
 
     try {
       // Merge aliases and attributes
@@ -224,10 +228,12 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
       // Remove from store
       otherEntities.forEach(e => removeEntity(e.id));
       setSelectedEntityIds(new Set());
+      setShowMergeModal(false);
 
-      alert(`Merged ${selectedEntityIds.size} entities into "${primaryEntity.name}"`);
+      alert(`✓ Successfully merged ${selectedEntities.length} entities into "${primaryEntity.name}"`);
     } catch (err) {
       alert('Failed to merge entities: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      throw err; // Re-throw to let modal handle it
     }
   };
 
@@ -276,13 +282,22 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header with Create Button */}
-      <div className="p-4 border-b border-slate-ui">
+      <div className="p-4 border-b border-slate-ui space-y-2">
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
           className="w-full bg-bronze text-white px-4 py-2 text-sm font-sans hover:bg-bronze/90 transition-colors"
           style={{ borderRadius: '2px' }}
         >
           + Create Entity
+        </button>
+        <button
+          onClick={handleBrainstorm}
+          className="w-full bg-white text-bronze border-2 border-bronze px-4 py-2 text-sm font-sans hover:bg-bronze/10 transition-colors flex items-center justify-center gap-2"
+          style={{ borderRadius: '2px' }}
+          title="AI-powered character generation using Brandon Sanderson's methodology"
+        >
+          <span>💡</span>
+          <span>Brainstorm Characters</span>
         </button>
       </div>
 
@@ -492,6 +507,15 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
           </div>
         )}
       </div>
+
+      {/* Merge Entities Modal */}
+      {showMergeModal && (
+        <MergeEntitiesModal
+          entities={entities.filter(e => selectedEntityIds.has(e.id))}
+          onConfirm={handleConfirmMerge}
+          onCancel={() => setShowMergeModal(false)}
+        />
+      )}
     </div>
   );
 }

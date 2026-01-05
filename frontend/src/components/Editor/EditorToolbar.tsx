@@ -135,17 +135,22 @@ export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }:
     }
 
     try {
-      // Extract text from editor
+      // Extract text from editor using proper Lexical API
       const editorState = editor.getEditorState();
       let text = '';
 
       editorState.read(() => {
-        const root = editorState._nodeMap;
-        root.forEach((node) => {
-          if ('__text' in node) {
-            text += node.__text + ' ';
-          }
-        });
+        const root = editorState._nodeMap.get('root');
+        if (root && '__cachedText' in root && typeof root.__cachedText === 'string') {
+          text = root.__cachedText;
+        } else {
+          // Fallback: manually build text from all text nodes
+          const allNodes = Array.from(editorState._nodeMap.values());
+          text = allNodes
+            .filter((node: any) => node.__type === 'text')
+            .map((node: any) => node.__text || '')
+            .join(' ');
+        }
       });
 
       if (!text.trim()) {
@@ -172,6 +177,7 @@ export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }:
       setSidebarOpen(true);
       setActiveTab('intel');
     } catch (err) {
+      console.error('Analyze error:', err);
       alert('Failed to analyze: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setAnalyzing(false);

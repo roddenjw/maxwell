@@ -15,12 +15,15 @@ import WelcomeModal from './components/Onboarding/WelcomeModal'
 import FeatureTour from './components/Onboarding/FeatureTour'
 import SettingsModal from './components/Settings/SettingsModal'
 import ManuscriptWizard from './components/Outline/ManuscriptWizard'
+import OutlineSidebar from './components/Outline/OutlineSidebar'
+import { BrainstormingModal } from './components/Brainstorming'
 import { useManuscriptStore } from './stores/manuscriptStore'
 import { useOnboardingStore } from './stores/onboardingStore'
 import { useCodexStore } from './stores/codexStore'
 import { useTimelineStore } from './stores/timelineStore'
 import { useChapterStore } from './stores/chapterStore'
 import { useFastCoachStore } from './stores/fastCoachStore'
+import { useOutlineStore } from './stores/outlineStore'
 import { chaptersApi } from './lib/api'
 import { useKeyboardShortcuts, type KeyboardShortcut } from './hooks/useKeyboardShortcuts'
 import { toast } from './stores/toastStore'
@@ -36,7 +39,8 @@ function App() {
   const { isTimelineOpen, setTimelineOpen } = useTimelineStore()
   const { setCurrentChapter, currentChapterId } = useChapterStore()
   const { isSidebarOpen: isCoachOpen, toggleSidebar: toggleCoach } = useFastCoachStore()
-  const [activeView, setActiveView] = useState<'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export'>('chapters')
+  const { isSidebarOpen: isOutlineSidebarOpen, setSidebarOpen: setOutlineSidebarOpen, clearOutline } = useOutlineStore()
+  const [activeView, setActiveView] = useState<'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export' | 'outline'>('chapters')
   const [editorKey, setEditorKey] = useState(0) // Force editor re-mount on restore
   const [currentChapterContent, setCurrentChapterContent] = useState<string>('')
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
@@ -136,6 +140,10 @@ function App() {
       // Open the manuscript
       await handleOpenManuscript(manuscriptId)
 
+      // Show outline view with all plot beats
+      setActiveView('outline')
+      setOutlineSidebarOpen(true)
+
       // Track creation with outline
       analytics.manuscriptCreated(manuscriptId, manuscriptData.title)
       toast.success('Manuscript created with story structure! Start writing your first beat.')
@@ -197,11 +205,12 @@ function App() {
     }
     setCurrentManuscript(null)
     setCurrentChapter(null) // Clear chapter selection
+    clearOutline() // Clear outline state
     setSaveStatus('saved') // Reset save status
     setActiveView('chapters') // Reset view
   }
 
-  const handleNavigate = (view: 'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export') => {
+  const handleNavigate = (view: 'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export' | 'outline') => {
     setActiveView(view)
 
     // Track feature usage
@@ -225,6 +234,9 @@ function App() {
         case 'timemachine':
           analytics.timeMachineOpened(currentManuscriptId)
           break
+        case 'outline':
+          // Track outline opened if needed
+          break
       }
     }
 
@@ -239,6 +251,8 @@ function App() {
       // Time machine is a modal, handled separately
     } else if (view === 'coach') {
       if (!isCoachOpen) toggleCoach()
+    } else if (view === 'outline') {
+      if (!isOutlineSidebarOpen) setOutlineSidebarOpen(true)
     }
   }
 
@@ -351,6 +365,34 @@ function App() {
     }
 
     return JSON.stringify(lexicalState)
+  }
+
+  const handleCreateChapterFromBeat = async (beat: any) => {
+    if (!currentManuscriptId) return
+
+    try {
+      // Create a new chapter with beat information
+      const chapter = await chaptersApi.createChapter({
+        manuscript_id: currentManuscriptId,
+        title: beat.beat_label,
+        is_folder: false,
+      })
+
+      // Update the beat to link it to the chapter
+      const { updateBeat } = useOutlineStore.getState()
+      await updateBeat(beat.id, { chapter_id: chapter.id })
+
+      // Switch to chapters view and select the new chapter
+      setActiveView('chapters')
+      setTimeout(() => {
+        handleChapterSelect(chapter.id)
+      }, 100)
+
+      toast.success(`Chapter "${beat.beat_label}" created!`)
+    } catch (error) {
+      console.error('Failed to create chapter from beat:', error)
+      toast.error('Failed to create chapter')
+    }
   }
 
   const handleChapterSelect = async (chapterId: string) => {
@@ -658,6 +700,33 @@ function App() {
                 onClose={() => setActiveView('chapters')}
               />
             )}
+
+            {/* Outline View */}
+            {activeView === 'outline' && (
+              <div className="flex-1 flex bg-vellum">
+                <div className="flex-1 flex items-center justify-center p-8">
+                  <div className="text-center max-w-2xl">
+                    <div className="text-6xl mb-6">📋</div>
+                    <h2 className="font-serif text-3xl font-bold text-midnight mb-4">
+                      Story Structure Outline
+                    </h2>
+                    <p className="font-sans text-faded-ink text-lg mb-6">
+                      Your plot beats are shown in the sidebar. Review each beat, add notes, and create chapters as you progress through your story.
+                    </p>
+                    <p className="font-sans text-faded-ink text-sm">
+                      Click on any beat to expand it and see details about what should happen in that section of your story.
+                    </p>
+                  </div>
+                </div>
+                <OutlineSidebar
+                  manuscriptId={currentManuscript.id}
+                  isOpen={isOutlineSidebarOpen}
+                  onClose={() => setOutlineSidebarOpen(false)}
+                  onCreateChapter={handleCreateChapterFromBeat}
+                  onOpenChapter={handleChapterSelect}
+                />
+              </div>
+            )}
           </div>
         </main>
 
@@ -687,6 +756,9 @@ function App() {
         {showTour && (
           <FeatureTour onComplete={handleTourComplete} onSkip={handleTourSkip} />
         )}
+
+        {/* Brainstorming Modal */}
+        <BrainstormingModal />
       </div>
     )
   }
@@ -724,6 +796,9 @@ function App() {
       {showTour && (
         <FeatureTour onComplete={handleTourComplete} onSkip={handleTourSkip} />
       )}
+
+      {/* Brainstorming Modal */}
+      <BrainstormingModal />
     </>
   )
 }

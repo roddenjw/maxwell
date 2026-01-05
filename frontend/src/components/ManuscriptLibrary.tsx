@@ -214,7 +214,7 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
                     Guided Setup
                   </h4>
                   <p className="text-sm text-faded-ink">
-                    Create with story structure templates (Hero's Journey, Save the Cat, etc.). Get plot beats and guidance.
+                    Create with story structure templates (Mythic Quest, Screenplay Structure, etc.). Get plot beats and guidance.
                   </p>
                 </button>
               )}

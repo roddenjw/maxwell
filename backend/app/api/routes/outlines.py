@@ -9,6 +9,10 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uuid
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.models.outline import Outline, PlotBeat
@@ -17,6 +21,7 @@ from app.services.story_structures import (
     get_structure_template,
     create_plot_beats_from_template
 )
+from app.services.openrouter_service import OpenRouterService
 
 
 router = APIRouter(prefix="/api/outlines", tags=["outlines"])
@@ -65,7 +70,7 @@ class PlotBeatResponse(BaseModel):
 
 class OutlineCreate(BaseModel):
     manuscript_id: str
-    structure_type: str  # 'km-weiland', 'save-the-cat', 'heros-journey', '3-act', 'custom'
+    structure_type: str  # 'story-arc-9', 'screenplay-15', 'mythic-quest', '3-act', 'custom'
     genre: Optional[str] = None
     target_word_count: Optional[int] = 80000
     premise: Optional[str] = ""
@@ -180,6 +185,251 @@ async def get_story_structure(structure_type: str):
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+class GeneratePremiseRequest(BaseModel):
+    brainstorm_text: str
+    api_key: str
+    genre: Optional[str] = None
+
+
+@router.post("/generate-premise")
+async def generate_premise(request: GeneratePremiseRequest):
+    """
+    Generate a concise premise from freeform brainstorming text using AI
+
+    Args:
+        request: Contains the brainstorm text and OpenRouter API key
+
+    Returns:
+        Generated premise and logline
+    """
+    if not request.brainstorm_text or len(request.brainstorm_text.strip()) < 20:
+        raise HTTPException(status_code=400, detail="Brainstorm text too short. Please write at least 20 characters.")
+
+    if not request.api_key:
+        raise HTTPException(status_code=400, detail="API key required for AI generation")
+
+    try:
+        openrouter = OpenRouterService(request.api_key)
+
+        # Build prompt for premise generation
+        genre_context = f" in the {request.genre} genre" if request.genre else ""
+        system_prompt = """You are an expert story consultant helping authors refine their story concepts.
+Your task is to distill freeform brainstorming into clear, compelling story elements."""
+
+        user_prompt = f"""Based on this author's brainstorming about their story{genre_context}, create:
+
+1. A PREMISE (2-3 sentences): A clear, engaging summary of the core story concept, including the protagonist's goal, the central conflict, and what's at stake.
+
+2. A LOGLINE (1 sentence): A punchy, one-sentence hook that captures the essence of the story.
+
+Author's brainstorming:
+{request.brainstorm_text}
+
+Respond in exactly this format:
+PREMISE: [your 2-3 sentence premise]
+
+LOGLINE: [your 1 sentence logline]"""
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{openrouter.BASE_URL}/chat/completions",
+                headers=openrouter.headers,
+                json={
+                    "model": openrouter.DEFAULT_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "max_tokens": 400,
+                    "temperature": 0.7,
+                },
+                timeout=30.0
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"AI service error: {response.status_code}")
+
+            data = response.json()
+            ai_response = data["choices"][0]["message"]["content"]
+
+            # Parse the response
+            premise = ""
+            logline = ""
+
+            lines = ai_response.strip().split('\n')
+            for i, line in enumerate(lines):
+                if line.startswith("PREMISE:"):
+                    premise = line.replace("PREMISE:", "").strip()
+                    # Check if premise continues on next lines
+                    j = i + 1
+                    while j < len(lines) and not lines[j].startswith("LOGLINE:"):
+                        if lines[j].strip():
+                            premise += " " + lines[j].strip()
+                        j += 1
+                elif line.startswith("LOGLINE:"):
+                    logline = line.replace("LOGLINE:", "").strip()
+
+            return {
+                "success": True,
+                "premise": premise,
+                "logline": logline,
+                "usage": data.get("usage", {})
+            }
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="AI service timeout. Please try again.")
+    except Exception as e:
+        logger.error(f"Premise generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SwitchStructureRequest(BaseModel):
+    current_outline_id: str
+    new_structure_type: str
+    beat_mappings: Optional[Dict[str, str]] = None  # old_beat_id -> new_beat_name
+
+
+@router.post("/switch-structure")
+async def switch_story_structure(
+    request: SwitchStructureRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Switch an existing outline to a different story structure
+    Intelligently migrates user notes, completion status, and chapter links
+
+    Args:
+        request: Contains current outline ID, new structure type, and optional beat mappings
+
+    Returns:
+        Suggested beat mappings if beat_mappings not provided, or new outline if complete
+    """
+    # Get current outline
+    current_outline = db.query(Outline).filter(Outline.id == request.current_outline_id).first()
+    if not current_outline:
+        raise HTTPException(status_code=404, detail="Current outline not found")
+
+    # Validate new structure type
+    try:
+        new_template = get_structure_template(request.new_structure_type)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # If no mappings provided, return suggested mappings for user review
+    if not request.beat_mappings:
+        old_beats = current_outline.plot_beats
+        new_beat_templates = new_template["beats"]
+
+        # Create mapping suggestions based on beat names and positions
+        suggested_mappings = []
+        for old_beat in old_beats:
+            best_match = None
+            best_score = 0
+
+            for new_beat in new_beat_templates:
+                score = 0
+
+                # Exact beat name match (highest priority)
+                if old_beat.beat_name == new_beat.beat_name:
+                    score += 100
+                # Similar beat names (e.g., both contain "midpoint")
+                elif new_beat.beat_name in old_beat.beat_name or old_beat.beat_name in new_beat.beat_name:
+                    score += 50
+
+                # Similar position in story (closer = better)
+                position_diff = abs(old_beat.target_position_percent - new_beat.position_percent)
+                score += (1.0 - position_diff) * 30
+
+                if score > best_score:
+                    best_score = score
+                    best_match = new_beat.beat_name
+
+            suggested_mappings.append({
+                "old_beat_id": old_beat.id,
+                "old_beat_name": old_beat.beat_name,
+                "old_beat_label": old_beat.beat_label,
+                "old_position": old_beat.target_position_percent,
+                "suggested_new_beat": best_match,
+                "has_notes": bool(old_beat.user_notes),
+                "has_chapter": bool(old_beat.chapter_id),
+                "is_completed": old_beat.is_completed,
+                "confidence": min(100, int(best_score))
+            })
+
+        return {
+            "success": True,
+            "requires_mapping": True,
+            "old_structure": current_outline.structure_type,
+            "new_structure": request.new_structure_type,
+            "new_beats": [
+                {
+                    "beat_name": beat.beat_name,
+                    "beat_label": beat.beat_label,
+                    "position": beat.position_percent
+                }
+                for beat in new_beat_templates
+            ],
+            "suggested_mappings": suggested_mappings
+        }
+
+    # User provided mappings - create new outline with migration
+    # Deactivate current outline
+    current_outline.is_active = False
+
+    # Create new outline with same premise/genre/target
+    new_outline = Outline(
+        id=str(uuid.uuid4()),
+        manuscript_id=current_outline.manuscript_id,
+        structure_type=request.new_structure_type,
+        genre=current_outline.genre,
+        target_word_count=current_outline.target_word_count,
+        premise=current_outline.premise,
+        logline=current_outline.logline,
+        synopsis=current_outline.synopsis,
+        is_active=True
+    )
+
+    db.add(new_outline)
+    db.flush()  # Get the outline ID
+
+    # Create new plot beats from template
+    old_beats_map = {beat.id: beat for beat in current_outline.plot_beats}
+    beat_templates = create_plot_beats_from_template(request.new_structure_type, current_outline.target_word_count)
+
+    for beat_data in beat_templates:
+        new_beat = PlotBeat(
+            id=str(uuid.uuid4()),
+            outline_id=new_outline.id,
+            **beat_data
+        )
+
+        # Find if this beat was mapped from an old beat
+        old_beat_id = None
+        for old_id, new_beat_name in request.beat_mappings.items():
+            if new_beat_name == beat_data["beat_name"]:
+                old_beat_id = old_id
+                break
+
+        # If mapped, copy data from old beat
+        if old_beat_id and old_beat_id in old_beats_map:
+            old_beat = old_beats_map[old_beat_id]
+            new_beat.user_notes = old_beat.user_notes
+            new_beat.is_completed = old_beat.is_completed
+            new_beat.chapter_id = old_beat.chapter_id
+            new_beat.completed_at = old_beat.completed_at
+            new_beat.content_summary = old_beat.content_summary
+
+        db.add(new_beat)
+
+    db.commit()
+    db.refresh(new_outline)
+
+    return {
+        "success": True,
+        "outline": new_outline
+    }
 
 
 @router.post("/from-template", response_model=OutlineResponse)

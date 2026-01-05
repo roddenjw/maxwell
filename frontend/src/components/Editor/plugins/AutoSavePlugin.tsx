@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $getRoot, EditorState } from 'lexical';
 import { useManuscriptStore } from '@/stores/manuscriptStore';
-import { versioningApi, chaptersApi } from '@/lib/api';
+import { versioningApi, chaptersApi, manuscriptApi } from '@/lib/api';
 
 interface AutoSavePluginProps {
   manuscriptId: string;
@@ -30,6 +30,7 @@ export default function AutoSavePlugin({
   const saveTimeoutRef = useRef<number | null>(null);
   const lastSnapshotTimeRef = useRef<number>(Date.now());
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const currentEditorStateRef = useRef<EditorState | null>(null);
 
   useEffect(() => {
     // Update parent component when save status changes
@@ -40,6 +41,9 @@ export default function AutoSavePlugin({
     // Register listener for editor state changes
     const removeUpdateListener = editor.registerUpdateListener(
       ({ editorState }: { editorState: EditorState }) => {
+        // Store current editor state for unmount save
+        currentEditorStateRef.current = editorState;
+
         // Mark as unsaved
         setSaveStatus('unsaved');
 
@@ -59,11 +63,21 @@ export default function AutoSavePlugin({
     // Cleanup
     return () => {
       removeUpdateListener();
+
+      // Clear timeout
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
+
+      // Force save any pending changes on unmount
+      if (currentEditorStateRef.current && saveStatus === 'unsaved') {
+        console.log('Component unmounting - forcing save of pending changes');
+        saveManuscript(currentEditorStateRef.current).catch(err => {
+          console.error('Failed to save on unmount:', err);
+        });
+      }
     };
-  }, [editor, manuscriptId, chapterId]);
+  }, [editor, manuscriptId, chapterId, saveStatus]);
 
   const saveManuscript = async (editorState: EditorState) => {
     // Serialize editor state to JSON
@@ -99,6 +113,17 @@ export default function AutoSavePlugin({
         wordCount: wordCount,
       });
 
+      // Sync word count to backend so home page shows correct value
+      try {
+        await manuscriptApi.update(manuscriptId, {
+          word_count: wordCount,
+          lexical_state: serializedState,
+        });
+        console.log(`Auto-saved manuscript ${manuscriptId}: ${wordCount} words`);
+      } catch (error) {
+        console.error('Failed to sync manuscript word count to backend:', error);
+      }
+
       // Create snapshot if enabled and enough time has passed
       if (enableSnapshots) {
         const now = Date.now();
@@ -120,8 +145,6 @@ export default function AutoSavePlugin({
           }
         }
       }
-
-      console.log(`Auto-saved manuscript ${manuscriptId}: ${wordCount} words`);
     }
 
     // Mark as saved

@@ -8,7 +8,7 @@ import { useState } from 'react';
 interface UnifiedSidebarProps {
   currentManuscriptId: string | null;
   manuscriptTitle: string;
-  onNavigate: (view: 'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export') => void;
+  onNavigate: (view: 'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export' | 'outline') => void;
   onCloseEditor: () => void;
   onSettingsClick?: () => void;
   activeView?: string;
@@ -26,6 +26,7 @@ export default function UnifiedSidebar({
 
   const navigationItems = [
     { id: 'chapters', label: 'Chapters', icon: '📑', description: 'Navigate chapters' },
+    { id: 'outline', label: 'Outline', icon: '📋', description: 'Story structure' },
     { id: 'codex', label: 'Codex', icon: '📖', description: 'Character & world info' },
     { id: 'timeline', label: 'Timeline', icon: '📜', description: 'Event chronology' },
     { id: 'analytics', label: 'Analytics', icon: '📊', description: 'Writing statistics' },

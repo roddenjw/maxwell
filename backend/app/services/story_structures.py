@@ -1,10 +1,12 @@
 """
 Story Structure Templates
-Defines beat templates for different story structures
-Based on: KM Weiland, Save the Cat, Hero's Journey, and traditional 3-Act structure
+Defines beat templates for various narrative structures
 """
 
 from typing import List, Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PlotBeatTemplate:
@@ -47,307 +49,308 @@ class PlotBeatTemplate:
         }
 
 
-# KM Weiland's Story Structure (Structuring Your Novel)
-# 9 key beats at specific percentages
-KM_WEILAND_STRUCTURE = [
+# 9-Beat Story Arc
+# A flexible nine-beat structure focusing on key turning points at specific story percentages
+STORY_ARC_9_STRUCTURE = [
     PlotBeatTemplate(
         beat_name="hook",
         beat_label="Hook",
-        description="Grab the reader's attention and establish the normal world. Introduce your protagonist and their everyday life.",
+        description="Capture your reader's attention immediately. Present your protagonist in their normal environment, showing who they are and hinting at what matters to them.",
         position_percent=0.00,
         order_index=0,
-        tips="Start with action, intrigue, or a compelling character moment. Show what's at stake."
+        tips="Open with something compelling—an intriguing situation, a character in motion, or a glimpse of conflict to come."
     ),
     PlotBeatTemplate(
         beat_name="inciting-event",
         beat_label="Inciting Event",
-        description="The event that disrupts the protagonist's normal world and sets the story in motion.",
+        description="An unexpected occurrence shakes up your protagonist's ordinary life. This catalyst introduces the central conflict or opportunity that will drive the story forward.",
         position_percent=0.12,
         order_index=1,
-        tips="This is the 'call to adventure' that changes everything. It should be impossible to ignore."
+        tips="Make this event significant enough that ignoring it becomes impossible for your protagonist."
     ),
     PlotBeatTemplate(
         beat_name="first-plot-point",
         beat_label="First Plot Point",
-        description="The protagonist makes a decision that commits them to the journey. No turning back. Moves from Act 1 to Act 2.",
+        description="Your protagonist makes a crucial choice that propels them into the main story conflict. This decision marks the transition into a new phase where returning to normalcy is no longer an option.",
         position_percent=0.25,
         order_index=2,
-        tips="This is a point of no return. The protagonist crosses a threshold into a new world or situation."
+        tips="This should be an active choice by your protagonist, not something forced upon them, showing their commitment to face what lies ahead."
     ),
     PlotBeatTemplate(
-        beat_name="first-pinch-point",
-        beat_label="First Pinch Point",
-        description="A reminder of the antagonistic force's power. Shows what the protagonist is up against.",
+        beat_name="first-pressure-point",
+        beat_label="First Pressure Point",
+        description="The opposing forces reveal their true strength. Your protagonist gets a clear demonstration of what they're up against, raising awareness of the challenge's magnitude.",
         position_percent=0.375,
         order_index=3,
-        tips="Raise the stakes. Show the antagonist's strength. Make the challenge feel real and dangerous."
+        tips="Increase tension by showing the antagonist's capabilities or the severity of the obstacles ahead."
     ),
     PlotBeatTemplate(
         beat_name="midpoint",
         beat_label="Midpoint",
-        description="A major shift in the story. New information is revealed that changes the protagonist's understanding or approach.",
+        description="A pivotal moment transforms the story's direction. New revelations emerge, forcing your protagonist to reassess their situation and change their strategy.",
         position_percent=0.50,
         order_index=4,
-        tips="This is the moment of truth or false victory. The protagonist shifts from reaction to action."
+        tips="Create a shift from your protagonist reacting to circumstances toward actively pursuing their goal."
     ),
     PlotBeatTemplate(
-        beat_name="second-pinch-point",
-        beat_label="Second Pinch Point",
-        description="Another reminder of the antagonistic force, often worse than the first. Pressure increases.",
+        beat_name="second-pressure-point",
+        beat_label="Second Pressure Point",
+        description="Opposition intensifies as antagonistic forces push back harder. The challenges escalate beyond what came before, tightening the vise on your protagonist.",
         position_percent=0.625,
         order_index=5,
-        tips="The darkest moment is approaching. Show how formidable the challenge truly is."
+        tips="Demonstrate how the conflict has grown more complex and dangerous since the first pressure point."
     ),
     PlotBeatTemplate(
-        beat_name="third-plot-point",
-        beat_label="Third Plot Point",
-        description="The low point. Everything seems lost. The protagonist faces their darkest moment. Moves from Act 2 to Act 3.",
+        beat_name="second-turning-point",
+        beat_label="Second Turning Point",
+        description="The story reaches its bleakest moment. Your protagonist experiences a devastating setback or loss that makes victory seem unreachable.",
         position_percent=0.75,
         order_index=6,
-        tips="This is the 'all is lost' moment. The protagonist must face their deepest fear or greatest loss."
+        tips="Strip away your protagonist's advantages or confidence, forcing them to find inner resources they didn't know they possessed."
     ),
     PlotBeatTemplate(
         beat_name="climax",
         beat_label="Climax",
-        description="The final confrontation. The protagonist faces the antagonistic force with everything they've learned.",
+        description="The decisive showdown arrives. Your protagonist confronts the central conflict armed with everything they've learned throughout their journey.",
         position_percent=0.90,
         order_index=7,
-        tips="This is the moment the entire story has been building toward. High stakes, maximum tension."
+        tips="Deliver maximum tension and stakes in this culminating moment that determines the story's outcome."
     ),
     PlotBeatTemplate(
         beat_name="resolution",
         beat_label="Resolution",
-        description="The aftermath. Show how the protagonist and their world have changed. Tie up loose ends.",
+        description="The story's aftermath unfolds. Show how your protagonist and their world have been transformed by the journey, wrapping up remaining story threads.",
         position_percent=0.98,
         order_index=8,
-        tips="Give readers closure. Show the new normal. Demonstrate growth and transformation."
+        tips="Provide satisfying closure while demonstrating the lasting changes your protagonist has undergone."
     ),
 ]
 
 
-# Save the Cat (Blake Snyder's 15-beat structure)
-SAVE_THE_CAT_STRUCTURE = [
+# 15-Beat Screenplay Structure
+# A comprehensive structure emphasizing thematic development and emotional beats
+SCREENPLAY_15_STRUCTURE = [
     PlotBeatTemplate(
-        beat_name="opening-image",
-        beat_label="Opening Image",
-        description="A snapshot of the protagonist's life before the adventure begins. Shows the 'before' picture.",
+        beat_name="story-opening",
+        beat_label="Story Opening",
+        description="Present a vivid picture of your protagonist's world before change arrives. This initial portrait establishes the baseline against which transformation will be measured.",
         position_percent=0.00,
         order_index=0,
-        tips="Create a vivid image that will contrast with the closing image."
+        tips="Create a memorable opening that you can mirror later to showcase how far your protagonist has come."
     ),
     PlotBeatTemplate(
         beat_name="theme-stated",
         beat_label="Theme Stated",
-        description="Someone (often not the protagonist) states the theme of the story, usually in the form of advice.",
+        description="Introduce your story's central theme through dialogue or action, often voiced by a character other than the protagonist who doesn't yet recognize its significance.",
         position_percent=0.05,
         order_index=1,
-        tips="This is subtle. The protagonist usually doesn't understand it yet."
+        tips="Plant this thematic seed subtly—your protagonist typically won't grasp its meaning until much later in their journey."
     ),
     PlotBeatTemplate(
         beat_name="setup",
         beat_label="Setup",
-        description="Introduce the protagonist's world, supporting characters, and the flaws that need fixing.",
+        description="Establish the key elements of your story world. Introduce important characters, relationships, and the protagonist's current situation, including what's incomplete or broken in their life.",
         position_percent=0.01,
         order_index=2,
-        tips="Show the protagonist's everyday life and what's missing or broken in it."
+        tips="Show your protagonist's daily reality and hint at the void or flaw that the coming journey will address."
     ),
     PlotBeatTemplate(
         beat_name="catalyst",
         beat_label="Catalyst",
-        description="The inciting incident. Something happens that disrupts the status quo.",
+        description="An event disrupts the established order of your protagonist's life. This occurrence presents a problem or opportunity that cannot be ignored, though acceptance hasn't yet happened.",
         position_percent=0.10,
         order_index=3,
-        tips="This changes everything but the protagonist doesn't accept the challenge yet."
+        tips="Distinguish this from commitment—the catalyst proposes change, but your protagonist hasn't agreed to pursue it yet."
     ),
     PlotBeatTemplate(
         beat_name="debate",
         beat_label="Debate",
-        description="The protagonist hesitates, questions whether to take action. Should they go on this journey?",
+        description="Your protagonist wrestles with uncertainty. They question whether to engage with the challenge presented by the catalyst, revealing their fears and the stakes involved.",
         position_percent=0.12,
         order_index=4,
-        tips="Show internal conflict. Make the stakes clear. Why is this decision hard?"
+        tips="Explore your protagonist's internal resistance to show why this decision carries weight and consequence."
     ),
     PlotBeatTemplate(
-        beat_name="break-into-two",
-        beat_label="Break Into Two",
-        description="The protagonist makes a choice and enters Act Two. They commit to the journey.",
+        beat_name="commitment-point",
+        beat_label="Commitment Point",
+        description="Your protagonist actively chooses to pursue the story's central challenge. This voluntary decision launches them into unfamiliar territory and new circumstances.",
         position_percent=0.20,
         order_index=5,
-        tips="This is a choice, not something forced on them. They step into a new world."
+        tips="Emphasize that this is a conscious choice, not an accident or force—your protagonist must take ownership of this step forward."
     ),
     PlotBeatTemplate(
         beat_name="b-story",
         beat_label="B Story",
-        description="Introduction of a new character or relationship that will help the protagonist learn the theme.",
+        description="A secondary character or relationship enters the narrative, often providing perspective that illuminates your story's theme. This subplot typically offers emotional contrast to the main action.",
         position_percent=0.22,
         order_index=6,
-        tips="This is often the love interest or mentor. They represent the theme."
+        tips="This relationship often serves as a mirror or teacher, helping your protagonist understand lessons they need to learn."
     ),
     PlotBeatTemplate(
         beat_name="fun-and-games",
         beat_label="Fun and Games",
-        description="The promise of the premise. The fun part of the adventure. Explore the new world.",
+        description="Explore the premise's most entertaining possibilities. Your protagonist navigates their new situation, providing the experiences that likely drew readers to your story concept.",
         position_percent=0.30,
         order_index=7,
-        tips="This is what the trailer would show. Deliver on the premise's promise."
+        tips="Deliver on your premise's promise—if it's a romance, show them falling in love; if it's an adventure, show thrilling escapades."
     ),
     PlotBeatTemplate(
         beat_name="midpoint",
         beat_label="Midpoint",
-        description="Either a false victory or false defeat. Stakes are raised. Time clock starts ticking.",
+        description="A significant win or loss occurs that raises the stakes considerably. Time pressure increases, and what seemed achievable becomes more complex or urgent.",
         position_percent=0.50,
         order_index=8,
-        tips="Everything changes here. The protagonist gets what they want... or loses everything."
+        tips="Create a major reversal—apparent success that hides coming disaster, or apparent failure that plants seeds of eventual triumph."
     ),
     PlotBeatTemplate(
-        beat_name="bad-guys-close-in",
-        beat_label="Bad Guys Close In",
-        description="The antagonistic forces regroup and press harder. Things get worse. Internal and external pressure builds.",
+        beat_name="rising-opposition",
+        beat_label="Rising Opposition",
+        description="Antagonistic forces regroup and push back against your protagonist's progress. External pressures combine with internal doubts as complications multiply.",
         position_percent=0.55,
         order_index=9,
-        tips="Show the opposition getting stronger. The protagonist's flaws cause problems."
+        tips="Show both external opposition strengthening and your protagonist's flaws creating additional problems."
     ),
     PlotBeatTemplate(
-        beat_name="all-is-lost",
-        beat_label="All Is Lost",
-        description="The lowest point. The opposite of the midpoint. Something or someone dies (literally or figuratively).",
+        beat_name="lowest-point",
+        beat_label="Lowest Point",
+        description="Everything collapses around your protagonist. A significant loss occurs—whether literal death or the death of hope, relationships, or dreams—creating the story's darkest moment.",
         position_percent=0.75,
         order_index=10,
-        tips="This is the 'whiff of death' moment. Hope seems gone. Make it devastating."
+        tips="Make this defeat feel genuine and devastating, leaving readers wondering how your protagonist can possibly recover."
     ),
     PlotBeatTemplate(
-        beat_name="dark-night-of-soul",
-        beat_label="Dark Night of the Soul",
-        description="The protagonist wallows in defeat. Processes the loss. Reflects on what went wrong.",
+        beat_name="moment-of-despair",
+        beat_label="Moment of Despair",
+        description="Your protagonist processes the recent catastrophe. In this quiet, reflective interval, they examine what went wrong and face the weight of their losses.",
         position_percent=0.80,
         order_index=11,
-        tips="This is a quiet, introspective moment before the final push."
+        tips="Allow stillness after the storm—this introspective pause makes the coming resurgence more powerful."
     ),
     PlotBeatTemplate(
-        beat_name="break-into-three",
-        beat_label="Break Into Three",
-        description="The protagonist has an 'aha!' moment. Discovers the solution by applying the theme. Act Three begins.",
+        beat_name="resolution-decision",
+        beat_label="Resolution Decision",
+        description="A breakthrough occurs as your protagonist grasps the key to solving their central problem. By integrating the story's thematic lesson, they discover a path forward.",
         position_percent=0.85,
         order_index=12,
-        tips="The A story and B story converge. The protagonist finally understands the theme."
+        tips="Unite your main story with the B story as your protagonist finally understands what they've been learning all along."
     ),
     PlotBeatTemplate(
         beat_name="finale",
         beat_label="Finale",
-        description="The climax. The protagonist confronts the antagonist using what they've learned. Resolve all storylines.",
+        description="Your protagonist faces the final challenge, applying their newfound understanding to resolve the central conflict. All narrative threads converge toward conclusion.",
         position_percent=0.90,
         order_index=13,
-        tips="Synthesize the old world (Act 1) and new world (Act 2). Show growth."
+        tips="Demonstrate how your protagonist has integrated lessons from their journey, showing growth through their actions."
     ),
     PlotBeatTemplate(
-        beat_name="final-image",
-        beat_label="Final Image",
-        description="A snapshot showing the protagonist's new life. Contrasts with the opening image. The 'after' picture.",
+        beat_name="story-closing",
+        beat_label="Story Closing",
+        description="Present your protagonist's transformed reality. This final image contrasts with your opening to illustrate the complete arc of change they've experienced.",
         position_percent=0.99,
         order_index=14,
-        tips="Mirror the opening image to show transformation. Leave readers satisfied."
+        tips="Echo elements from your opening to highlight the transformation, giving readers a satisfying sense of completion."
     ),
 ]
 
 
-# Hero's Journey (Joseph Campbell / Christopher Vogler)
-# 12 stages
-HEROS_JOURNEY_STRUCTURE = [
+# Mythic Quest Structure
+# A twelve-stage structure based on archetypal quest narratives
+MYTHIC_QUEST_STRUCTURE = [
     PlotBeatTemplate(
         beat_name="ordinary-world",
         beat_label="Ordinary World",
-        description="The hero's normal life before the adventure begins. Establish the status quo.",
+        description="Show your protagonist's life before transformation begins. Establish their familiar environment, daily patterns, and the people who populate their normal existence.",
         position_percent=0.00,
         order_index=0,
-        tips="Show what the hero will leave behind. Make us care about their world."
+        tips="Create investment in your protagonist's current world so readers understand what they're leaving behind when change comes."
     ),
     PlotBeatTemplate(
-        beat_name="call-to-adventure",
-        beat_label="Call to Adventure",
-        description="The hero is presented with a challenge or quest. The inciting incident.",
+        beat_name="invitation-to-change",
+        beat_label="Invitation to Change",
+        description="Your protagonist encounters an opportunity or challenge that threatens to disrupt their familiar life. This presents the central quest or problem that will drive the narrative.",
         position_percent=0.10,
         order_index=1,
-        tips="This disrupts the ordinary world. Present a problem that can't be ignored."
+        tips="Introduce a problem compelling enough that your protagonist cannot simply ignore it and continue their previous existence."
     ),
     PlotBeatTemplate(
-        beat_name="refusal-of-call",
-        beat_label="Refusal of the Call",
-        description="The hero hesitates or refuses the adventure. Shows their fears and doubts.",
+        beat_name="hesitation",
+        beat_label="Hesitation",
+        description="Your protagonist resists the invitation to embark on the journey. This reluctance reveals their doubts, fears, or attachments to their current situation.",
         position_percent=0.15,
         order_index=2,
-        tips="Make the stakes clear. Show why the hero is reluctant or afraid."
+        tips="Use this resistance to establish what's at stake and why leaving the familiar feels dangerous or costly."
     ),
     PlotBeatTemplate(
         beat_name="meeting-mentor",
         beat_label="Meeting the Mentor",
-        description="The hero encounters a guide who provides advice, training, or magical gifts.",
+        description="A guide figure appears who offers wisdom, tools, or encouragement. This character helps prepare your protagonist for the challenges ahead.",
         position_percent=0.20,
         order_index=3,
-        tips="The mentor prepares the hero and gives them what they need to begin."
+        tips="The mentor equips your protagonist with what they need to begin—this might be knowledge, objects, or simply confidence."
     ),
     PlotBeatTemplate(
         beat_name="crossing-threshold",
         beat_label="Crossing the Threshold",
-        description="The hero commits to the adventure and enters the special world. No turning back.",
+        description="Your protagonist commits to the quest and steps beyond the boundaries of their known world. They enter unfamiliar territory where old rules no longer apply.",
         position_percent=0.25,
         order_index=4,
-        tips="This is the point of no return. The hero leaves the familiar behind."
+        tips="Mark this as a definitive departure from the ordinary world—your protagonist passes through a one-way door."
     ),
     PlotBeatTemplate(
         beat_name="tests-allies-enemies",
         beat_label="Tests, Allies, and Enemies",
-        description="The hero faces tests, makes allies, and confronts enemies. Learning the rules of the special world.",
+        description="Your protagonist encounters challenges that test their abilities while forming bonds with helpers and identifying adversaries. They learn how this new world operates.",
         position_percent=0.30,
         order_index=5,
-        tips="Show the hero adapting to the new world. Introduce key supporting characters."
+        tips="Use these encounters to develop supporting characters who will matter later and show your protagonist adapting to new circumstances."
     ),
     PlotBeatTemplate(
-        beat_name="approach-innermost-cave",
-        beat_label="Approach to the Inmost Cave",
-        description="The hero prepares for the major challenge. Approaches the most dangerous place.",
+        beat_name="preparation",
+        beat_label="Preparation for Crisis",
+        description="Your protagonist prepares to face the story's central challenge. They approach the most dangerous phase of their quest with growing awareness of what it will demand.",
         position_percent=0.45,
         order_index=6,
-        tips="Build tension. The hero prepares for the greatest ordeal."
+        tips="Build mounting tension as your protagonist steels themselves for the ordeal that awaits."
     ),
     PlotBeatTemplate(
         beat_name="ordeal",
         beat_label="Ordeal",
-        description="The hero faces their greatest fear or challenge. A life-or-death crisis. The midpoint.",
+        description="Your protagonist confronts their greatest fear or challenge in a life-threatening crisis. This central trial tests them to their limits.",
         position_percent=0.50,
         order_index=7,
-        tips="This is a major turning point. The hero faces death (literally or figuratively)."
+        tips="Create a genuine brush with failure or death that fundamentally alters your protagonist's journey."
     ),
     PlotBeatTemplate(
-        beat_name="reward",
-        beat_label="Reward (Seizing the Sword)",
-        description="The hero survives the ordeal and gains the reward: knowledge, treasure, reconciliation.",
+        beat_name="victory",
+        beat_label="Victory and Gain",
+        description="Having survived the ordeal, your protagonist claims their reward. This might be knowledge, an object of power, reconciliation, or deeper understanding.",
         position_percent=0.60,
         order_index=8,
-        tips="Show what the hero has won. This sets up the final confrontation."
+        tips="Show what your protagonist has earned through their survival, establishing assets they'll need for the final confrontation."
     ),
     PlotBeatTemplate(
         beat_name="road-back",
         beat_label="The Road Back",
-        description="The hero must return to the ordinary world. New obstacles arise. The chase begins.",
+        description="Your protagonist must journey back toward their original world, but new complications arise. The consequences of their actions create fresh obstacles or pursuit.",
         position_percent=0.70,
         order_index=9,
-        tips="The adventure isn't over. Complications arise. Pursuit or urgency increases."
+        tips="Introduce urgency or pursuit—the quest isn't finished, and getting home presents its own challenges."
     ),
     PlotBeatTemplate(
         beat_name="resurrection",
         beat_label="Resurrection",
-        description="The final test. The hero is purified through a last sacrifice or ordeal. Climax.",
+        description="Your protagonist faces one final, purifying test. This ultimate challenge serves as the climax, requiring them to demonstrate complete transformation.",
         position_percent=0.90,
         order_index=10,
-        tips="This is the climactic final battle. The hero is transformed by the experience."
+        tips="Make this the most demanding trial yet, where your protagonist must prove they've truly changed through their journey."
     ),
     PlotBeatTemplate(
-        beat_name="return-with-elixir",
-        beat_label="Return with the Elixir",
-        description="The hero returns to the ordinary world with knowledge, treasure, or wisdom to share.",
+        beat_name="triumphant-return",
+        beat_label="Triumphant Return",
+        description="Your protagonist returns to the ordinary world bearing gifts—wisdom, treasures, or abilities that benefit others. They share what they've gained from their transformative journey.",
         position_percent=0.98,
         order_index=11,
-        tips="Show how the hero and their world have changed. The journey was worthwhile."
+        tips="Show both personal transformation and how your protagonist's journey creates value for their community or world."
     ),
 ]
 
@@ -357,98 +360,98 @@ THREE_ACT_STRUCTURE = [
     PlotBeatTemplate(
         beat_name="setup",
         beat_label="Setup",
-        description="Introduce characters, setting, and the normal world. Establish what the story is about.",
+        description="Introduce your cast, environment, and the protagonist's current situation. Establish the foundation readers need to understand your story's stakes and possibilities.",
         position_percent=0.00,
         order_index=0,
-        tips="Hook the reader. Make them care about the characters and world."
+        tips="Hook readers immediately while providing essential context about who your characters are and what world they inhabit."
     ),
     PlotBeatTemplate(
         beat_name="inciting-incident",
         beat_label="Inciting Incident",
-        description="The event that disrupts the status quo and kicks off the main plot.",
+        description="An event shatters the established status quo and initiates your main plot. This occurrence sets your story's conflict in motion.",
         position_percent=0.10,
         order_index=1,
-        tips="Something happens that changes everything. The story truly begins here."
+        tips="Create a disruption significant enough to launch your entire narrative—the real story begins at this moment."
     ),
     PlotBeatTemplate(
         beat_name="plot-point-one",
         beat_label="Plot Point One",
-        description="The protagonist commits to the journey. End of Act One. They cross into a new situation.",
+        description="Your protagonist commits to addressing the story's central challenge. This decision or event propels them into new circumstances and marks the first act's conclusion.",
         position_percent=0.25,
         order_index=2,
-        tips="This is a major decision or event. No going back to the old normal."
+        tips="Make this a significant threshold—returning to the previous normal becomes impossible from this point forward."
     ),
     PlotBeatTemplate(
         beat_name="rising-action",
         beat_label="Rising Action",
-        description="The protagonist faces escalating obstacles and challenges. Learning and adapting.",
+        description="Your protagonist faces increasingly difficult obstacles as they pursue their goal. Each challenge forces them to learn, adapt, and grow stronger.",
         position_percent=0.35,
         order_index=3,
-        tips="Build tension progressively. Each obstacle should be harder than the last."
+        tips="Escalate difficulty progressively—ensure each new obstacle presents greater challenges than what came before."
     ),
     PlotBeatTemplate(
         beat_name="midpoint",
         beat_label="Midpoint",
-        description="A major revelation or reversal. The story takes a new direction. Stakes increase.",
+        description="A major revelation or reversal shifts your story's trajectory. The stakes intensify and new information changes how your protagonist approaches their quest.",
         position_percent=0.50,
         order_index=4,
-        tips="This changes the game. New information or a major event shifts the trajectory."
+        tips="Create a pivot point that transforms the story's direction and raises urgency for everything that follows."
     ),
     PlotBeatTemplate(
         beat_name="complications",
         beat_label="Complications",
-        description="Things get harder. The antagonist fights back. Pressure builds on the protagonist.",
+        description="Opposition strengthens as antagonistic forces counterattack. Mounting pressure makes your protagonist's success appear increasingly unlikely.",
         position_percent=0.60,
         order_index=5,
-        tips="Turn the screws. Make success seem increasingly impossible."
+        tips="Intensify conflict by showing how opposition adapts and grows more formidable in response to your protagonist's actions."
     ),
     PlotBeatTemplate(
         beat_name="plot-point-two",
         beat_label="Plot Point Two",
-        description="The low point. All seems lost. End of Act Two. The darkest moment before the dawn.",
+        description="Your protagonist hits rock bottom in their darkest hour. This devastating low point concludes the second act and forces them to find reserves they didn't know existed.",
         position_percent=0.75,
         order_index=6,
-        tips="This is rock bottom. The protagonist must dig deep to find the will to continue."
+        tips="Strip away everything that gave your protagonist confidence or advantage, creating genuine doubt about possible success."
     ),
     PlotBeatTemplate(
         beat_name="climax",
         beat_label="Climax",
-        description="The final confrontation. The protagonist faces the antagonist with everything they've learned.",
+        description="The ultimate confrontation arrives. Your protagonist applies everything they've learned to face the central conflict in this decisive showdown.",
         position_percent=0.90,
         order_index=7,
-        tips="This is the payoff. Maximum tension. Everything the story has built toward."
+        tips="Deliver the culminating moment your entire story has built toward, with maximum stakes and tension."
     ),
     PlotBeatTemplate(
         beat_name="resolution",
         beat_label="Resolution",
-        description="The aftermath. Show the new normal. Tie up loose ends. Demonstrate growth.",
+        description="Show the consequences of your climax and how your protagonist's world has changed. Resolve remaining plot threads while demonstrating lasting transformation.",
         position_percent=0.98,
         order_index=8,
-        tips="Give readers closure. Show how the journey changed the protagonist and their world."
+        tips="Provide closure that satisfies readers while clearly showing how your protagonist and their world have evolved through the journey."
     ),
 ]
 
 
 # Structure registry
 STORY_STRUCTURES = {
-    "km-weiland": {
-        "name": "KM Weiland's Structure",
-        "description": "9-beat structure based on KM Weiland's 'Structuring Your Novel'. Focuses on key turning points at specific percentages.",
-        "beats": KM_WEILAND_STRUCTURE,
+    "story-arc-9": {
+        "name": "9-Beat Story Arc",
+        "description": "A flexible nine-beat structure focusing on key turning points at specific story percentages. Works well for character-driven narratives and literary fiction.",
+        "beats": STORY_ARC_9_STRUCTURE,
         "recommended_for": ["all genres", "literary fiction", "character-driven"],
         "word_count_range": (50000, 120000),
     },
-    "save-the-cat": {
-        "name": "Save the Cat",
-        "description": "Blake Snyder's 15-beat structure. Originally for screenwriting but works brilliantly for novels.",
-        "beats": SAVE_THE_CAT_STRUCTURE,
+    "screenplay-15": {
+        "name": "15-Beat Screenplay Structure",
+        "description": "A comprehensive fifteen-beat structure emphasizing thematic development and emotional beats. Originally developed for screenwriting but highly effective for novels.",
+        "beats": SCREENPLAY_15_STRUCTURE,
         "recommended_for": ["thriller", "action", "romance", "commercial fiction"],
         "word_count_range": (60000, 100000),
     },
-    "heros-journey": {
-        "name": "The Hero's Journey",
-        "description": "Joseph Campbell's monomyth structure. 12 stages of the archetypal hero's adventure.",
-        "beats": HEROS_JOURNEY_STRUCTURE,
+    "mythic-quest": {
+        "name": "Mythic Quest Structure",
+        "description": "A twelve-stage structure based on archetypal quest narratives. Ideal for adventure stories featuring transformation and discovery.",
+        "beats": MYTHIC_QUEST_STRUCTURE,
         "recommended_for": ["fantasy", "sci-fi", "adventure", "epic"],
         "word_count_range": (80000, 150000),
     },
@@ -461,17 +464,49 @@ STORY_STRUCTURES = {
     },
 }
 
+# Legacy structure ID mapping for backward compatibility
+LEGACY_STRUCTURE_IDS = {
+    "km-weiland": "story-arc-9",
+    "save-the-cat": "screenplay-15",
+    "heros-journey": "mythic-quest",
+}
+
 
 def get_structure_template(structure_type: str) -> Dict[str, Any]:
-    """Get a story structure template by type"""
-    if structure_type not in STORY_STRUCTURES:
-        raise ValueError(f"Unknown structure type: {structure_type}. Available: {list(STORY_STRUCTURES.keys())}")
+    """Get a story structure template by type
 
-    return STORY_STRUCTURES[structure_type]
+    Args:
+        structure_type: The structure ID (supports both current and legacy IDs)
+
+    Returns:
+        Dictionary containing structure metadata and beat templates
+
+    Raises:
+        ValueError: If structure_type is not recognized
+    """
+    # Map legacy IDs to current IDs for backward compatibility
+    actual_type = LEGACY_STRUCTURE_IDS.get(structure_type, structure_type)
+
+    if structure_type in LEGACY_STRUCTURE_IDS:
+        logger.warning(
+            f"Legacy structure ID '{structure_type}' used. "
+            f"Please update to use '{actual_type}' instead. "
+            f"Legacy IDs will be supported for backward compatibility."
+        )
+
+    if actual_type not in STORY_STRUCTURES:
+        available = list(STORY_STRUCTURES.keys()) + list(LEGACY_STRUCTURE_IDS.keys())
+        raise ValueError(f"Unknown structure type: {structure_type}. Available: {available}")
+
+    return STORY_STRUCTURES[actual_type]
 
 
 def get_available_structures() -> List[Dict[str, Any]]:
-    """Get list of all available structure templates"""
+    """Get list of all available structure templates (current IDs only)
+
+    Returns:
+        List of dictionaries containing structure metadata
+    """
     return [
         {
             "id": structure_id,
@@ -490,7 +525,7 @@ def create_plot_beats_from_template(structure_type: str, target_word_count: int 
     Create plot beats from a template with calculated word counts
 
     Args:
-        structure_type: The structure template to use
+        structure_type: The structure template to use (supports legacy IDs)
         target_word_count: Target word count for the manuscript
 
     Returns:
