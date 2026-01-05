@@ -24,6 +24,24 @@ import type {
   AnalyzeTimelineRequest,
 } from '@/types/timeline';
 
+import type {
+  Outline,
+  PlotBeat,
+  OutlineProgress,
+  PlotBeatUpdate,
+  OutlineUpdate,
+} from '@/types/outline';
+
+import type {
+  BrainstormSession,
+  BrainstormIdea,
+  BrainstormSessionStats,
+  CreateSessionRequest,
+  CharacterGenerationRequest,
+  UpdateIdeaRequest,
+  IntegrateCodexRequest,
+} from '@/types/brainstorm';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 /**
@@ -667,6 +685,85 @@ export const chaptersApi = {
 };
 
 /**
+ * Outline API (Story Structure & Plot Beats)
+ */
+export const outlineApi = {
+  /**
+   * Get the active outline for a manuscript
+   */
+  async getActiveOutline(manuscriptId: string): Promise<Outline> {
+    return apiFetch<Outline>(`/outlines/manuscript/${manuscriptId}/active`);
+  },
+
+  /**
+   * Get outline by ID
+   */
+  async getOutline(outlineId: string): Promise<Outline> {
+    return apiFetch<Outline>(`/outlines/${outlineId}`);
+  },
+
+  /**
+   * Get all outlines for a manuscript
+   */
+  async listOutlines(manuscriptId: string): Promise<Outline[]> {
+    return apiFetch<Outline[]>(`/outlines/manuscript/${manuscriptId}`);
+  },
+
+  /**
+   * Update an outline
+   */
+  async updateOutline(outlineId: string, data: OutlineUpdate): Promise<Outline> {
+    return apiFetch<Outline>(`/outlines/${outlineId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Update a plot beat
+   */
+  async updateBeat(beatId: string, data: PlotBeatUpdate): Promise<PlotBeat> {
+    return apiFetch<PlotBeat>(`/outlines/beats/${beatId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Get outline progress/completion stats
+   */
+  async getProgress(outlineId: string): Promise<OutlineProgress> {
+    return apiFetch<OutlineProgress>(`/outlines/${outlineId}/progress`);
+  },
+
+  /**
+   * Create a new plot beat
+   */
+  async createBeat(outlineId: string, data: {
+    beat_name: string;
+    beat_label: string;
+    beat_description?: string;
+    target_position_percent: number;
+    order_index: number;
+    user_notes?: string;
+  }): Promise<PlotBeat> {
+    return apiFetch<PlotBeat>(`/outlines/${outlineId}/beats`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Delete a plot beat
+   */
+  async deleteBeat(beatId: string): Promise<{ success: boolean; message: string }> {
+    return apiFetch(`/outlines/beats/${beatId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+/**
  * Recap types
  */
 export interface ChapterRecap {
@@ -848,6 +945,182 @@ export const analyticsApi = {
 };
 
 /**
+ * Brainstorming API
+ */
+export const brainstormingApi = {
+  /**
+   * Create a new brainstorming session
+   */
+  async createSession(request: CreateSessionRequest): Promise<BrainstormSession> {
+    const response = await fetch(`${API_BASE_URL}/brainstorming/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create brainstorming session');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get session details
+   */
+  async getSession(sessionId: string): Promise<BrainstormSession> {
+    const response = await fetch(`${API_BASE_URL}/brainstorming/sessions/${sessionId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get session');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * List all sessions for a manuscript
+   */
+  async listManuscriptSessions(manuscriptId: string): Promise<BrainstormSession[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/brainstorming/manuscripts/${manuscriptId}/sessions`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to list sessions');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Update session status
+   */
+  async updateSessionStatus(sessionId: string, status: string): Promise<void> {
+    const response = await fetch(
+      `${API_BASE_URL}/brainstorming/sessions/${sessionId}/status?status=${status}`,
+      {
+        method: 'PATCH',
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update session status');
+    }
+  },
+
+  /**
+   * Generate character ideas using AI
+   */
+  async generateCharacters(
+    sessionId: string,
+    request: CharacterGenerationRequest
+  ): Promise<BrainstormIdea[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/brainstorming/sessions/${sessionId}/generate/characters`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate characters');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * List all ideas for a session
+   */
+  async listSessionIdeas(sessionId: string): Promise<BrainstormIdea[]> {
+    const response = await fetch(`${API_BASE_URL}/brainstorming/sessions/${sessionId}/ideas`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to list ideas');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Update an idea
+   */
+  async updateIdea(ideaId: string, updates: UpdateIdeaRequest): Promise<BrainstormIdea> {
+    const response = await fetch(`${API_BASE_URL}/brainstorming/ideas/${ideaId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update idea');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Delete an idea
+   */
+  async deleteIdea(ideaId: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/brainstorming/ideas/${ideaId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to delete idea');
+    }
+  },
+
+  /**
+   * Integrate idea to Codex as entity
+   */
+  async integrateToCodex(
+    ideaId: string,
+    request?: IntegrateCodexRequest
+  ): Promise<{ success: boolean; idea_id: string; entity: any }> {
+    const response = await fetch(`${API_BASE_URL}/brainstorming/ideas/${ideaId}/integrate/codex`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request || {}),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to integrate to Codex');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get session statistics
+   */
+  async getSessionStats(sessionId: string): Promise<BrainstormSessionStats> {
+    const response = await fetch(`${API_BASE_URL}/brainstorming/sessions/${sessionId}/stats`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get session stats');
+    }
+
+    const data = await response.json();
+    return data.data;
+  },
+};
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
@@ -861,7 +1134,9 @@ export default {
   codex: codexApi,
   timeline: timelineApi,
   chapters: chaptersApi,
+  outline: outlineApi,
   recap: recapApi,
   analytics: analyticsApi,
+  brainstorming: brainstormingApi,
   healthCheck,
 };
