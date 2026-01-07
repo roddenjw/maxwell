@@ -226,7 +226,7 @@ async def delete_chapter_recap(
     if recap:
         db.delete(recap)
         db.commit()
-        return {"message": "Recap deleted successfully"}
+        return {"success": True, "data": {"message": "Recap deleted successfully"}}
 
     raise HTTPException(status_code=404, detail="No recap found for this chapter")
 
@@ -251,14 +251,17 @@ async def get_manuscript_recaps(
     ).order_by(Recap.created_at.desc()).all()
 
     return {
-        "recaps": [
-            {
-                "recap_id": r.id,
-                "recap_type": r.recap_type,
-                "chapter_id": r.chapter_id,
-                "created_at": r.created_at.isoformat(),
-                "content": r.content
-            }
-            for r in recaps
-        ]
+        "success": True,
+        "data": {
+            "recaps": [
+                {
+                    "recap_id": r.id,
+                    "recap_type": r.recap_type,
+                    "chapter_id": r.chapter_id,
+                    "created_at": r.created_at.isoformat(),
+                    "content": r.content
+                }
+                for r in recaps
+            ]
+        }
     }
