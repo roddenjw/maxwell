@@ -125,7 +125,7 @@ class OutlineListResponse(BaseModel):
 
 # CRUD Endpoints
 
-@router.post("", response_model=OutlineResponse)
+@router.post("")
 async def create_outline(
     outline: OutlineCreate,
     db: Session = Depends(get_db)
@@ -154,7 +154,7 @@ async def create_outline(
     db.commit()
     db.refresh(new_outline)
 
-    return new_outline
+    return {"success": True, "data": new_outline}
 
 
 # Story Structure Template Endpoints (MUST be before /{outline_id} to avoid route conflicts)
@@ -495,7 +495,7 @@ async def create_outline_from_template(
 
 # Regular CRUD Endpoints (generic routes like /{outline_id} go after specific routes)
 
-@router.get("/{outline_id}", response_model=OutlineResponse)
+@router.get("/{outline_id}")
 async def get_outline(
     outline_id: str,
     db: Session = Depends(get_db)
@@ -505,10 +505,10 @@ async def get_outline(
     if not outline:
         raise HTTPException(status_code=404, detail="Outline not found")
 
-    return outline
+    return {"success": True, "data": outline}
 
 
-@router.get("/manuscript/{manuscript_id}", response_model=List[OutlineListResponse])
+@router.get("/manuscript/{manuscript_id}")
 async def get_manuscript_outlines(
     manuscript_id: str,
     db: Session = Depends(get_db)
@@ -518,10 +518,10 @@ async def get_manuscript_outlines(
         Outline.manuscript_id == manuscript_id
     ).order_by(Outline.created_at.desc()).all()
 
-    return outlines
+    return {"success": True, "data": outlines}
 
 
-@router.get("/manuscript/{manuscript_id}/active", response_model=OutlineResponse)
+@router.get("/manuscript/{manuscript_id}/active")
 async def get_active_outline(
     manuscript_id: str,
     db: Session = Depends(get_db)
@@ -535,10 +535,10 @@ async def get_active_outline(
     if not outline:
         raise HTTPException(status_code=404, detail="No active outline found for manuscript")
 
-    return outline
+    return {"success": True, "data": outline}
 
 
-@router.put("/{outline_id}", response_model=OutlineResponse)
+@router.put("/{outline_id}")
 async def update_outline(
     outline_id: str,
     outline_update: OutlineUpdate,
@@ -559,7 +559,7 @@ async def update_outline(
     db.commit()
     db.refresh(outline)
 
-    return outline
+    return {"success": True, "data": outline}
 
 
 @router.delete("/{outline_id}")
@@ -580,7 +580,7 @@ async def delete_outline(
 
 # Plot Beat Endpoints
 
-@router.post("/{outline_id}/beats", response_model=PlotBeatResponse)
+@router.post("/{outline_id}/beats")
 async def create_plot_beat(
     outline_id: str,
     beat: PlotBeatCreate,
@@ -605,10 +605,10 @@ async def create_plot_beat(
     db.commit()
     db.refresh(new_beat)
 
-    return new_beat
+    return {"success": True, "data": new_beat}
 
 
-@router.put("/beats/{beat_id}", response_model=PlotBeatResponse)
+@router.put("/beats/{beat_id}")
 async def update_plot_beat(
     beat_id: str,
     beat_update: PlotBeatUpdate,
@@ -633,7 +633,7 @@ async def update_plot_beat(
     db.commit()
     db.refresh(beat)
 
-    return beat
+    return {"success": True, "data": beat}
 
 
 @router.delete("/beats/{beat_id}")
@@ -667,10 +667,13 @@ async def get_outline_progress(
     completed_beats = sum(1 for beat in beats if beat.is_completed)
 
     return {
-        "outline_id": outline_id,
-        "total_beats": total_beats,
-        "completed_beats": completed_beats,
-        "completion_percentage": (completed_beats / total_beats * 100) if total_beats > 0 else 0,
-        "target_word_count": outline.target_word_count,
-        "actual_word_count": sum(beat.actual_word_count for beat in beats),
+        "success": True,
+        "data": {
+            "outline_id": outline_id,
+            "total_beats": total_beats,
+            "completed_beats": completed_beats,
+            "completion_percentage": (completed_beats / total_beats * 100) if total_beats > 0 else 0,
+            "target_word_count": outline.target_word_count,
+            "actual_word_count": sum(beat.actual_word_count for beat in beats),
+        }
     }
