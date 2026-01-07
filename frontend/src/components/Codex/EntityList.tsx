@@ -3,14 +3,17 @@
  */
 
 import { useState, useEffect } from 'react';
+
 import type { Entity } from '@/types/codex';
-import { EntityType } from '@/types/codex';
-import { codexApi } from '@/lib/api';
-import { useCodexStore } from '@/stores/codexStore';
-import { useBrainstormStore } from '@/stores/brainstormStore';
+
 import EntityCard from './EntityCard';
 import EntityDetail from './EntityDetail';
 import MergeEntitiesModal from './MergeEntitiesModal';
+
+import { codexApi } from '@/lib/api';
+import { useCodexStore } from '@/stores/codexStore';
+import { useBrainstormStore } from '@/stores/brainstormStore';
+import { EntityType } from '@/types/codex';
 
 interface EntityListProps {
   manuscriptId: string;

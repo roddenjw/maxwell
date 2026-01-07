@@ -4,9 +4,11 @@
  */
 
 import { useState } from 'react';
-import { useBrainstormStore } from '@/stores/brainstormStore';
-import { brainstormingApi } from '@/lib/api';
+
 import type { CharacterGenerationRequest } from '@/types/brainstorm';
+
+import { brainstormingApi } from '@/lib/api';
+import { useBrainstormStore } from '@/stores/brainstormStore';
 
 export default function CharacterBrainstorm() {
   const {
