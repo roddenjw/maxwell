@@ -539,6 +539,6 @@ Sudowrite refugees, cost-conscious authors, AI-curious writers
 **Related Documentation:**
 - Current progress and metrics: [PROGRESS.md](./PROGRESS.md)
 - Architecture and development standards: [CLAUDE.md](./CLAUDE.md)
-- Feature documentation: [FEATURES.md](./FEATURES.md)
+- Feature documentation: [FEATURES.md](./FEATURESS.md)
 - Growth strategy: [PLG_STRATEGY.md](./PLG_STRATEGY.md)
 - Architectural decisions: [docs/ARCHITECTURE_DECISIONS.md](./docs/ARCHITECTURE_DECISIONS.md)

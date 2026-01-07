@@ -561,7 +561,7 @@ frontend/src/components/Codex/
 - **Services:** 70%+ coverage (critical business logic)
 - **Routes:** 50%+ coverage (API contracts)
 - **Utilities:** 80%+ coverage (shared functions)
-- **Overall project:** 60%+ target
+- **Overall project:** 80%+ target
 
 #### Test Structure
 
