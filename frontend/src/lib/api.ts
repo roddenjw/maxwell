@@ -1245,7 +1245,8 @@ export const brainstormingApi = {
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
   const response = await fetch(`${API_BASE_URL.replace('/api', '')}/health`);
-  return response.json();
+  const result = await response.json();
+  return result.data;
 }
 
 export default {
