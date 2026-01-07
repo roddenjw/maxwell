@@ -218,11 +218,14 @@ async def test_api_key(api_key: str) -> Dict[str, Any]:
     try:
         openrouter = OpenRouterService(api_key)
         result = await openrouter.validate_api_key()
-        return result
+        return {"success": True, "data": result}
     except Exception as e:
         return {
-            "valid": False,
-            "error": str(e)
+            "success": False,
+            "error": {
+                "message": str(e),
+                "valid": False
+            }
         }
 
 
@@ -230,8 +233,11 @@ async def test_api_key(api_key: str) -> Dict[str, Any]:
 async def health_check():
     """Health check endpoint"""
     return {
-        "status": "ok",
-        "service": "fast-coach",
-        "analyzers": ["style", "word", "dialogue", "consistency"],
-        "ai_enabled": True
+        "success": True,
+        "data": {
+            "status": "ok",
+            "service": "fast-coach",
+            "analyzers": ["style", "word", "dialogue", "consistency"],
+            "ai_enabled": True
+        }
     }
