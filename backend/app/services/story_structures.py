@@ -3,8 +3,8 @@ Story Structure Templates
 Defines beat templates for various narrative structures
 """
 
-from typing import List, Dict, Any
 import logging
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 

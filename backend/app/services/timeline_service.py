@@ -8,21 +8,22 @@ Manages:
 - Timeline inconsistency detection
 """
 
-from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
-from sqlalchemy.orm import Session
+from typing import List, Optional, Dict, Any, Tuple
+
 from sqlalchemy import and_, or_
+from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
+from app.models.entity import Entity
 from app.models.timeline import (
+    CharacterLocation,
+    LocationDistance,
     TimelineEvent,
     TimelineInconsistency,
-    CharacterLocation,
     TravelLeg,
     TravelSpeedProfile,
-    LocationDistance
 )
-from app.models.entity import Entity
 
 
 class TimelineService:

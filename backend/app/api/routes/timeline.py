@@ -3,14 +3,15 @@ Timeline API Routes
 Endpoints for timeline event management, analysis, and inconsistency detection
 """
 
+from datetime import datetime
+from typing import List, Optional, Dict, Any
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-from datetime import datetime
 
-from app.services.timeline_service import timeline_service
-from app.services.nlp_service import nlp_service
 from app.services.codex_service import codex_service
+from app.services.nlp_service import nlp_service
+from app.services.timeline_service import timeline_service
 
 router = APIRouter(prefix="/api/timeline", tags=["timeline"])
 

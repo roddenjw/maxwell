@@ -3,12 +3,13 @@ Codex service for entity and relationship management
 Handles CRUD operations for characters, locations, items, and lore
 """
 
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import List, Dict, Any, Optional
+
 from sqlalchemy import and_
 
-from app.models.entity import Entity, Relationship, EntitySuggestion
 from app.database import SessionLocal
+from app.models.entity import Entity, Relationship, EntitySuggestion
 
 
 class CodexService:

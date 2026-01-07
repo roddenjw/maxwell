@@ -3,25 +3,26 @@ Outline CRUD API Routes
 Handles story structure outlines and plot beats
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import uuid
-import httpx
 import logging
+import uuid
+from datetime import datetime
+from typing import List, Optional, Dict, Any
 
-logger = logging.getLogger(__name__)
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.outline import Outline, PlotBeat
+from app.services.openrouter_service import OpenRouterService
 from app.services.story_structures import (
+    create_plot_beats_from_template,
     get_available_structures,
     get_structure_template,
-    create_plot_beats_from_template
 )
-from app.services.openrouter_service import OpenRouterService
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/outlines", tags=["outlines"])

@@ -3,13 +3,14 @@ Chapter CRUD API Routes
 Handles hierarchical chapter/folder structure (Scrivener-like navigation)
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
-import uuid
 import json
+import uuid
+from datetime import datetime
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.manuscript import Chapter
