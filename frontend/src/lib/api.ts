@@ -927,7 +927,8 @@ export const recapApi = {
       throw new Error(error.detail || 'Failed to generate recap');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 
   /**
@@ -944,7 +945,8 @@ export const recapApi = {
       throw new Error(error.detail || 'Failed to get recap');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 
   /**
@@ -967,7 +969,8 @@ export const recapApi = {
       throw new Error(error.detail || 'Failed to generate arc recap');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 
   /**
@@ -983,7 +986,8 @@ export const recapApi = {
       throw new Error(error.detail || 'Failed to delete recap');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 
   /**
@@ -997,7 +1001,8 @@ export const recapApi = {
       throw new Error(error.detail || 'Failed to get recaps');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 };
 
