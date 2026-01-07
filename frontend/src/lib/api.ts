@@ -702,7 +702,8 @@ export const outlineApi = {
       throw new Error(error.detail || 'Failed to get outline');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 
   /**
@@ -716,7 +717,8 @@ export const outlineApi = {
       throw new Error(error.detail || 'Failed to get outline');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 
   /**
@@ -730,7 +732,8 @@ export const outlineApi = {
       throw new Error(error.detail || 'Failed to list outlines');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 
   /**
@@ -748,7 +751,8 @@ export const outlineApi = {
       throw new Error(error.detail || 'Failed to update outline');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 
   /**
@@ -766,7 +770,8 @@ export const outlineApi = {
       throw new Error(error.detail || 'Failed to update beat');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 
   /**
@@ -780,7 +785,8 @@ export const outlineApi = {
       throw new Error(error.detail || 'Failed to get progress');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 
   /**
@@ -805,7 +811,8 @@ export const outlineApi = {
       throw new Error(error.detail || 'Failed to create beat');
     }
 
-    return response.json();
+    const result = await response.json();
+    return result.data;
   },
 
   /**
