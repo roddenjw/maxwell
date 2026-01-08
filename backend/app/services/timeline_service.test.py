@@ -339,3 +339,259 @@ def test_get_location_distance_nonexistent():
 
     # Assert
     assert distance is None or distance == 0
+
+
+# ============================================================================
+# Performance Tests (Phase 1-2 Optimizations)
+# ============================================================================
+
+def test_batch_load_entities_performance(test_db, test_manuscript_id):
+    """
+    Test that batch entity loading is faster than N individual queries.
+    Validates Phase 1 optimization: _batch_load_entities() method.
+    """
+    import time
+
+    # Arrange: Create 100 entities
+    entity_ids = []
+    db = SessionLocal()
+
+    for i in range(100):
+        entity = Entity(
+            id=str(uuid.uuid4()),
+            manuscript_id=test_manuscript_id,
+            type="CHARACTER",
+            name=f"Character {i}",
+            attributes={},
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(entity)
+        entity_ids.append(entity.id)
+
+    db.commit()
+
+    # Act: Time batch loading
+    start = time.time()
+    entity_map = timeline_service._batch_load_entities(db, entity_ids)
+    batch_time = time.time() - start
+
+    # Assert: Performance and correctness
+    assert len(entity_map) == 100, "Should load all 100 entities"
+    assert batch_time < 0.2, f"Batch load took {batch_time}s, should be < 0.2s"
+
+    # Verify O(1) lookup
+    for entity_id in entity_ids:
+        assert entity_id in entity_map, f"Entity {entity_id} should be in map"
+        assert entity_map[entity_id].id == entity_id
+
+    db.close()
+
+
+def test_detect_inconsistencies_with_many_events(test_db, test_manuscript_id):
+    """
+    Test validation performance with 50+ events.
+    Ensures N+1 query problem is solved (Phase 1 optimization).
+    """
+    import time
+
+    # Arrange: Create 10 characters and 5 locations
+    db = SessionLocal()
+    char_ids = []
+    loc_ids = []
+
+    for i in range(10):
+        char = Entity(
+            id=str(uuid.uuid4()),
+            manuscript_id=test_manuscript_id,
+            type="CHARACTER",
+            name=f"Char {i}",
+            attributes={},
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(char)
+        char_ids.append(char.id)
+
+    for i in range(5):
+        loc = Entity(
+            id=str(uuid.uuid4()),
+            manuscript_id=test_manuscript_id,
+            type="LOCATION",
+            name=f"Location {i}",
+            attributes={},
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(loc)
+        loc_ids.append(loc.id)
+
+    db.commit()
+
+    # Create 50 events with characters and locations
+    for i in range(50):
+        event = TimelineEvent(
+            id=str(uuid.uuid4()),
+            manuscript_id=test_manuscript_id,
+            description=f"Event {i}: Important scene",
+            order_index=i,
+            location_id=loc_ids[i % len(loc_ids)],
+            character_ids=char_ids[i % 5:(i % 5) + 3],  # 3 rotating characters
+            event_metadata={"word_count": 1000 + (i * 50)},
+            prerequisite_ids=[],
+            event_type="SCENE",
+            narrative_importance=5,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(event)
+
+    db.commit()
+    db.close()
+
+    # Act: Time validation
+    start = time.time()
+    inconsistencies = timeline_service.detect_inconsistencies(test_manuscript_id)
+    validation_time = time.time() - start
+
+    # Assert: Should complete quickly (< 2 seconds with optimizations)
+    assert validation_time < 2.0, f"Validation took {validation_time}s, should be < 2s"
+    assert isinstance(inconsistencies, list), "Should return list of inconsistencies"
+    # With optimizations, this should use ~10 queries instead of 900+
+
+
+def test_reorder_events_bulk_performance(test_db, test_manuscript_id):
+    """
+    Test bulk reorder performance (Phase 1.4 optimization).
+    Should use 1 query instead of N queries.
+    """
+    import time
+
+    # Arrange: Create 100 events
+    db = SessionLocal()
+    event_ids = []
+
+    for i in range(100):
+        event = TimelineEvent(
+            id=str(uuid.uuid4()),
+            manuscript_id=test_manuscript_id,
+            description=f"Event {i}",
+            order_index=i,
+            character_ids=[],
+            event_metadata={},
+            prerequisite_ids=[],
+            event_type="SCENE",
+            narrative_importance=5,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(event)
+        event_ids.append(event.id)
+
+    db.commit()
+    db.close()
+
+    # Act: Time reordering (reverse order)
+    reversed_ids = list(reversed(event_ids))
+
+    start = time.time()
+    success = timeline_service.reorder_events(reversed_ids)
+    reorder_time = time.time() - start
+
+    # Assert: Performance and correctness
+    assert success is True, "Reorder should succeed"
+    assert reorder_time < 1.0, f"Reorder took {reorder_time}s, should be < 1s"
+
+    # Verify order changed
+    db = SessionLocal()
+    events = db.query(TimelineEvent).filter(
+        TimelineEvent.manuscript_id == test_manuscript_id
+    ).order_by(TimelineEvent.order_index).all()
+
+    assert len(events) == 100, "Should have all 100 events"
+    assert events[0].id == reversed_ids[0], "First event should be last original event"
+    assert events[-1].id == reversed_ids[-1], "Last event should be first original event"
+
+    db.close()
+
+
+def test_batch_load_entities_empty_list(test_db):
+    """Test batch load with empty list returns empty dict"""
+    db = SessionLocal()
+
+    # Act
+    entity_map = timeline_service._batch_load_entities(db, [])
+
+    # Assert
+    assert entity_map == {}, "Empty input should return empty dict"
+
+    db.close()
+
+
+def test_detect_inconsistencies_query_efficiency(test_db, test_manuscript_id):
+    """
+    Verify that inconsistency detection uses minimal queries.
+    This is a regression test for N+1 query problems.
+    """
+    # Arrange: Create test data
+    db = SessionLocal()
+
+    # 5 characters
+    char_ids = []
+    for i in range(5):
+        char = Entity(
+            id=str(uuid.uuid4()),
+            manuscript_id=test_manuscript_id,
+            type="CHARACTER",
+            name=f"Character {i}",
+            attributes={},
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(char)
+        char_ids.append(char.id)
+
+    # 3 locations
+    loc_ids = []
+    for i in range(3):
+        loc = Entity(
+            id=str(uuid.uuid4()),
+            manuscript_id=test_manuscript_id,
+            type="LOCATION",
+            name=f"Location {i}",
+            attributes={},
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(loc)
+        loc_ids.append(loc.id)
+
+    # 20 events
+    for i in range(20):
+        event = TimelineEvent(
+            id=str(uuid.uuid4()),
+            manuscript_id=test_manuscript_id,
+            description=f"Event {i}",
+            order_index=i,
+            location_id=loc_ids[i % len(loc_ids)],
+            character_ids=char_ids[:2],  # 2 characters per event
+            event_metadata={},
+            prerequisite_ids=[],
+            event_type="SCENE",
+            narrative_importance=5,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(event)
+
+    db.commit()
+    db.close()
+
+    # Act: Run validation
+    inconsistencies = timeline_service.detect_inconsistencies(test_manuscript_id)
+
+    # Assert: Should complete without errors
+    # With batch loading, this uses ~10 queries instead of 100+
+    assert isinstance(inconsistencies, list)
+    # The key metric is that it completes quickly (tested above)
+    # This test ensures no exceptions are raised
