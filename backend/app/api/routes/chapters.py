@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.manuscript import Chapter
+from app.services.manuscript_aggregation_service import manuscript_aggregation_service
 
 
 router = APIRouter(prefix="/api/chapters", tags=["chapters"])
@@ -191,6 +192,13 @@ async def create_chapter(
     db.commit()
     db.refresh(db_chapter)
 
+    # Update manuscript word count if this is a document (not folder)
+    if not chapter.is_folder:
+        manuscript_aggregation_service.update_manuscript_word_count(
+            db,
+            chapter.manuscript_id
+        )
+
     return {
         "success": True,
         "data": serialize_chapter(db_chapter)
@@ -287,6 +295,9 @@ async def update_chapter(
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
 
+    # Track if word count changed
+    original_word_count = chapter.word_count
+
     # Get dict of provided fields (excluding None values from fields not set)
     update_data = chapter_update.model_dump(exclude_unset=True)
 
@@ -317,8 +328,26 @@ async def update_chapter(
         chapter.word_count = update_data['word_count']
 
     chapter.updated_at = datetime.utcnow()
+
+    # Check if word count changed
+    word_count_changed = (chapter.word_count != original_word_count)
+
     db.commit()
     db.refresh(chapter)
+
+    # Update aggregations if word count changed
+    if word_count_changed and not chapter.is_folder:
+        # Update manuscript total
+        manuscript_aggregation_service.update_manuscript_word_count(
+            db,
+            chapter.manuscript_id
+        )
+
+        # Sync any plot beat linked to this chapter
+        manuscript_aggregation_service.sync_plot_beat_word_count(
+            db,
+            chapter.id
+        )
 
     return {
         "success": True,
@@ -336,6 +365,10 @@ async def delete_chapter(
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
 
+    # Store manuscript_id and folder status before deletion
+    manuscript_id = chapter.manuscript_id
+    was_folder = chapter.is_folder
+
     # If it's a folder, recursively delete children
     if chapter.is_folder:
         def delete_children(parent_id: str):
@@ -349,6 +382,13 @@ async def delete_chapter(
 
     db.delete(chapter)
     db.commit()
+
+    # Update manuscript word count if we deleted a document
+    if not was_folder:
+        manuscript_aggregation_service.update_manuscript_word_count(
+            db,
+            manuscript_id
+        )
 
     return {
         "success": True,

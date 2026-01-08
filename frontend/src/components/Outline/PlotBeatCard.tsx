@@ -18,10 +18,11 @@ interface PlotBeatCardProps {
   manuscriptId: string;
   onCreateChapter?: (beat: PlotBeat) => void;
   onOpenChapter?: (chapterId: string) => void;
+  onGetAIIdeas?: (beatId: string) => void;
 }
 
-export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOpenChapter }: PlotBeatCardProps) {
-  const { updateBeat, expandedBeatId, setExpandedBeat } = useOutlineStore();
+export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOpenChapter, onGetAIIdeas }: PlotBeatCardProps) {
+  const { updateBeat, expandedBeatId, setExpandedBeat, beatSuggestions } = useOutlineStore();
   const [isUpdating, setIsUpdating] = useState(false);
   const [notes, setNotes] = useState(beat.user_notes);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -29,18 +30,19 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
   const notesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isExpanded = expandedBeatId === beat.id;
+  const hasAISuggestions = beatSuggestions.has(beat.id);
 
   // Update local notes when beat changes
   useEffect(() => {
     setNotes(beat.user_notes);
   }, [beat.user_notes]);
 
-  // Fetch chapters when beat is expanded
+  // Fetch chapters when beat is expanded OR if beat has linked chapter (for collapsed preview)
   useEffect(() => {
-    if (isExpanded && chapters.length === 0) {
+    if ((isExpanded || beat.chapter_id) && chapters.length === 0) {
       fetchChapters();
     }
-  }, [isExpanded]);
+  }, [isExpanded, beat.chapter_id]);
 
   const fetchChapters = async () => {
     setLoadingChapters(true);
@@ -117,6 +119,24 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
     ? Math.min(100, (beat.actual_word_count / beat.target_word_count) * 100)
     : 0;
 
+  // Find linked chapter for collapsed state preview
+  const linkedChapter = beat.chapter_id
+    ? chapters.find(ch => ch.id === beat.chapter_id)
+    : null;
+
+  // Determine beat status
+  const getBeatStatus = (): { label: string; color: string } => {
+    if (beat.is_completed) {
+      return { label: 'Completed', color: 'bg-green-500 text-white' };
+    }
+    if (beat.user_notes || beat.chapter_id || beat.actual_word_count > 0) {
+      return { label: 'In Progress', color: 'bg-bronze text-white' };
+    }
+    return { label: 'Not Started', color: 'bg-slate-ui/50 text-faded-ink' };
+  };
+
+  const status = getBeatStatus();
+
   return (
     <div
       className={`bg-white border-2 transition-all ${
@@ -128,7 +148,7 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
     >
       {/* Header - Always Visible */}
       <div
-        className="p-4 cursor-pointer"
+        className="p-3 cursor-pointer"
         onClick={handleToggleExpand}
       >
         <div className="flex items-start gap-3">
@@ -161,22 +181,54 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
                 {Math.round(beat.target_position_percent * 100)}% through story
               </span>
             </div>
-            <h4 className={`font-serif font-bold text-lg mb-1 ${
-              beat.is_completed ? 'text-bronze' : 'text-midnight'
-            }`}>
-              {beat.beat_label}
-            </h4>
+
+            {/* Beat Title and Status */}
+            <div className="flex items-start gap-2 mb-2">
+              <h4 className={`flex-1 font-serif font-bold text-lg ${
+                beat.is_completed ? 'text-bronze' : 'text-midnight'
+              }`}>
+                {beat.beat_label}
+              </h4>
+
+              {/* Status Pill */}
+              <span
+                className={`flex-shrink-0 px-2 py-0.5 text-xs font-sans font-semibold uppercase tracking-wider ${status.color}`}
+                style={{ borderRadius: '2px' }}
+              >
+                {status.label}
+              </span>
+            </div>
+
+            {/* Notes preview (collapsed state only) */}
+            {!isExpanded && beat.user_notes && (
+              <p className="mt-1 mb-2 text-sm text-faded-ink italic line-clamp-2">
+                {beat.user_notes}
+              </p>
+            )}
+
+            {/* Linked chapter (collapsed state only) */}
+            {!isExpanded && beat.chapter_id && linkedChapter && (
+              <div className="mt-1 mb-2 flex items-center gap-1.5 text-sm text-bronze">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.102m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                <span className="font-sans font-medium">Linked: {linkedChapter.title}</span>
+              </div>
+            )}
 
             {/* Word Count Progress Bar */}
             <div className="flex items-center gap-2 text-xs font-sans text-faded-ink">
               <div className="flex-1 h-1.5 bg-slate-ui/30 overflow-hidden" style={{ borderRadius: '2px' }}>
                 <div
-                  className="h-full bg-bronze transition-all duration-300"
+                  className={`h-full transition-all duration-300 ${
+                    wordCountProgress >= 100 ? 'bg-green-500' : 'bg-bronze'
+                  }`}
                   style={{ width: `${wordCountProgress}%` }}
                 />
               </div>
-              <span>
+              <span className={wordCountProgress >= 100 ? 'text-green-600 font-semibold' : ''}>
                 {beat.actual_word_count.toLocaleString()} / {beat.target_word_count.toLocaleString()} words
+                {wordCountProgress >= 100 && ' ✓'}
               </span>
             </div>
           </div>
@@ -195,7 +247,7 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="px-4 pb-4 border-t border-slate-ui/30">
+        <div className="px-3 pb-3 border-t border-slate-ui/30">
           {/* Beat Description */}
           {beat.beat_description && (
             <div className="pt-4 mb-4">
@@ -217,7 +269,7 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
               value={notes}
               onChange={(e) => handleNotesChange(e.target.value)}
               placeholder="Add your ideas, character notes, or scene details..."
-              className="w-full px-3 py-2 border border-slate-ui focus:border-bronze focus:outline-none font-sans text-sm text-midnight placeholder:text-faded-ink/50 min-h-[100px] resize-y"
+              className="w-full px-3 py-2 border border-slate-ui focus:border-bronze focus:outline-none font-sans text-sm text-midnight placeholder:text-faded-ink/50 min-h-[60px] resize-y"
               style={{ borderRadius: '2px' }}
             />
           </div>
@@ -234,50 +286,69 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
             </div>
           )}
 
-          {/* Action Buttons */}
-          <div className="space-y-3">
-            {beat.chapter_id ? (
+          {/* Compact Action Buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {beat.chapter_id && linkedChapter ? (
               <button
                 onClick={() => onOpenChapter?.(beat.chapter_id!)}
-                className="w-full px-4 py-2 bg-bronze hover:bg-bronze-dark text-white font-sans text-sm font-medium uppercase tracking-button transition-colors"
+                className="px-3 py-1.5 text-sm bg-bronze/10 text-bronze border border-bronze/30 hover:bg-bronze/20 font-sans font-medium transition-colors flex items-center gap-1.5"
                 style={{ borderRadius: '2px' }}
+                title={`Open ${linkedChapter.title}`}
               >
-                Open Linked Chapter
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="truncate max-w-[200px]">{linkedChapter.title}</span>
               </button>
             ) : (
               <>
-                {/* Link Existing Chapter */}
+                {/* Link Existing Chapter Dropdown */}
                 {chapters.length > 0 && (
-                  <div>
-                    <label className="block font-sans text-xs font-semibold text-midnight mb-2">
-                      Link to Existing Chapter:
-                    </label>
-                    <select
-                      onChange={(e) => e.target.value && handleLinkChapter(e.target.value)}
-                      value=""
-                      disabled={isUpdating || loadingChapters}
-                      className="w-full px-3 py-2 border border-slate-ui focus:border-bronze focus:outline-none font-sans text-sm text-midnight disabled:opacity-50"
-                      style={{ borderRadius: '2px' }}
-                    >
-                      <option value="">Select a chapter...</option>
-                      {chapters.map((chapter) => (
-                        <option key={chapter.id} value={chapter.id}>
-                          {chapter.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <select
+                    onChange={(e) => e.target.value && handleLinkChapter(e.target.value)}
+                    value=""
+                    disabled={isUpdating || loadingChapters}
+                    className="px-3 py-1.5 text-sm border border-slate-ui focus:border-bronze focus:outline-none font-sans text-midnight disabled:opacity-50 bg-white"
+                    style={{ borderRadius: '2px' }}
+                    title="Link to existing chapter"
+                  >
+                    <option value="">Link chapter...</option>
+                    {chapters.map((chapter) => (
+                      <option key={chapter.id} value={chapter.id}>
+                        {chapter.title}
+                      </option>
+                    ))}
+                  </select>
                 )}
 
-                {/* Create New Chapter */}
+                {/* Create New Chapter Button */}
                 <button
                   onClick={() => onCreateChapter?.(beat)}
-                  className="w-full px-4 py-2 border-2 border-bronze text-bronze hover:bg-bronze hover:text-white font-sans text-sm font-medium uppercase tracking-button transition-colors"
+                  className="px-3 py-1.5 text-sm bg-bronze hover:bg-bronze-dark text-white font-sans font-medium transition-colors flex items-center gap-1.5"
                   style={{ borderRadius: '2px' }}
+                  title="Create new chapter for this beat"
                 >
-                  {chapters.length > 0 ? 'Or Create New Chapter' : 'Create Chapter for This Beat'}
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>New Chapter</span>
                 </button>
               </>
+            )}
+
+            {/* Get AI Ideas Button */}
+            {onGetAIIdeas && (
+              <button
+                onClick={() => onGetAIIdeas(beat.id)}
+                className="ml-auto px-3 py-1.5 text-sm bg-purple-500/10 text-purple-600 border border-purple-500/30 hover:bg-purple-500/20 font-sans font-medium transition-colors flex items-center gap-1.5"
+                style={{ borderRadius: '2px' }}
+                title="Get AI-powered content suggestions for this beat"
+              >
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                <span>{hasAISuggestions ? 'View AI Ideas' : 'AI Ideas'}</span>
+              </button>
             )}
           </div>
 

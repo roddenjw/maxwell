@@ -321,7 +321,8 @@ export default function CreateOutlineModal({
 
               <div>
                 <label className="block font-sans font-semibold text-midnight mb-2">
-                  Premise (Optional)
+                  Premise{' '}
+                  <span className="text-faded-ink text-sm font-normal">(helps AI generate better analysis)</span>
                 </label>
                 <textarea
                   value={premise}
@@ -330,11 +331,15 @@ export default function CreateOutlineModal({
                   className="w-full px-4 py-2 border-2 border-slate-ui focus:border-bronze focus:outline-none font-sans min-h-[100px]"
                   style={{ borderRadius: '2px' }}
                 />
+                <p className="mt-1 text-xs font-sans text-faded-ink">
+                  💡 Tip: A clear premise helps AI provide story-specific beat descriptions and detect plot holes
+                </p>
               </div>
 
               <div>
                 <label className="block font-sans font-semibold text-midnight mb-2">
-                  Logline (Optional)
+                  Logline{' '}
+                  <span className="text-faded-ink text-sm font-normal">(helps AI analysis)</span>
                 </label>
                 <input
                   type="text"

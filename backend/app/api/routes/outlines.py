@@ -15,12 +15,15 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.outline import Outline, PlotBeat
+from app.models.manuscript import Chapter
 from app.services.openrouter_service import OpenRouterService
+from app.services.ai_outline_service import AIOutlineService
 from app.services.story_structures import (
     create_plot_beats_from_template,
     get_available_structures,
     get_structure_template,
 )
+from app.services.manuscript_aggregation_service import manuscript_aggregation_service
 
 logger = logging.getLogger(__name__)
 
@@ -544,6 +547,475 @@ async def create_outline_from_template(
     return {"success": True, "data": serialize_outline(new_outline)}
 
 
+# === AI ANALYSIS ENDPOINTS (BEFORE GENERIC ROUTES) ===
+
+class AIAnalysisRequest(BaseModel):
+    """Request for AI analysis of outline"""
+    api_key: str
+    analysis_types: Optional[List[str]] = None  # ["beat_descriptions", "plot_holes", "pacing"]
+
+
+@router.post("/{outline_id}/ai-analyze")
+async def analyze_outline_with_ai(
+    outline_id: str,
+    request: AIAnalysisRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Run AI analysis on outline using Claude 3.5 Sonnet
+
+    Provides intelligent suggestions for:
+    - Beat descriptions based on premise
+    - Plot hole detection
+    - Pacing analysis
+
+    Requires user's OpenRouter API key (BYOK pattern)
+
+    Returns analysis results with cost breakdown
+    """
+    try:
+        # Validate outline exists
+        outline = db.query(Outline).filter(Outline.id == outline_id).first()
+        if not outline:
+            raise HTTPException(status_code=404, detail="Outline not found")
+
+        # Validate API key format
+        if not request.api_key or len(request.api_key) < 10:
+            raise HTTPException(status_code=400, detail="Invalid API key")
+
+        # Validate we have enough context for meaningful analysis
+        has_premise = bool(outline.premise and len(outline.premise) > 20)
+        has_chapters = db.query(Chapter).filter(
+            Chapter.manuscript_id == outline.manuscript_id,
+            Chapter.is_folder == 0
+        ).count() > 0
+
+        if not has_premise and not has_chapters:
+            raise HTTPException(
+                status_code=400,
+                detail="Not enough context for AI analysis. Please either: (1) Add a premise/logline in outline settings, or (2) Write at least 1-2 chapters of your manuscript."
+            )
+
+        # If no premise but has chapters, auto-extract premise from first chapter
+        if not has_premise and has_chapters:
+            try:
+                first_chapter = db.query(Chapter).filter(
+                    Chapter.manuscript_id == outline.manuscript_id,
+                    Chapter.is_folder == 0
+                ).order_by(Chapter.order_index).first()
+
+                if first_chapter and first_chapter.content:
+                    outline.premise = f"[Auto-extracted from manuscript]: {first_chapter.content[:500]}..."
+                    outline.updated_at = datetime.utcnow()
+                    db.commit()
+                    logger.info(f"Auto-extracted premise for outline {outline_id}")
+            except Exception as e:
+                logger.warning(f"Failed to auto-extract premise: {e}")
+                # Continue anyway - we have chapters for context
+
+        # Initialize AI service with user's key
+        ai_service = AIOutlineService(request.api_key)
+
+        # Run analysis
+        result = await ai_service.run_full_analysis(
+            outline_id=outline_id,
+            db=db,
+            analysis_types=request.analysis_types
+        )
+
+        if not result["success"]:
+            raise HTTPException(
+                status_code=500,
+                detail=f"AI analysis failed: {result.get('error', 'Unknown error')}"
+            )
+
+        return {
+            "success": True,
+            "data": result["data"],
+            "usage": result.get("usage", {}),
+            "cost": result.get("cost", {})
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI analysis error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI analysis failed: {str(e)}"
+        )
+
+
+@router.post("/beats/{beat_id}/ai-suggest")
+async def get_beat_content_suggestions(
+    beat_id: str,
+    request: AIAnalysisRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Get AI-powered content suggestions for a specific plot beat
+
+    Returns 3-5 specific scene ideas, character moments, and content suggestions
+
+    Requires user's OpenRouter API key (BYOK pattern)
+    """
+    try:
+        # Fetch beat and outline
+        beat = db.query(PlotBeat).filter(PlotBeat.id == beat_id).first()
+        if not beat:
+            raise HTTPException(status_code=404, detail="Plot beat not found")
+
+        outline = db.query(Outline).filter(Outline.id == beat.outline_id).first()
+        if not outline:
+            raise HTTPException(status_code=404, detail="Outline not found")
+
+        # Get previous beats for context
+        previous_beats = (
+            db.query(PlotBeat)
+            .filter(
+                PlotBeat.outline_id == beat.outline_id,
+                PlotBeat.order_index < beat.order_index
+            )
+            .order_by(PlotBeat.order_index.desc())
+            .limit(3)
+            .all()
+        )
+
+        # Validate API key
+        if not request.api_key or len(request.api_key) < 10:
+            raise HTTPException(status_code=400, detail="Invalid API key")
+
+        # Initialize AI service
+        ai_service = AIOutlineService(request.api_key)
+
+        # Get suggestions
+        result = await ai_service.generate_beat_content_suggestions(
+            beat=beat,
+            outline=outline,
+            previous_beats=previous_beats
+        )
+
+        if not result["success"]:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Suggestion generation failed: {result.get('error', 'Unknown error')}"
+            )
+
+        # Calculate cost
+        usage = result.get("usage", {})
+        cost = OpenRouterService.calculate_cost(usage)
+
+        return {
+            "success": True,
+            "data": {
+                "beat_id": beat_id,
+                "suggestions": result.get("suggestions", [])
+            },
+            "usage": usage,
+            "cost": {
+                "total_usd": round(cost, 4),
+                "formatted": f"${cost:.4f}"
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Beat suggestion error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Suggestion generation failed: {str(e)}"
+        )
+
+
+class GenerateChaptersRequest(BaseModel):
+    """Request model for chapter generation"""
+    generation_strategy: str = "one-per-beat"  # "one-per-beat", "act-folders", "custom"
+    chapter_naming: str = "beat-label"  # "beat-label", "numbered", "custom"
+    include_beat_description: bool = True
+    create_act_folders: bool = False
+
+
+@router.post("/{outline_id}/generate-chapters")
+async def generate_chapters_from_outline(
+    outline_id: str,
+    request: GenerateChaptersRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Generate chapter scaffolding from outline plot beats
+
+    Creates chapter placeholders automatically from plot beats with optional
+    act folder organization. Chapters are automatically linked to beats.
+
+    Strategies:
+    - one-per-beat: Creates one chapter for each plot beat
+    - act-folders: Groups chapters into Act 1/2/3 folders based on beat position
+    """
+    try:
+        # Fetch outline with beats
+        outline = db.query(Outline).filter(Outline.id == outline_id).first()
+        if not outline:
+            raise HTTPException(status_code=404, detail="Outline not found")
+
+        beats = db.query(PlotBeat).filter(
+            PlotBeat.outline_id == outline_id
+        ).order_by(PlotBeat.order_index).all()
+
+        if not beats:
+            raise HTTPException(status_code=400, detail="Outline has no plot beats")
+
+        # Check how many beats already have chapters linked
+        beats_with_chapters = sum(1 for beat in beats if beat.chapter_id)
+        if beats_with_chapters > 0:
+            logger.warning(f"{beats_with_chapters}/{len(beats)} beats already have chapters linked")
+
+        # Group beats by act based on target_position_percent
+        act_folders = {}
+        chapters_created = []
+        folder_structure = {}
+
+        # Create act folders if requested
+        if request.create_act_folders:
+            # Act 1: 0-25%, Act 2: 25-75%, Act 3: 75-100%
+            act_definitions = [
+                ("Act 1", 0.0, 0.25, 0),
+                ("Act 2", 0.25, 0.75, 1),
+                ("Act 3", 0.75, 1.0, 2)
+            ]
+
+            for act_name, min_pos, max_pos, order in act_definitions:
+                # Check if any beats fall in this act
+                act_beats = [b for b in beats if min_pos <= b.target_position_percent < max_pos or
+                            (b.target_position_percent == 1.0 and act_name == "Act 3")]
+
+                if act_beats:
+                    # Create act folder
+                    folder = Chapter(
+                        id=str(uuid.uuid4()),
+                        manuscript_id=outline.manuscript_id,
+                        title=act_name,
+                        content="",
+                        lexical_state="{}",
+                        is_folder=1,
+                        parent_id=None,
+                        order_index=order,
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow()
+                    )
+                    db.add(folder)
+                    db.flush()  # Get folder ID
+                    act_folders[act_name] = folder.id
+                    folder_structure[act_name] = []
+                    logger.info(f"Created act folder: {act_name}")
+
+        # Create chapters for each beat
+        for idx, beat in enumerate(beats):
+            # Skip if beat already has a chapter (unless we want to override)
+            if beat.chapter_id:
+                logger.info(f"Skipping beat {beat.beat_name} - already has chapter {beat.chapter_id}")
+                continue
+
+            # Determine parent folder if using act folders
+            parent_id = None
+            act_name = None
+            if request.create_act_folders:
+                if beat.target_position_percent < 0.25:
+                    act_name = "Act 1"
+                elif beat.target_position_percent < 0.75:
+                    act_name = "Act 2"
+                else:
+                    act_name = "Act 3"
+                parent_id = act_folders.get(act_name)
+
+            # Generate chapter title based on naming strategy
+            if request.chapter_naming == "beat-label":
+                chapter_title = beat.beat_label
+            elif request.chapter_naming == "numbered":
+                chapter_title = f"Chapter {idx + 1}"
+            else:  # custom or fallback
+                chapter_title = f"Chapter {idx + 1}: {beat.beat_label}"
+
+            # Generate chapter content from beat description
+            chapter_content = ""
+            lexical_state = '{"root":{"children":[],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+
+            if request.include_beat_description and beat.beat_description:
+                # Create simple Lexical JSON with beat description as writing prompt
+                chapter_content = f"[Writing Prompt]\n\n{beat.beat_description}\n\n---\n\nStart writing here..."
+
+                # Convert to Lexical JSON format (simple paragraph node)
+                lexical_state = f'''{{
+                    "root": {{
+                        "children": [
+                            {{
+                                "children": [
+                                    {{
+                                        "detail": 0,
+                                        "format": 2,
+                                        "mode": "normal",
+                                        "style": "",
+                                        "text": "[Writing Prompt]",
+                                        "type": "text",
+                                        "version": 1
+                                    }}
+                                ],
+                                "direction": "ltr",
+                                "format": "",
+                                "indent": 0,
+                                "type": "paragraph",
+                                "version": 1
+                            }},
+                            {{
+                                "children": [],
+                                "direction": null,
+                                "format": "",
+                                "indent": 0,
+                                "type": "paragraph",
+                                "version": 1
+                            }},
+                            {{
+                                "children": [
+                                    {{
+                                        "detail": 0,
+                                        "format": 0,
+                                        "mode": "normal",
+                                        "style": "",
+                                        "text": "{beat.beat_description.replace('"', '\\"')}",
+                                        "type": "text",
+                                        "version": 1
+                                    }}
+                                ],
+                                "direction": "ltr",
+                                "format": "",
+                                "indent": 0,
+                                "type": "paragraph",
+                                "version": 1
+                            }},
+                            {{
+                                "children": [],
+                                "direction": null,
+                                "format": "",
+                                "indent": 0,
+                                "type": "paragraph",
+                                "version": 1
+                            }},
+                            {{
+                                "children": [
+                                    {{
+                                        "detail": 0,
+                                        "format": 0,
+                                        "mode": "normal",
+                                        "style": "",
+                                        "text": "---",
+                                        "type": "text",
+                                        "version": 1
+                                    }}
+                                ],
+                                "direction": "ltr",
+                                "format": "",
+                                "indent": 0,
+                                "type": "paragraph",
+                                "version": 1
+                            }},
+                            {{
+                                "children": [],
+                                "direction": null,
+                                "format": "",
+                                "indent": 0,
+                                "type": "paragraph",
+                                "version": 1
+                            }},
+                            {{
+                                "children": [
+                                    {{
+                                        "detail": 0,
+                                        "format": 0,
+                                        "mode": "normal",
+                                        "style": "",
+                                        "text": "Start writing here...",
+                                        "type": "text",
+                                        "version": 1
+                                    }}
+                                ],
+                                "direction": "ltr",
+                                "format": "",
+                                "indent": 0,
+                                "type": "paragraph",
+                                "version": 1
+                            }}
+                        ],
+                        "direction": "ltr",
+                        "format": "",
+                        "indent": 0,
+                        "type": "root",
+                        "version": 1
+                    }}
+                }}'''
+
+            # Create chapter
+            chapter = Chapter(
+                id=str(uuid.uuid4()),
+                manuscript_id=outline.manuscript_id,
+                title=chapter_title,
+                content=chapter_content,
+                lexical_state=lexical_state,
+                is_folder=0,
+                parent_id=parent_id,
+                order_index=idx,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+
+            db.add(chapter)
+            db.flush()  # Get chapter ID
+
+            # Link beat to chapter
+            beat.chapter_id = chapter.id
+            beat.updated_at = datetime.utcnow()
+
+            chapters_created.append({
+                "id": chapter.id,
+                "title": chapter_title,
+                "beat_id": beat.id,
+                "beat_name": beat.beat_name
+            })
+
+            # Track in folder structure
+            if act_name and act_name in folder_structure:
+                folder_structure[act_name].append(chapter_title)
+
+            logger.info(f"Created chapter '{chapter_title}' for beat {beat.beat_name}")
+
+        # Commit all changes
+        db.commit()
+
+        # Return result
+        result = {
+            "success": True,
+            "chapters_created": len(chapters_created),
+            "beats_linked": len(chapters_created),
+            "chapters": chapters_created
+        }
+
+        if request.create_act_folders:
+            result["folder_structure"] = folder_structure
+
+        logger.info(f"Generated {len(chapters_created)} chapters for outline {outline_id}")
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Chapter generation error: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chapter generation failed: {str(e)}"
+        )
+
+
 # Regular CRUD Endpoints (generic routes like /{outline_id} go after specific routes)
 
 @router.get("/{outline_id}")
@@ -679,6 +1151,9 @@ async def update_plot_beat(
     if not beat:
         raise HTTPException(status_code=404, detail="Plot beat not found")
 
+    # Track old chapter_id for aggregation sync
+    old_chapter_id = beat.chapter_id
+
     # Update fields
     update_data = beat_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -690,8 +1165,20 @@ async def update_plot_beat(
 
     beat.updated_at = datetime.utcnow()
 
+    # Check if chapter_id changed
+    chapter_id_changed = ('chapter_id' in update_data and beat.chapter_id != old_chapter_id)
+
     db.commit()
     db.refresh(beat)
+
+    # Sync word count if chapter link changed
+    if chapter_id_changed:
+        manuscript_aggregation_service.sync_plot_beat_on_link_change(
+            db,
+            beat_id,
+            old_chapter_id,
+            beat.chapter_id
+        )
 
     return {"success": True, "data": serialize_plot_beat(beat)}
 

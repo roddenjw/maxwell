@@ -3,7 +3,7 @@
  * Displays all saved manuscripts with create/open/delete functionality
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useManuscriptStore } from '../stores/manuscriptStore';
 import { toast } from '../stores/toastStore';
 import analytics from '../lib/analytics';
@@ -15,9 +15,14 @@ interface ManuscriptLibraryProps {
 }
 
 export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, onCreateWithWizard }: ManuscriptLibraryProps) {
-  const { manuscripts, createManuscript, deleteManuscript } = useManuscriptStore();
+  const { manuscripts, fetchManuscripts, createManuscript, deleteManuscript, isLoading, error } = useManuscriptStore();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+
+  // Fetch manuscripts from backend on mount
+  useEffect(() => {
+    fetchManuscripts();
+  }, [fetchManuscripts]);
 
   const handleCreate = async () => {
     try {
@@ -104,7 +109,27 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
         </div>
 
         {/* Manuscript Grid */}
-        {manuscripts.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-20">
+            <div className="text-4xl mb-4 text-bronze">⏳</div>
+            <p className="text-faded-ink font-sans">Loading manuscripts...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-20">
+            <div className="text-4xl mb-4 text-red-600">⚠️</div>
+            <h3 className="text-xl font-serif font-bold text-midnight mb-2">
+              Failed to Load Manuscripts
+            </h3>
+            <p className="text-faded-ink font-sans mb-4">{error}</p>
+            <button
+              onClick={() => fetchManuscripts()}
+              className="px-6 py-2 bg-bronze hover:bg-bronze-dark text-white font-sans font-medium uppercase tracking-button transition-colors"
+              style={{ borderRadius: '2px' }}
+            >
+              Try Again
+            </button>
+          </div>
+        ) : manuscripts.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-6xl mb-6 text-bronze">📝</div>
             <h3 className="text-2xl font-serif font-bold text-midnight mb-3">
@@ -134,7 +159,7 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
                   {manuscript.title}
                 </h3>
                 <div className="space-y-1 text-sm font-sans text-faded-ink mb-4">
-                  <p>{manuscript.wordCount.toLocaleString()} words</p>
+                  <p>{(manuscript.wordCount || 0).toLocaleString()} words</p>
                   <p>Updated {formatDate(manuscript.updatedAt)}</p>
                 </div>
                 <div className="flex items-center gap-2">

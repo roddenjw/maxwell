@@ -66,3 +66,67 @@ export interface OutlineUpdate {
   notes?: string;
   is_active?: boolean;
 }
+
+// === AI Analysis Types ===
+
+export interface PlotHole {
+  severity: 'high' | 'medium' | 'low';
+  location: string;
+  issue: string;
+  suggestion: string;
+  resolved?: boolean;  // Frontend-only flag
+}
+
+export interface PacingAnalysis {
+  overall_score: number;
+  act_balance: {
+    act1_percent: number;
+    act2_percent: number;
+    act3_percent: number;
+  };
+  issues: string[];
+  recommendations: string[];
+  strengths?: string[];
+}
+
+export interface BeatSuggestion {
+  type: 'scene' | 'character' | 'dialogue' | 'subplot';
+  title: string;
+  description: string;
+  used?: boolean;  // Frontend-only flag
+}
+
+export interface AIAnalysisResult {
+  beat_descriptions?: { [beatName: string]: string };
+  plot_holes?: PlotHole[];
+  pacing_analysis?: PacingAnalysis;
+  overall_assessment?: string;
+  cost?: {
+    total_usd: number;
+    formatted: string;
+  };
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+export interface BeatSuggestionsResult {
+  beat_id: string;
+  suggestions: BeatSuggestion[];
+  cost?: {
+    total_usd: number;
+    formatted: string;
+  };
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+export interface AIAnalysisRequest {
+  api_key: string;
+  analysis_types?: ('beat_descriptions' | 'plot_holes' | 'pacing')[];
+}

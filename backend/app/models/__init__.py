@@ -8,6 +8,7 @@ from app.models.versioning import Snapshot
 from app.models.coach import WritingProfile, CoachingHistory, FeedbackPattern
 from app.models.recap import Recap
 from app.models.outline import Outline, PlotBeat
+from app.models.brainstorm import BrainstormSession, BrainstormIdea
 
 __all__ = [
     "Manuscript",
@@ -24,4 +25,6 @@ __all__ = [
     "Recap",
     "Outline",
     "PlotBeat",
+    "BrainstormSession",
+    "BrainstormIdea",
 ]

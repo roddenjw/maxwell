@@ -9,6 +9,9 @@ import PlotBeatCard from './PlotBeatCard';
 import CreateOutlineModal from './CreateOutlineModal';
 import SwitchStructureModal from './SwitchStructureModal';
 import OutlineCompletionDonut from './OutlineCompletionDonut';
+import TimelineView from './TimelineView';
+import ProgressDashboard from './ProgressDashboard';
+import AISuggestionsPanel from './AISuggestionsPanel';
 import type { PlotBeat } from '@/types/outline';
 
 interface OutlineSidebarProps {
@@ -39,6 +42,9 @@ export default function OutlineSidebar({
   const [showStructureInfo, setShowStructureInfo] = useState(false);
   const [structureDetails, setStructureDetails] = useState<any>(null);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'analytics'>('list');
+  const [expandedBeatId, setExpandedBeatId] = useState<string | null>(null);
 
   // Load outline when manuscript changes
   useEffect(() => {
@@ -90,6 +96,12 @@ export default function OutlineSidebar({
     }
   };
 
+  const handleGetAIIdeas = (beatId: string) => {
+    // Open the AI panel
+    setShowAIPanel(true);
+    // The AISuggestionsPanel will allow users to generate suggestions for specific beats
+  };
+
   return (
     <div
       className="fixed right-0 top-0 h-full bg-white border-l-2 border-slate-ui shadow-2xl flex flex-col z-40"
@@ -130,12 +142,13 @@ export default function OutlineSidebar({
         {/* Progress Section */}
         {outline && (
           <div className="space-y-4">
-            {/* Donut Chart */}
-            <div className="flex justify-center pt-2">
+            {/* Donut Chart - Compact Size */}
+            <div className="flex justify-center py-2">
               <OutlineCompletionDonut
                 completed={progress?.completed_beats || 0}
                 total={progress?.total_beats || 0}
                 percentage={completionPercentage}
+                size={100}
               />
             </div>
 
@@ -192,10 +205,52 @@ export default function OutlineSidebar({
         </div>
       )}
 
-      {/* Plot Beats List */}
+      {/* View Toggle */}
+      {!isLoading && outline && (
+        <div className="flex-shrink-0 border-b border-slate-ui bg-white px-4 py-3">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex-1 px-3 py-2 font-sans text-sm font-medium uppercase tracking-button transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-bronze text-white'
+                  : 'bg-slate-ui/20 text-faded-ink hover:bg-slate-ui/40'
+              }`}
+              style={{ borderRadius: '2px' }}
+            >
+              📋 List
+            </button>
+            <button
+              onClick={() => setViewMode('timeline')}
+              className={`flex-1 px-3 py-2 font-sans text-sm font-medium uppercase tracking-button transition-colors ${
+                viewMode === 'timeline'
+                  ? 'bg-bronze text-white'
+                  : 'bg-slate-ui/20 text-faded-ink hover:bg-slate-ui/40'
+              }`}
+              style={{ borderRadius: '2px' }}
+            >
+              ⏱️ Timeline
+            </button>
+            <button
+              onClick={() => setViewMode('analytics')}
+              className={`flex-1 px-3 py-2 font-sans text-sm font-medium uppercase tracking-button transition-colors ${
+                viewMode === 'analytics'
+                  ? 'bg-bronze text-white'
+                  : 'bg-slate-ui/20 text-faded-ink hover:bg-slate-ui/40'
+              }`}
+              style={{ borderRadius: '2px' }}
+              title="Coming soon - analytics dashboard"
+            >
+              📊 Analytics
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Plot Beats Content */}
       {!isLoading && outline && (
         <>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto">
             {outline.plot_beats.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-4xl mb-3">📋</div>
@@ -204,31 +259,63 @@ export default function OutlineSidebar({
                 </p>
               </div>
             ) : (
-              outline.plot_beats
-                .sort((a, b) => a.order_index - b.order_index)
-                .map((beat) => (
-                  <PlotBeatCard
-                    key={beat.id}
-                    beat={beat}
-                    manuscriptId={manuscriptId!}
-                    onCreateChapter={onCreateChapter}
-                    onOpenChapter={onOpenChapter}
+              <>
+                {/* List View */}
+                {viewMode === 'list' && (
+                  <div className="p-4 space-y-3">
+                    {outline.plot_beats
+                      .sort((a, b) => a.order_index - b.order_index)
+                      .map((beat) => (
+                        <PlotBeatCard
+                          key={beat.id}
+                          beat={beat}
+                          manuscriptId={manuscriptId!}
+                          onCreateChapter={onCreateChapter}
+                          onOpenChapter={onOpenChapter}
+                          onGetAIIdeas={handleGetAIIdeas}
+                        />
+                      ))}
+                  </div>
+                )}
+
+                {/* Timeline View */}
+                {viewMode === 'timeline' && (
+                  <TimelineView
+                    beats={outline.plot_beats}
+                    onBeatClick={(beatId) => setExpandedBeatId(beatId === expandedBeatId ? null : beatId)}
+                    expandedBeatId={expandedBeatId}
                   />
-                ))
+                )}
+
+                {/* Analytics View */}
+                {viewMode === 'analytics' && (
+                  <ProgressDashboard outline={outline} />
+                )}
+              </>
             )}
           </div>
 
           {/* Footer */}
           <div className="flex-shrink-0 border-t-2 border-slate-ui bg-vellum p-4">
-            {/* Switch Structure Button */}
-            <button
-              onClick={() => setShowSwitchModal(true)}
-              className="w-full px-4 py-2 mb-3 border-2 border-bronze text-bronze hover:bg-bronze hover:text-white font-sans text-sm font-medium uppercase tracking-button transition-colors"
-              style={{ borderRadius: '2px' }}
-              title="Switch to a different story structure"
-            >
-              🔄 Switch Structure
-            </button>
+            {/* Action Buttons Grid */}
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <button
+                onClick={() => setShowSwitchModal(true)}
+                className="px-3 py-2 border-2 border-bronze text-bronze hover:bg-bronze hover:text-white font-sans text-xs font-medium uppercase tracking-button transition-colors"
+                style={{ borderRadius: '2px' }}
+                title="Switch to a different story structure"
+              >
+                🔄 Switch
+              </button>
+              <button
+                onClick={() => setShowAIPanel(true)}
+                className="px-3 py-2 bg-bronze hover:bg-bronze-dark text-white font-sans text-xs font-medium uppercase tracking-button transition-colors shadow-md"
+                style={{ borderRadius: '2px' }}
+                title="Get AI-powered insights and suggestions"
+              >
+                🤖 AI Insights
+              </button>
+            </div>
 
             <div className="space-y-2">
               {/* Target Word Count */}
@@ -419,6 +506,15 @@ export default function OutlineSidebar({
             </div>
           </div>
         </div>
+      )}
+
+      {/* AI Suggestions Panel */}
+      {outline && (
+        <AISuggestionsPanel
+          outline={outline}
+          isOpen={showAIPanel}
+          onClose={() => setShowAIPanel(false)}
+        />
       )}
     </div>
   );

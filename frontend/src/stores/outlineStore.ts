@@ -4,7 +4,14 @@
  */
 
 import { create } from 'zustand';
-import type { Outline, PlotBeat, PlotBeatUpdate, OutlineProgress } from '@/types/outline';
+import type {
+  Outline,
+  PlotBeat,
+  PlotBeatUpdate,
+  OutlineProgress,
+  AIAnalysisResult,
+  BeatSuggestionsResult
+} from '@/types/outline';
 import { outlineApi } from '@/lib/api';
 import { toast } from './toastStore';
 
@@ -16,6 +23,12 @@ interface OutlineStore {
   isSidebarOpen: boolean;
   expandedBeatId: string | null;
   error: string | null;
+
+  // AI State
+  aiSuggestions: AIAnalysisResult | null;
+  beatSuggestions: Map<string, BeatSuggestionsResult>;  // beatId -> suggestions
+  isAnalyzing: boolean;
+  apiKey: string | null;
 
   // Actions
   setOutline: (outline: Outline | null) => void;
@@ -32,6 +45,14 @@ interface OutlineStore {
   updateBeat: (beatId: string, updates: PlotBeatUpdate) => Promise<void>;
   clearOutline: () => void;
 
+  // AI Actions
+  setApiKey: (apiKey: string) => void;
+  getApiKey: () => string | null;
+  runAIAnalysis: (outlineId: string, analysisTypes?: string[]) => Promise<void>;
+  getBeatAISuggestions: (beatId: string) => Promise<void>;
+  clearAISuggestions: () => void;
+  markPlotHoleResolved: (index: number) => void;
+
   // Computed
   getCompletedBeatsCount: () => number;
   getTotalBeatsCount: () => number;
@@ -47,6 +68,12 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
   isSidebarOpen: false,
   expandedBeatId: null,
   error: null,
+
+  // AI Initial State
+  aiSuggestions: null,
+  beatSuggestions: new Map(),
+  isAnalyzing: false,
+  apiKey: typeof window !== 'undefined' ? localStorage.getItem('openrouter_api_key') : null,
 
   // Synchronous Actions
   setOutline: (outline) => set({ outline, error: null }),
@@ -132,7 +159,130 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
       expandedBeatId: null,
       isSidebarOpen: false,
       error: null,
+      aiSuggestions: null,
+      beatSuggestions: new Map(),
     });
+  },
+
+  // AI Actions
+  setApiKey: (apiKey: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('openrouter_api_key', apiKey);
+    }
+    set({ apiKey });
+  },
+
+  getApiKey: () => {
+    const state = get();
+    if (state.apiKey) return state.apiKey;
+
+    // Try to load from localStorage
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('openrouter_api_key');
+      if (stored) {
+        set({ apiKey: stored });
+        return stored;
+      }
+    }
+    return null;
+  },
+
+  runAIAnalysis: async (outlineId: string, analysisTypes?: string[]) => {
+    const apiKey = get().getApiKey();
+    if (!apiKey) {
+      toast.error('Please set your OpenRouter API key in Settings');
+      return;
+    }
+
+    set({ isAnalyzing: true, error: null });
+
+    try {
+      // This will be implemented in the API client
+      const { aiApi } = await import('@/lib/api');
+      const result = await aiApi.analyzeOutline(outlineId, apiKey, analysisTypes);
+
+      set({
+        aiSuggestions: result.data,
+        isAnalyzing: false,
+      });
+
+      toast.success(`AI analysis complete! Cost: ${result.cost?.formatted || '$0.00'}`);
+    } catch (error: any) {
+      console.error('AI analysis failed:', error);
+      set({ isAnalyzing: false, error: error.message });
+
+      // Handle specific error types with helpful messages
+      if (error.message?.includes('insufficient_credits') || error.message?.includes('insufficient credits')) {
+        toast.error('Your OpenRouter API key has insufficient credits. Please add credits at https://openrouter.ai/credits');
+      } else if (error.message?.includes('invalid_api_key') || error.message?.includes('invalid')) {
+        toast.error('Your OpenRouter API key is invalid. Please check your API key in Settings.');
+      } else {
+        toast.error('AI analysis failed: ' + (error.message || 'Unknown error'));
+      }
+      throw error;
+    }
+  },
+
+  getBeatAISuggestions: async (beatId: string) => {
+    const apiKey = get().getApiKey();
+    if (!apiKey) {
+      toast.error('Please set your OpenRouter API key in Settings');
+      return;
+    }
+
+    set({ isAnalyzing: true, error: null });
+
+    try {
+      const { aiApi } = await import('@/lib/api');
+      const result = await aiApi.getBeatSuggestions(beatId, apiKey);
+
+      // Update the beat suggestions map
+      const newMap = new Map(get().beatSuggestions);
+      newMap.set(beatId, result.data);
+
+      set({
+        beatSuggestions: newMap,
+        isAnalyzing: false,
+      });
+
+      toast.success(`AI suggestions generated! Cost: ${result.cost?.formatted || '$0.00'}`);
+    } catch (error: any) {
+      console.error('Beat suggestions failed:', error);
+      set({ isAnalyzing: false, error: error.message });
+
+      // Handle specific error types with helpful messages
+      if (error.message?.includes('insufficient_credits') || error.message?.includes('insufficient credits')) {
+        toast.error('Your OpenRouter API key has insufficient credits. Please add credits at https://openrouter.ai/credits');
+      } else if (error.message?.includes('invalid_api_key') || error.message?.includes('invalid')) {
+        toast.error('Your OpenRouter API key is invalid. Please check your API key in Settings.');
+      } else {
+        toast.error('Failed to get AI suggestions: ' + (error.message || 'Unknown error'));
+      }
+      throw error;
+    }
+  },
+
+  clearAISuggestions: () => {
+    set({
+      aiSuggestions: null,
+      beatSuggestions: new Map(),
+    });
+  },
+
+  markPlotHoleResolved: (index: number) => {
+    const current = get().aiSuggestions;
+    if (!current || !current.plot_holes) return;
+
+    const updated = { ...current };
+    updated.plot_holes = [...current.plot_holes];
+    if (updated.plot_holes[index]) {
+      updated.plot_holes[index] = {
+        ...updated.plot_holes[index],
+        resolved: true,
+      };
+    }
+
+    set({ aiSuggestions: updated });
   },
 
   // Computed Values

@@ -30,6 +30,9 @@ import type {
   OutlineProgress,
   PlotBeatUpdate,
   OutlineUpdate,
+  AIAnalysisRequest,
+  AIAnalysisResult,
+  BeatSuggestionsResult,
 } from '@/types/outline';
 
 import type {
@@ -163,7 +166,14 @@ export const manuscriptApi = {
    * Get all manuscripts
    */
   async list(): Promise<Manuscript[]> {
-    return apiFetch<Manuscript[]>('/manuscripts');
+    const url = `${API_BASE_URL}/manuscripts`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch manuscripts');
+    }
+
+    return response.json();
   },
 
   /**
@@ -1241,6 +1251,77 @@ export const brainstormingApi = {
 };
 
 /**
+ * AI Analysis API
+ * Endpoints for AI-powered outline analysis using Claude 3.5 Sonnet
+ */
+export const aiApi = {
+  /**
+   * Run AI analysis on entire outline
+   * @param outlineId - Outline ID to analyze
+   * @param apiKey - User's OpenRouter API key
+   * @param analysisTypes - Optional array of analysis types to run
+   * @returns Analysis results with cost information
+   */
+  async analyzeOutline(
+    outlineId: string,
+    apiKey: string,
+    analysisTypes?: string[]
+  ): Promise<{
+    success: boolean;
+    data: AIAnalysisResult;
+    cost?: { total_usd: number; formatted: string };
+    usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/ai-analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        analysis_types: analysisTypes,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'AI analysis failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get AI content suggestions for a specific beat
+   * @param beatId - Beat ID to generate suggestions for
+   * @param apiKey - User's OpenRouter API key
+   * @returns Beat suggestions with cost information
+   */
+  async getBeatSuggestions(
+    beatId: string,
+    apiKey: string
+  ): Promise<{
+    success: boolean;
+    data: BeatSuggestionsResult;
+    cost?: { total_usd: number; formatted: string };
+    usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/outlines/beats/${beatId}/ai-suggest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get beat suggestions');
+    }
+
+    return response.json();
+  },
+};
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
@@ -1259,5 +1340,6 @@ export default {
   recap: recapApi,
   analytics: analyticsApi,
   brainstorming: brainstormingApi,
+  ai: aiApi,
   healthCheck,
 };

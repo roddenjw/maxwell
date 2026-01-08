@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { manuscriptApi } from '../lib/api';
 
 export interface Manuscript {
   id: string;
@@ -18,8 +19,11 @@ export interface Manuscript {
 interface ManuscriptStore {
   manuscripts: Manuscript[];
   currentManuscriptId: string | null;
+  isLoading: boolean;
+  error: string | null;
 
   // Actions
+  fetchManuscripts: () => Promise<void>;
   createManuscript: (title: string) => Promise<Manuscript>;
   addManuscript: (manuscript: Manuscript) => void;
   updateManuscript: (id: string, updates: Partial<Manuscript>) => void;
@@ -34,6 +38,44 @@ export const useManuscriptStore = create<ManuscriptStore>()(
     (set, get) => ({
       manuscripts: [],
       currentManuscriptId: null,
+      isLoading: false,
+      error: null,
+
+      fetchManuscripts: async () => {
+        try {
+          set({ isLoading: true, error: null });
+          const rawManuscripts = await manuscriptApi.list();
+
+          console.log('Raw manuscripts from API:', rawManuscripts);
+
+          // Map backend snake_case to frontend camelCase
+          const manuscripts = rawManuscripts.map((m: any) => {
+            const mapped = {
+              id: m.id,
+              title: m.title,
+              content: '', // List endpoint doesn't return content
+              wordCount: Number(m.word_count) || 0,
+              createdAt: m.created_at,
+              updatedAt: m.updated_at,
+            };
+            console.log('Mapped manuscript:', mapped);
+            return mapped;
+          });
+
+          console.log('All manuscripts mapped:', manuscripts);
+
+          set({
+            manuscripts,
+            isLoading: false,
+          });
+        } catch (error) {
+          console.error('fetchManuscripts error:', error);
+          set({
+            error: error instanceof Error ? error.message : 'Failed to fetch manuscripts',
+            isLoading: false,
+          });
+        }
+      },
 
       createManuscript: async (title: string) => {
         // Call backend API to create manuscript in database
