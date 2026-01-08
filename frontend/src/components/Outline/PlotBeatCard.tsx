@@ -26,7 +26,7 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
   const [notes, setNotes] = useState(beat.user_notes);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loadingChapters, setLoadingChapters] = useState(false);
-  const notesTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const notesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isExpanded = expandedBeatId === beat.id;
 

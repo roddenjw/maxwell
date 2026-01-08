@@ -122,10 +122,12 @@ export default function CreateOutlineModal({
       );
 
       if (!response.ok) {
-        throw new Error('Failed to create outline');
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create outline');
       }
 
-      const outline = await response.json();
+      const result = await response.json();
+      const outline = result.data;
 
       // Update with premise/logline if provided
       if (premise || logline) {

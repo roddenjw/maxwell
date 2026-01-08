@@ -28,6 +28,48 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/outlines", tags=["outlines"])
 
 
+def serialize_plot_beat(beat: PlotBeat) -> dict:
+    """Serialize a PlotBeat SQLAlchemy object to dict"""
+    return {
+        "id": beat.id,
+        "outline_id": beat.outline_id,
+        "beat_name": beat.beat_name,
+        "beat_label": beat.beat_label,
+        "beat_description": beat.beat_description or "",
+        "target_position_percent": beat.target_position_percent,
+        "target_word_count": beat.target_word_count,
+        "actual_word_count": beat.actual_word_count,
+        "order_index": beat.order_index,
+        "user_notes": beat.user_notes or "",
+        "content_summary": beat.content_summary or "",
+        "chapter_id": beat.chapter_id,
+        "is_completed": beat.is_completed,
+        "created_at": beat.created_at.isoformat() if beat.created_at else None,
+        "updated_at": beat.updated_at.isoformat() if beat.updated_at else None,
+        "completed_at": beat.completed_at.isoformat() if beat.completed_at else None,
+    }
+
+
+def serialize_outline(outline: Outline) -> dict:
+    """Serialize an Outline SQLAlchemy object to dict with plot_beats"""
+    return {
+        "id": outline.id,
+        "manuscript_id": outline.manuscript_id,
+        "structure_type": outline.structure_type,
+        "genre": outline.genre,
+        "target_word_count": outline.target_word_count,
+        "premise": outline.premise or "",
+        "logline": outline.logline or "",
+        "synopsis": outline.synopsis or "",
+        "notes": outline.notes or "",
+        "is_active": outline.is_active,
+        "settings": outline.settings or {},
+        "created_at": outline.created_at.isoformat() if outline.created_at else None,
+        "updated_at": outline.updated_at.isoformat() if outline.updated_at else None,
+        "plot_beats": [serialize_plot_beat(beat) for beat in outline.plot_beats],
+    }
+
+
 # Pydantic schemas for request/response
 class PlotBeatCreate(BaseModel):
     beat_name: str
@@ -154,7 +196,10 @@ async def create_outline(
     db.commit()
     db.refresh(new_outline)
 
-    return {"success": True, "data": new_outline}
+    # Trigger lazy load of plot_beats relationship (will be empty for new outline)
+    _ = new_outline.plot_beats
+
+    return {"success": True, "data": serialize_outline(new_outline)}
 
 
 # Story Structure Template Endpoints (MUST be before /{outline_id} to avoid route conflicts)
@@ -427,13 +472,16 @@ async def switch_story_structure(
     db.commit()
     db.refresh(new_outline)
 
+    # Trigger lazy load of plot_beats relationship
+    _ = new_outline.plot_beats
+
     return {
         "success": True,
-        "outline": new_outline
+        "data": serialize_outline(new_outline)
     }
 
 
-@router.post("/from-template", response_model=OutlineResponse)
+@router.post("/from-template")
 async def create_outline_from_template(
     manuscript_id: str,
     structure_type: str,
@@ -490,7 +538,10 @@ async def create_outline_from_template(
     db.commit()
     db.refresh(new_outline)
 
-    return new_outline
+    # Trigger lazy load of plot_beats relationship
+    _ = new_outline.plot_beats
+
+    return {"success": True, "data": serialize_outline(new_outline)}
 
 
 # Regular CRUD Endpoints (generic routes like /{outline_id} go after specific routes)
@@ -505,7 +556,10 @@ async def get_outline(
     if not outline:
         raise HTTPException(status_code=404, detail="Outline not found")
 
-    return {"success": True, "data": outline}
+    # Trigger lazy load of plot_beats relationship
+    _ = outline.plot_beats
+
+    return {"success": True, "data": serialize_outline(outline)}
 
 
 @router.get("/manuscript/{manuscript_id}")
@@ -535,7 +589,10 @@ async def get_active_outline(
     if not outline:
         raise HTTPException(status_code=404, detail="No active outline found for manuscript")
 
-    return {"success": True, "data": outline}
+    # Trigger lazy load of plot_beats relationship
+    _ = outline.plot_beats
+
+    return {"success": True, "data": serialize_outline(outline)}
 
 
 @router.put("/{outline_id}")
@@ -559,7 +616,10 @@ async def update_outline(
     db.commit()
     db.refresh(outline)
 
-    return {"success": True, "data": outline}
+    # Trigger lazy load of plot_beats relationship
+    _ = outline.plot_beats
+
+    return {"success": True, "data": serialize_outline(outline)}
 
 
 @router.delete("/{outline_id}")
@@ -605,7 +665,7 @@ async def create_plot_beat(
     db.commit()
     db.refresh(new_beat)
 
-    return {"success": True, "data": new_beat}
+    return {"success": True, "data": serialize_plot_beat(new_beat)}
 
 
 @router.put("/beats/{beat_id}")
@@ -633,7 +693,7 @@ async def update_plot_beat(
     db.commit()
     db.refresh(beat)
 
-    return {"success": True, "data": beat}
+    return {"success": True, "data": serialize_plot_beat(beat)}
 
 
 @router.delete("/beats/{beat_id}")
