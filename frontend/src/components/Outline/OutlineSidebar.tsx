@@ -8,6 +8,7 @@ import { useOutlineStore } from '@/stores/outlineStore';
 import PlotBeatCard from './PlotBeatCard';
 import CreateOutlineModal from './CreateOutlineModal';
 import SwitchStructureModal from './SwitchStructureModal';
+import OutlineCompletionDonut from './OutlineCompletionDonut';
 import type { PlotBeat } from '@/types/outline';
 
 interface OutlineSidebarProps {
@@ -128,20 +129,32 @@ export default function OutlineSidebar({
 
         {/* Progress Section */}
         {outline && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm font-sans">
-              <span className="text-faded-ink">
-                {progress?.completed_beats || 0} of {progress?.total_beats || 0} beats completed
-              </span>
-              <span className="font-bold text-bronze">
-                {completionPercentage}%
-              </span>
-            </div>
-            <div className="w-full h-2 bg-slate-ui/30 overflow-hidden" style={{ borderRadius: '2px' }}>
-              <div
-                className="h-full bg-bronze transition-all duration-500"
-                style={{ width: `${completionPercentage}%` }}
+          <div className="space-y-4">
+            {/* Donut Chart */}
+            <div className="flex justify-center pt-2">
+              <OutlineCompletionDonut
+                completed={progress?.completed_beats || 0}
+                total={progress?.total_beats || 0}
+                percentage={completionPercentage}
               />
+            </div>
+
+            {/* Progress Bar (Keep for precise reading) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm font-sans">
+                <span className="text-faded-ink">
+                  {progress?.completed_beats || 0} of {progress?.total_beats || 0} beats completed
+                </span>
+                <span className="font-bold text-bronze">
+                  {completionPercentage}%
+                </span>
+              </div>
+              <div className="w-full h-2 bg-slate-ui/30 overflow-hidden" style={{ borderRadius: '2px' }}>
+                <div
+                  className="h-full bg-bronze transition-all duration-500"
+                  style={{ width: `${completionPercentage}%` }}
+                />
+              </div>
             </div>
           </div>
         )}
