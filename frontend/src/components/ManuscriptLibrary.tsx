@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { useManuscriptStore } from '../stores/manuscriptStore';
+import { toast } from '../stores/toastStore';
 import analytics from '../lib/analytics';
 
 interface ManuscriptLibraryProps {
@@ -18,16 +19,21 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newTitle, setNewTitle] = useState('');
 
-  const handleCreate = () => {
-    const title = newTitle || 'Untitled Manuscript';
-    const manuscript = createManuscript(title);
+  const handleCreate = async () => {
+    try {
+      const title = newTitle || 'Untitled Manuscript';
+      const manuscript = await createManuscript(title);
 
-    // Track manuscript creation
-    analytics.manuscriptCreated(manuscript.id, title);
+      // Track manuscript creation
+      analytics.manuscriptCreated(manuscript.id, title);
 
-    setNewTitle('');
-    setShowCreateDialog(false);
-    onOpenManuscript(manuscript.id);
+      setNewTitle('');
+      setShowCreateDialog(false);
+      onOpenManuscript(manuscript.id);
+    } catch (error) {
+      console.error('Failed to create manuscript:', error);
+      toast.error('Failed to create manuscript. Please try again.');
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -176,13 +182,19 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
             <div className="grid md:grid-cols-2 gap-4 mb-6">
               {/* Quick Create */}
               <button
-                onClick={() => {
+                onClick={async () => {
                   setShowCreateDialog(false);
-                  // Show simple title input
-                  const title = prompt('Manuscript title (optional):');
-                  const manuscript = createManuscript(title || 'Untitled Manuscript');
-                  analytics.manuscriptCreated(manuscript.id, manuscript.title);
-                  onOpenManuscript(manuscript.id);
+                  try {
+                    // Show simple title input
+                    const title = prompt('Manuscript title (optional):');
+                    if (title === null) return; // User cancelled
+                    const manuscript = await createManuscript(title || 'Untitled Manuscript');
+                    analytics.manuscriptCreated(manuscript.id, manuscript.title);
+                    onOpenManuscript(manuscript.id);
+                  } catch (error) {
+                    console.error('Failed to create manuscript:', error);
+                    toast.error('Failed to create manuscript. Please try again.');
+                  }
                 }}
                 className="p-6 border-2 border-slate-ui hover:border-bronze hover:shadow-lg transition-all text-left rounded-sm"
               >

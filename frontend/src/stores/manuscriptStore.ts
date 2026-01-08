@@ -20,7 +20,7 @@ interface ManuscriptStore {
   currentManuscriptId: string | null;
 
   // Actions
-  createManuscript: (title: string) => Manuscript;
+  createManuscript: (title: string) => Promise<Manuscript>;
   addManuscript: (manuscript: Manuscript) => void;
   updateManuscript: (id: string, updates: Partial<Manuscript>) => void;
   deleteManuscript: (id: string) => void;
@@ -35,14 +35,28 @@ export const useManuscriptStore = create<ManuscriptStore>()(
       manuscripts: [],
       currentManuscriptId: null,
 
-      createManuscript: (title: string) => {
+      createManuscript: async (title: string) => {
+        // Call backend API to create manuscript in database
+        const response = await fetch('http://localhost:8000/api/manuscripts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: title || 'Untitled Manuscript' })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create manuscript');
+        }
+
+        const data = await response.json();
+
+        // Add manuscript with real UUID from database
         const newManuscript: Manuscript = {
-          id: `ms-${Date.now()}`,
-          title: title || 'Untitled Manuscript',
+          id: data.id,
+          title: data.title,
           content: '',
-          wordCount: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          wordCount: data.word_count || 0,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
         };
 
         set((state) => ({
