@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $getRoot, EditorState } from 'lexical';
 import { useManuscriptStore } from '@/stores/manuscriptStore';
+import { useOutlineStore } from '@/stores/outlineStore';
 import { versioningApi, chaptersApi, manuscriptApi } from '@/lib/api';
 
 interface AutoSavePluginProps {
@@ -27,6 +28,7 @@ export default function AutoSavePlugin({
 }: AutoSavePluginProps) {
   const [editor] = useLexicalComposerContext();
   const { updateManuscript } = useManuscriptStore();
+  const { getBeatByChapterId, loadProgress } = useOutlineStore();
   const saveTimeoutRef = useRef<number | null>(null);
   const lastSnapshotTimeRef = useRef<number>(Date.now());
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
@@ -103,6 +105,12 @@ export default function AutoSavePlugin({
           word_count: wordCount,
         });
         console.log(`Auto-saved chapter ${chapterId}: ${wordCount} words`);
+
+        // Trigger beat progress refresh if chapter is linked to a beat
+        const beat = getBeatByChapterId?.(chapterId);
+        if (beat) {
+          await loadProgress(beat.outline_id);
+        }
       } catch (error) {
         console.error('Failed to save chapter:', error);
       }

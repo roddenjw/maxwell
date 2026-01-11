@@ -3,12 +3,12 @@
  * Right-side panel showing story structure outline and plot beats
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
 import PlotBeatCard from './PlotBeatCard';
 import CreateOutlineModal from './CreateOutlineModal';
 import SwitchStructureModal from './SwitchStructureModal';
-import OutlineCompletionDonut from './OutlineCompletionDonut';
+// Removed: OutlineCompletionDonut - replaced with compact progress bar
 import TimelineView from './TimelineView';
 import ProgressDashboard from './ProgressDashboard';
 import AISuggestionsPanel from './AISuggestionsPanel';
@@ -36,6 +36,8 @@ export default function OutlineSidebar({
     loadOutline,
     clearOutline,
     getCompletionPercentage,
+    expandedBeatId,
+    setExpandedBeat,
   } = useOutlineStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -44,7 +46,9 @@ export default function OutlineSidebar({
   const [showSwitchModal, setShowSwitchModal] = useState(false);
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'analytics'>('list');
-  const [expandedBeatId, setExpandedBeatId] = useState<string | null>(null);
+  const beatRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevExpandedBeatIdRef = useRef<string | null>(null);
 
   // Load outline when manuscript changes
   useEffect(() => {
@@ -59,10 +63,42 @@ export default function OutlineSidebar({
     };
   }, [manuscriptId, isOpen]);
 
+  // Auto-navigate ONLY when expandedBeatId changes (from external sources like breadcrumb button)
+  useEffect(() => {
+    // Only run if expandedBeatId actually changed (not just on re-render)
+    if (expandedBeatId && isOpen && expandedBeatId !== prevExpandedBeatIdRef.current) {
+      console.log('Auto-navigating to beat:', expandedBeatId);
+
+      // Switch to list view to show the beat
+      setViewMode('list');
+
+      // Scroll to the beat after a delay to ensure list view has rendered
+      setTimeout(() => {
+        const beatElement = beatRefs.current.get(expandedBeatId);
+        if (beatElement && scrollContainerRef.current) {
+          beatElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Highlight animation
+          beatElement.style.animation = 'pulse 0.5s ease-in-out 2';
+        }
+      }, 150);
+    }
+
+    // Update ref to track the current value
+    prevExpandedBeatIdRef.current = expandedBeatId;
+  }, [expandedBeatId, isOpen]);
+
   // Don't render if not open
   if (!isOpen) {
     return null;
   }
+
+  // Debug: log current state
+  console.log('OutlineSidebar state:', {
+    viewMode,
+    expandedBeatId,
+    beatCount: outline?.plot_beats.length || 0,
+    isOpen,
+  });
 
   const handleCreateSuccess = () => {
     if (manuscriptId) {
@@ -102,6 +138,26 @@ export default function OutlineSidebar({
     // The AISuggestionsPanel will allow users to generate suggestions for specific beats
   };
 
+  // Navigate to a beat (from timeline or other views)
+  const handleBeatNavigation = useCallback((beatId: string) => {
+    // Switch to list view
+    setViewMode('list');
+
+    // Expand the beat (use store method)
+    setExpandedBeat(beatId);
+
+    // Scroll to the beat after a short delay to ensure the view has switched
+    setTimeout(() => {
+      const beatElement = beatRefs.current.get(beatId);
+      if (beatElement && scrollContainerRef.current) {
+        beatElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Highlight animation
+        beatElement.style.animation = 'pulse 0.5s ease-in-out 2';
+      }
+    }, 100);
+  }, [setExpandedBeat]);
+
   return (
     <div
       className="fixed right-0 top-0 h-full bg-white border-l-2 border-slate-ui shadow-2xl flex flex-col z-40"
@@ -139,34 +195,31 @@ export default function OutlineSidebar({
           </button>
         </div>
 
-        {/* Progress Section */}
+        {/* Enhanced Progress Display */}
         {outline && (
-          <div className="space-y-4">
-            {/* Donut Chart - Compact Size */}
-            <div className="flex justify-center py-2">
-              <OutlineCompletionDonut
-                completed={progress?.completed_beats || 0}
-                total={progress?.total_beats || 0}
-                percentage={completionPercentage}
-                size={100}
-              />
-            </div>
-
-            {/* Progress Bar (Keep for precise reading) */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm font-sans">
-                <span className="text-faded-ink">
-                  {progress?.completed_beats || 0} of {progress?.total_beats || 0} beats completed
-                </span>
-                <span className="font-bold text-bronze">
-                  {completionPercentage}%
-                </span>
-              </div>
-              <div className="w-full h-2 bg-slate-ui/30 overflow-hidden" style={{ borderRadius: '2px' }}>
+          <div className="space-y-2">
+            {/* Compact progress bar with dual metrics */}
+            <div
+              role="progressbar"
+              aria-label="Outline completion progress"
+              aria-valuenow={completionPercentage}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="space-y-2"
+            >
+              <div className="w-full h-2.5 bg-slate-ui/30 overflow-hidden" style={{ borderRadius: '2px' }}>
                 <div
                   className="h-full bg-bronze transition-all duration-500"
                   style={{ width: `${completionPercentage}%` }}
                 />
+              </div>
+              <div className="flex items-center justify-between text-xs font-sans">
+                <span className="text-faded-ink font-medium">
+                  Progress: {progress?.completed_beats || 0} of {progress?.total_beats || 0} beats ({completionPercentage}%)
+                </span>
+                <span className="text-faded-ink font-medium">
+                  {progress?.actual_word_count.toLocaleString() || 0} / {outline.target_word_count.toLocaleString()} words
+                </span>
               </div>
             </div>
           </div>
@@ -207,10 +260,13 @@ export default function OutlineSidebar({
 
       {/* View Toggle */}
       {!isLoading && outline && (
-        <div className="flex-shrink-0 border-b border-slate-ui bg-white px-4 py-3">
+        <div className="flex-shrink-0 border-b border-slate-ui bg-white px-3 py-2">
           <div className="flex gap-2">
             <button
-              onClick={() => setViewMode('list')}
+              onClick={() => {
+                console.log('Switching to List view');
+                setViewMode('list');
+              }}
               className={`flex-1 px-3 py-2 font-sans text-sm font-medium uppercase tracking-button transition-colors ${
                 viewMode === 'list'
                   ? 'bg-bronze text-white'
@@ -221,7 +277,10 @@ export default function OutlineSidebar({
               📋 List
             </button>
             <button
-              onClick={() => setViewMode('timeline')}
+              onClick={() => {
+                console.log('Switching to Timeline view');
+                setViewMode('timeline');
+              }}
               className={`flex-1 px-3 py-2 font-sans text-sm font-medium uppercase tracking-button transition-colors ${
                 viewMode === 'timeline'
                   ? 'bg-bronze text-white'
@@ -232,14 +291,16 @@ export default function OutlineSidebar({
               ⏱️ Timeline
             </button>
             <button
-              onClick={() => setViewMode('analytics')}
+              onClick={() => {
+                console.log('Switching to Analytics view');
+                setViewMode('analytics');
+              }}
               className={`flex-1 px-3 py-2 font-sans text-sm font-medium uppercase tracking-button transition-colors ${
                 viewMode === 'analytics'
                   ? 'bg-bronze text-white'
                   : 'bg-slate-ui/20 text-faded-ink hover:bg-slate-ui/40'
               }`}
               style={{ borderRadius: '2px' }}
-              title="Coming soon - analytics dashboard"
             >
               📊 Analytics
             </button>
@@ -250,7 +311,7 @@ export default function OutlineSidebar({
       {/* Plot Beats Content */}
       {!isLoading && outline && (
         <>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" ref={scrollContainerRef}>
             {outline.plot_beats.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-4xl mb-3">📋</div>
@@ -262,18 +323,28 @@ export default function OutlineSidebar({
               <>
                 {/* List View */}
                 {viewMode === 'list' && (
-                  <div className="p-4 space-y-3">
+                  <div className="p-3 space-y-2">
                     {outline.plot_beats
                       .sort((a, b) => a.order_index - b.order_index)
                       .map((beat) => (
-                        <PlotBeatCard
+                        <div
                           key={beat.id}
-                          beat={beat}
-                          manuscriptId={manuscriptId!}
-                          onCreateChapter={onCreateChapter}
-                          onOpenChapter={onOpenChapter}
-                          onGetAIIdeas={handleGetAIIdeas}
-                        />
+                          ref={(el) => {
+                            if (el) {
+                              beatRefs.current.set(beat.id, el);
+                            } else {
+                              beatRefs.current.delete(beat.id);
+                            }
+                          }}
+                        >
+                          <PlotBeatCard
+                            beat={beat}
+                            manuscriptId={manuscriptId!}
+                            onCreateChapter={onCreateChapter}
+                            onOpenChapter={onOpenChapter}
+                            onGetAIIdeas={handleGetAIIdeas}
+                          />
+                        </div>
                       ))}
                   </div>
                 )}
@@ -282,7 +353,7 @@ export default function OutlineSidebar({
                 {viewMode === 'timeline' && (
                   <TimelineView
                     beats={outline.plot_beats}
-                    onBeatClick={(beatId) => setExpandedBeatId(beatId === expandedBeatId ? null : beatId)}
+                    onBeatClick={handleBeatNavigation}
                     expandedBeatId={expandedBeatId}
                   />
                 )}
@@ -295,13 +366,12 @@ export default function OutlineSidebar({
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex-shrink-0 border-t-2 border-slate-ui bg-vellum p-4">
-            {/* Action Buttons Grid */}
-            <div className="grid grid-cols-2 gap-2 mb-3">
+          {/* Footer - Action Buttons Only */}
+          <div className="flex-shrink-0 border-t-2 border-slate-ui bg-vellum p-2.5">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setShowSwitchModal(true)}
-                className="px-3 py-2 border-2 border-bronze text-bronze hover:bg-bronze hover:text-white font-sans text-xs font-medium uppercase tracking-button transition-colors"
+                className="px-2.5 py-1.5 border-2 border-bronze text-bronze hover:bg-bronze hover:text-white font-sans text-xs font-medium uppercase tracking-button transition-colors"
                 style={{ borderRadius: '2px' }}
                 title="Switch to a different story structure"
               >
@@ -309,56 +379,12 @@ export default function OutlineSidebar({
               </button>
               <button
                 onClick={() => setShowAIPanel(true)}
-                className="px-3 py-2 bg-bronze hover:bg-bronze-dark text-white font-sans text-xs font-medium uppercase tracking-button transition-colors shadow-md"
+                className="px-2.5 py-1.5 bg-bronze hover:bg-bronze-dark text-white font-sans text-xs font-medium uppercase tracking-button transition-colors shadow-md"
                 style={{ borderRadius: '2px' }}
                 title="Get AI-powered insights and suggestions"
               >
                 🤖 AI Insights
               </button>
-            </div>
-
-            <div className="space-y-2">
-              {/* Target Word Count */}
-              <div className="flex items-center justify-between text-sm font-sans">
-                <span className="text-faded-ink">Target Word Count</span>
-                <span className="font-bold text-midnight">
-                  {outline.target_word_count.toLocaleString()}
-                </span>
-              </div>
-
-              {/* Actual Word Count */}
-              {progress && (
-                <div className="flex items-center justify-between text-sm font-sans">
-                  <span className="text-faded-ink">Current Word Count</span>
-                  <span className="font-bold text-bronze">
-                    {progress.actual_word_count.toLocaleString()}
-                  </span>
-                </div>
-              )}
-
-              {/* Premise (if exists) */}
-              {outline.premise && (
-                <div className="pt-2 border-t border-slate-ui/30">
-                  <p className="text-xs font-sans font-semibold text-midnight mb-1">
-                    Story Premise:
-                  </p>
-                  <p className="text-xs font-sans text-faded-ink leading-relaxed">
-                    {outline.premise}
-                  </p>
-                </div>
-              )}
-
-              {/* Logline (if exists) */}
-              {outline.logline && (
-                <div className="pt-2">
-                  <p className="text-xs font-sans font-semibold text-midnight mb-1">
-                    Logline:
-                  </p>
-                  <p className="text-xs font-sans text-faded-ink italic leading-relaxed">
-                    {outline.logline}
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         </>

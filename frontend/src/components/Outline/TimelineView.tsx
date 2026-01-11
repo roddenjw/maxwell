@@ -122,12 +122,14 @@ export default function TimelineView({ beats, onBeatClick, expandedBeatId }: Tim
                   </div>
                 </div>
 
-                {/* Hover Tooltip */}
+                {/* Hover Tooltip - Smart positioning to avoid cutoff */}
                 {isHovered && (
-                  <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 z-10 w-64 max-w-[90vw] pointer-events-none">
+                  <div className={`absolute bottom-12 z-10 w-64 pointer-events-none ${
+                    position < 20 ? 'left-0' : position > 80 ? 'right-0' : 'left-1/2 -translate-x-1/2'
+                  }`}>
                     <div className="bg-midnight text-white p-3 shadow-xl transition-opacity duration-200" style={{ borderRadius: '2px' }}>
                       <div className="font-sans font-bold text-sm mb-1">{beat.beat_label}</div>
-                      <div className="text-xs text-white/80 mb-2 line-clamp-2">
+                      <div className="text-xs text-white/80 mb-2 max-h-12 overflow-y-auto">
                         {beat.beat_description}
                       </div>
                       <div className="flex items-center justify-between text-xs flex-wrap gap-1">
@@ -141,7 +143,9 @@ export default function TimelineView({ beats, onBeatClick, expandedBeatId }: Tim
                       </div>
                     </div>
                     {/* Arrow pointing down */}
-                    <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-midnight mx-auto" />
+                    <div className={`w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-midnight ${
+                      position < 20 ? 'ml-8' : position > 80 ? 'mr-8' : 'mx-auto'
+                    }`} />
                   </div>
                 )}
 

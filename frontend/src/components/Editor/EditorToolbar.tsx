@@ -20,6 +20,7 @@ import { INSERT_UNORDERED_LIST_COMMAND, INSERT_ORDERED_LIST_COMMAND } from '@lex
 import { $createSceneBreakNode } from './nodes/SceneBreakNode';
 import { codexApi, timelineApi } from '@/lib/api';
 import { useCodexStore } from '@/stores/codexStore';
+import { useOutlineStore } from '@/stores/outlineStore';
 import ChapterRecapModal from '@/components/Chapter/ChapterRecapModal';
 
 interface EditorToolbarProps {
@@ -31,6 +32,7 @@ interface EditorToolbarProps {
 export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }: EditorToolbarProps = {}) {
   const [editor] = useLexicalComposerContext();
   const { setAnalyzing, setSidebarOpen, setActiveTab } = useCodexStore();
+  const { outline, getCompletionPercentage, toggleOutlineReferenceSidebar, outlineReferenceSidebarOpen } = useOutlineStore();
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
   const [isUnderline, setIsUnderline] = useState(false);
@@ -347,12 +349,25 @@ export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }:
 
       {/* Chapter Recap button */}
       {chapterId && (
-        <div className="toolbar-group flex gap-1">
+        <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
           <ToolbarButton
             onClick={() => setShowRecapModal(true)}
             title="Generate an AI-powered chapter recap with themes, events, and character developments"
           >
             📖 Recap
+          </ToolbarButton>
+        </div>
+      )}
+
+      {/* Outline Reference Sidebar Toggle */}
+      {outline && (
+        <div className="toolbar-group flex gap-1">
+          <ToolbarButton
+            onClick={toggleOutlineReferenceSidebar}
+            active={outlineReferenceSidebarOpen}
+            title={outlineReferenceSidebarOpen ? "Hide outline reference" : "Show outline reference while writing"}
+          >
+            📋 Outline {getCompletionPercentage()}%
           </ToolbarButton>
         </div>
       )}

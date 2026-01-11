@@ -21,8 +21,11 @@ interface OutlineStore {
   progress: OutlineProgress | null;
   isLoading: boolean;
   isSidebarOpen: boolean;
+  outlineReferenceSidebarOpen: boolean;
+  beatContextPanelCollapsed: boolean;
   expandedBeatId: string | null;
   error: string | null;
+  notifiedCompletedBeats: Set<string>;  // Track which beats we've shown completion notification for
 
   // AI State
   aiSuggestions: AIAnalysisResult | null;
@@ -36,6 +39,10 @@ interface OutlineStore {
   setLoading: (isLoading: boolean) => void;
   setSidebarOpen: (isOpen: boolean) => void;
   toggleSidebar: () => void;
+  setOutlineReferenceSidebarOpen: (isOpen: boolean) => void;
+  toggleOutlineReferenceSidebar: () => void;
+  setBeatContextPanelCollapsed: (collapsed: boolean) => void;
+  toggleBeatContextPanel: () => void;
   setExpandedBeat: (beatId: string | null) => void;
   setError: (error: string | null) => void;
 
@@ -57,6 +64,7 @@ interface OutlineStore {
   getCompletedBeatsCount: () => number;
   getTotalBeatsCount: () => number;
   getBeatById: (beatId: string) => PlotBeat | undefined;
+  getBeatByChapterId: (chapterId: string) => PlotBeat | null;
   getCompletionPercentage: () => number;
 }
 
@@ -66,8 +74,11 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
   progress: null,
   isLoading: false,
   isSidebarOpen: false,
+  outlineReferenceSidebarOpen: false,
+  beatContextPanelCollapsed: false,
   expandedBeatId: null,
   error: null,
+  notifiedCompletedBeats: new Set(),
 
   // AI Initial State
   aiSuggestions: null,
@@ -85,6 +96,14 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
   setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
 
   toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+
+  setOutlineReferenceSidebarOpen: (isOpen) => set({ outlineReferenceSidebarOpen: isOpen }),
+
+  toggleOutlineReferenceSidebar: () => set((state) => ({ outlineReferenceSidebarOpen: !state.outlineReferenceSidebarOpen })),
+
+  setBeatContextPanelCollapsed: (collapsed) => set({ beatContextPanelCollapsed: collapsed }),
+
+  toggleBeatContextPanel: () => set((state) => ({ beatContextPanelCollapsed: !state.beatContextPanelCollapsed })),
 
   setExpandedBeat: (beatId) => set({ expandedBeatId: beatId }),
 
@@ -113,39 +132,76 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     }
   },
 
-  loadProgress: async (outlineId: string) => {
-    try {
-      const progress = await outlineApi.getProgress(outlineId);
-      set({ progress });
-    } catch (error: any) {
-      console.error('Failed to load outline progress:', error);
-      // Don't show error toast for progress - it's not critical
-    }
-  },
+  loadProgress: (() => {
+    // Debounce map: outlineId -> timeout
+    const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const DEBOUNCE_MS = 1000; // 1 second debounce
+
+    return async (outlineId: string) => {
+      // Clear existing timer for this outline
+      const existingTimer = debounceTimers.get(outlineId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
+
+      // Set new debounced timer
+      const timer = setTimeout(async () => {
+        try {
+          const progress = await outlineApi.getProgress(outlineId);
+          set({ progress });
+        } catch (error: any) {
+          console.error('Failed to load outline progress:', error);
+          // Don't show error toast for progress - it's not critical
+        } finally {
+          debounceTimers.delete(outlineId);
+        }
+      }, DEBOUNCE_MS);
+
+      debounceTimers.set(outlineId, timer);
+    };
+  })(),
 
   updateBeat: async (beatId: string, updates: PlotBeatUpdate) => {
+    const currentOutline = get().outline;
+    if (!currentOutline) return;
+
+    // Store original state for rollback
+    const originalOutline = { ...currentOutline };
+
+    // Optimistic update - immediately update local state
+    const optimisticBeats = currentOutline.plot_beats.map((beat) =>
+      beat.id === beatId ? { ...beat, ...updates } : beat
+    );
+    set({
+      outline: {
+        ...currentOutline,
+        plot_beats: optimisticBeats,
+      },
+    });
+
     try {
+      // Call API to persist changes
       const updatedBeat = await outlineApi.updateBeat(beatId, updates);
 
-      // Update the beat in the local state
-      const currentOutline = get().outline;
-      if (currentOutline) {
-        const updatedBeats = currentOutline.plot_beats.map((beat) =>
-          beat.id === beatId ? updatedBeat : beat
-        );
-        set({
-          outline: {
-            ...currentOutline,
-            plot_beats: updatedBeats,
-          },
-        });
+      // Update with actual API response
+      const updatedBeats = currentOutline.plot_beats.map((beat) =>
+        beat.id === beatId ? updatedBeat : beat
+      );
+      set({
+        outline: {
+          ...currentOutline,
+          plot_beats: updatedBeats,
+        },
+      });
 
-        // Reload progress if completion status changed
-        if (updates.is_completed !== undefined) {
-          get().loadProgress(currentOutline.id);
-        }
+      // Reload progress if completion status changed
+      if (updates.is_completed !== undefined) {
+        get().loadProgress(currentOutline.id);
       }
     } catch (error: any) {
+      // Revert to original state on error
+      set({ outline: originalOutline });
+
       console.error('Failed to update beat:', error);
       toast.error('Failed to update plot beat');
       throw error;
@@ -303,6 +359,34 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     if (!outline) return undefined;
     return outline.plot_beats.find((beat) => beat.id === beatId);
   },
+
+  getBeatByChapterId: (() => {
+    // Memoization cache for beat lookups
+    const cache = new Map<string, PlotBeat | null>();
+    let lastOutlineId: string | null = null;
+
+    return (chapterId: string) => {
+      const outline = get().outline;
+
+      // Clear cache if outline changed
+      if (outline?.id !== lastOutlineId) {
+        cache.clear();
+        lastOutlineId = outline?.id || null;
+      }
+
+      if (!outline) return null;
+
+      // Return cached result if available
+      if (cache.has(chapterId)) {
+        return cache.get(chapterId) || null;
+      }
+
+      // Find beat and cache result
+      const beat = outline.plot_beats.find((beat) => beat.chapter_id === chapterId) || null;
+      cache.set(chapterId, beat);
+      return beat;
+    };
+  })(),
 
   getCompletionPercentage: () => {
     const total = get().getTotalBeatsCount();

@@ -18,6 +18,8 @@ import { EditorState } from 'lexical';
 import editorTheme from '@/lib/editorTheme';
 import type { EditorMode } from '@/types/editor';
 import EditorToolbar from './EditorToolbar';
+import BeatContextPanel from './BeatContextPanel';
+import OutlineReferenceSidebar from './OutlineReferenceSidebar';
 import { SceneBreakNode } from './nodes/SceneBreakNode';
 import { EntityMentionNode } from './nodes/EntityMentionNode';
 import AutoSavePlugin from './plugins/AutoSavePlugin';
@@ -25,7 +27,8 @@ import EntityMentionsPlugin from './plugins/EntityMentionsPlugin';
 import RealtimeNLPPlugin from './plugins/RealtimeNLPPlugin';
 import FastCoachPlugin from './plugins/FastCoachPlugin';
 import EntityDetectionPlugin from './plugins/EntityDetectionPlugin';
-import { versioningApi } from '@/lib/api';
+import { versioningApi, chaptersApi } from '@/lib/api';
+import { useOutlineStore } from '@/stores/outlineStore';
 
 interface ManuscriptEditorProps {
   manuscriptId?: string;
@@ -34,6 +37,7 @@ interface ManuscriptEditorProps {
   mode?: EditorMode;
   onChange?: (editorState: EditorState) => void;
   onSaveStatusChange?: (status: 'saved' | 'saving' | 'unsaved') => void;
+  onViewBeat?: (beatId: string) => void;
 }
 
 export default function ManuscriptEditor({
@@ -43,16 +47,44 @@ export default function ManuscriptEditor({
   mode = 'normal',
   onChange,
   onSaveStatusChange,
+  onViewBeat,
 }: ManuscriptEditorProps) {
   const [wordCount, setWordCount] = useState(0);
   const [isFocusMode, setIsFocusMode] = useState(mode === 'focus');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [latestEditorState, setLatestEditorState] = useState<EditorState | null>(null);
+  const [chapterTitle, setChapterTitle] = useState<string>('');
+
+  const {
+    getBeatByChapterId,
+    toggleBeatContextPanel,
+    toggleOutlineReferenceSidebar
+  } = useOutlineStore();
+  const beat = chapterId ? getBeatByChapterId?.(chapterId) : null;
 
   // Notify parent of save status changes
   useEffect(() => {
     onSaveStatusChange?.(saveStatus);
   }, [saveStatus, onSaveStatusChange]);
+
+  // Fetch chapter title when chapter changes
+  useEffect(() => {
+    if (!chapterId) {
+      setChapterTitle('');
+      return;
+    }
+
+    const fetchChapterTitle = async () => {
+      try {
+        const chapter = await chaptersApi.getChapter(chapterId);
+        setChapterTitle(chapter.title);
+      } catch (error) {
+        console.error('Failed to fetch chapter title:', error);
+      }
+    };
+
+    fetchChapterTitle();
+  }, [chapterId]);
 
   // Configure Lexical editor
   const initialConfig = {
@@ -133,6 +165,22 @@ export default function ManuscriptEditor({
         return;
       }
 
+      // Toggle beat context panel: Cmd+B or Ctrl+B
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b' && !e.shiftKey) {
+        e.preventDefault();
+        if (beat) {
+          toggleBeatContextPanel();
+        }
+        return;
+      }
+
+      // Toggle outline reference sidebar: Cmd+Shift+O or Ctrl+Shift+O
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'o') {
+        e.preventDefault();
+        toggleOutlineReferenceSidebar();
+        return;
+      }
+
       // Focus mode toggle: F11 or Ctrl+Shift+F
       if (e.key === 'F11' || (e.ctrlKey && e.shiftKey && e.key === 'f')) {
         e.preventDefault();
@@ -142,12 +190,29 @@ export default function ManuscriptEditor({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [manuscriptId, latestEditorState, wordCount]);
+  }, [manuscriptId, latestEditorState, wordCount, beat, toggleBeatContextPanel, toggleOutlineReferenceSidebar]);
 
   return (
     <div className={`editor-container ${isFocusMode ? 'focus-mode' : ''}`}>
       <LexicalComposer initialConfig={initialConfig}>
         <div className="relative">
+          {/* Breadcrumb Navigation - shows beat context */}
+          {!isFocusMode && beat && chapterTitle && onViewBeat && (
+            <div className="sticky top-0 z-10 bg-bronze/5 border-b border-bronze/20 px-4 py-2">
+              <div className="flex items-center gap-2 text-sm font-sans">
+                <span className="text-faded-ink">Writing:</span>
+                <button
+                  onClick={() => onViewBeat(beat.id)}
+                  className="text-bronze hover:text-bronze-dark font-semibold transition-colors"
+                >
+                  {beat.beat_label} ({Math.round(beat.target_position_percent * 100)}%)
+                </button>
+                <span className="text-faded-ink">›</span>
+                <span className="text-midnight font-semibold">{chapterTitle}</span>
+              </div>
+            </div>
+          )}
+
           {/* Toolbar - hidden in focus mode */}
           {!isFocusMode && (
             <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
@@ -262,6 +327,24 @@ export default function ManuscriptEditor({
             <div className="fixed top-4 right-4 text-sm text-faded-ink font-sans">
               Press F11 to exit focus mode
             </div>
+          )}
+
+          {/* Beat Context Panel - shows current plot beat while writing */}
+          {!isFocusMode && manuscriptId && chapterId && (
+            <BeatContextPanel
+              manuscriptId={manuscriptId}
+              chapterId={chapterId}
+              onViewBeat={onViewBeat}
+            />
+          )}
+
+          {/* Outline Reference Sidebar - full outline as reference while writing */}
+          {!isFocusMode && manuscriptId && (
+            <OutlineReferenceSidebar
+              manuscriptId={manuscriptId}
+              currentChapterId={chapterId}
+              onViewBeat={onViewBeat}
+            />
           )}
         </div>
       </LexicalComposer>

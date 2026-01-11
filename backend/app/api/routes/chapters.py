@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.manuscript import Chapter
+from app.models.outline import PlotBeat
 from app.services.manuscript_aggregation_service import manuscript_aggregation_service
 
 
@@ -348,6 +349,19 @@ async def update_chapter(
             db,
             chapter.id
         )
+
+        # Auto-complete beat if chapter reached target word count
+        beat = db.query(PlotBeat).filter(
+            PlotBeat.chapter_id == chapter_id
+        ).first()
+
+        if beat and not beat.is_completed:
+            # Auto-complete if chapter reached target
+            if chapter.word_count >= beat.target_word_count:
+                beat.is_completed = True
+                beat.completed_at = datetime.utcnow()
+                db.commit()
+                print(f"✅ Auto-completed beat {beat.id} ({beat.beat_name})")
 
     return {
         "success": True,

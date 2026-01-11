@@ -148,7 +148,7 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
     >
       {/* Header - Always Visible */}
       <div
-        className="p-3 cursor-pointer"
+        className="p-2.5 cursor-pointer"
         onClick={handleToggleExpand}
       >
         <div className="flex items-start gap-3">
@@ -159,6 +159,7 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
               handleToggleComplete();
             }}
             disabled={isUpdating}
+            title="Mark as complete (or auto-completes when chapter reaches target word count)"
             className={`flex-shrink-0 mt-1 w-5 h-5 border-2 flex items-center justify-center transition-colors ${
               beat.is_completed
                 ? 'bg-bronze border-bronze'
@@ -201,7 +202,7 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
 
             {/* Notes preview (collapsed state only) */}
             {!isExpanded && beat.user_notes && (
-              <p className="mt-1 mb-2 text-sm text-faded-ink italic line-clamp-2">
+              <p className="mt-1 mb-2 text-sm text-faded-ink italic line-clamp-2 leading-snug">
                 {beat.user_notes}
               </p>
             )}
@@ -247,21 +248,23 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="px-3 pb-3 border-t border-slate-ui/30">
+        <div className="px-2.5 pb-2.5 border-t border-slate-ui/30">
           {/* Beat Description */}
           {beat.beat_description && (
-            <div className="pt-4 mb-4">
+            <div className="pt-3 mb-3">
               <h5 className="font-sans font-semibold text-midnight text-sm mb-2">
                 What should happen in this beat:
               </h5>
-              <p className="font-sans text-faded-ink text-sm leading-relaxed whitespace-pre-wrap">
-                {beat.beat_description}
-              </p>
+              <div className="max-h-40 overflow-y-auto">
+                <p className="font-sans text-faded-ink text-sm leading-snug whitespace-pre-wrap">
+                  {beat.beat_description}
+                </p>
+              </div>
             </div>
           )}
 
           {/* User Notes */}
-          <div className="mb-4">
+          <div className="mb-3">
             <label className="font-sans font-semibold text-midnight text-sm mb-2 block">
               Your Notes:
             </label>
@@ -269,18 +272,18 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
               value={notes}
               onChange={(e) => handleNotesChange(e.target.value)}
               placeholder="Add your ideas, character notes, or scene details..."
-              className="w-full px-3 py-2 border border-slate-ui focus:border-bronze focus:outline-none font-sans text-sm text-midnight placeholder:text-faded-ink/50 min-h-[60px] resize-y"
+              className="w-full px-2.5 py-2 border border-slate-ui focus:border-bronze focus:outline-none font-sans text-sm text-midnight placeholder:text-faded-ink/50 min-h-[60px] resize-y"
               style={{ borderRadius: '2px' }}
             />
           </div>
 
           {/* Content Summary (if exists) */}
           {beat.content_summary && (
-            <div className="mb-4 p-3 bg-slate-ui/10 border-l-2 border-bronze">
+            <div className="mb-3 p-2.5 bg-slate-ui/10 border-l-2 border-bronze">
               <h5 className="font-sans font-semibold text-midnight text-sm mb-1">
                 Written Content:
               </h5>
-              <p className="font-sans text-faded-ink text-sm">
+              <p className="font-sans text-faded-ink text-sm leading-snug">
                 {beat.content_summary}
               </p>
             </div>
@@ -291,14 +294,14 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
             {beat.chapter_id && linkedChapter ? (
               <button
                 onClick={() => onOpenChapter?.(beat.chapter_id!)}
-                className="px-3 py-1.5 text-sm bg-bronze/10 text-bronze border border-bronze/30 hover:bg-bronze/20 font-sans font-medium transition-colors flex items-center gap-1.5"
+                className="px-4 py-2 text-sm bg-bronze text-white hover:bg-bronze-dark font-sans font-semibold transition-colors flex items-center gap-2"
                 style={{ borderRadius: '2px' }}
-                title={`Open ${linkedChapter.title}`}
+                title={`Continue writing ${linkedChapter.title}`}
               >
                 <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
-                <span className="truncate max-w-[200px]">{linkedChapter.title}</span>
+                <span>Continue Writing</span>
               </button>
             ) : (
               <>

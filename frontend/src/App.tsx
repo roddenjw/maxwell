@@ -395,6 +395,21 @@ function App() {
     }
   }
 
+  const handleViewBeat = (beatId: string) => {
+    // Switch to outline view
+    setActiveView('outline')
+
+    // Open outline sidebar if not already open
+    if (!isOutlineSidebarOpen) {
+      setOutlineSidebarOpen(true)
+    }
+
+    // Expand the specific beat using the store
+    // Note: OutlineSidebar will handle scrolling via handleBeatNavigation
+    const { setExpandedBeat } = useOutlineStore.getState()
+    setExpandedBeat(beatId)
+  }
+
   const handleChapterSelect = async (chapterId: string) => {
     // Check for unsaved changes before switching chapters
     if (!checkNavigateAway()) {
@@ -590,6 +605,7 @@ function App() {
                       initialContent={currentChapterContent}
                       mode="normal"
                       onSaveStatusChange={setSaveStatus}
+                      onViewBeat={handleViewBeat}
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full bg-vellum">
@@ -619,6 +635,7 @@ function App() {
                       initialContent={currentChapterContent}
                       mode="normal"
                       onSaveStatusChange={setSaveStatus}
+                      onViewBeat={handleViewBeat}
                     />
                   </div>
                 )}
@@ -653,6 +670,7 @@ function App() {
                       initialContent={currentChapterContent}
                       mode="normal"
                       onSaveStatusChange={setSaveStatus}
+                      onViewBeat={handleViewBeat}
                     />
                   </div>
                 )}
