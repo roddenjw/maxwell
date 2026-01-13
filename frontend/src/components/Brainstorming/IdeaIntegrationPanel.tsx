@@ -200,7 +200,7 @@ export default function IdeaIntegrationPanel() {
       <div className="text-xs text-gray-500">
         <p>
           Characters will be added as <strong>{entityType}</strong> entities in your Codex with
-          all Brandon Sanderson methodology fields preserved in their attributes.
+          all character framework fields preserved in their attributes.
         </p>
       </div>
     </div>

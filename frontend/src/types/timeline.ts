@@ -234,3 +234,26 @@ export interface ComprehensiveTimelineData {
   location_distances: LocationDistance[];
   stats: TimelineStats;
 }
+
+// === Gantt Timeline Visualization Types ===
+
+export interface GanttEvent {
+  id: string;
+  event_name: string;
+  narrative_importance: 'high' | 'medium' | 'low';
+  positionInBeat: number;  // 0.0 to 1.0 (position within the beat)
+}
+
+export interface GanttBeat {
+  id: string;
+  beat_name: string;
+  beat_label: string;
+  target_word_count: number;
+  actual_word_count: number;
+  is_completed: boolean;
+
+  // Computed for Gantt visualization:
+  startPercent: number;  // X position (0-100%)
+  widthPercent: number;  // Bar width based on target_word_count
+  events: GanttEvent[];  // Events that fall within this beat
+}

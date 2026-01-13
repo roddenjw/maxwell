@@ -3,7 +3,7 @@
  * Main Lexical-based rich text editor for manuscripts
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
@@ -27,6 +27,7 @@ import EntityMentionsPlugin from './plugins/EntityMentionsPlugin';
 import RealtimeNLPPlugin from './plugins/RealtimeNLPPlugin';
 import FastCoachPlugin from './plugins/FastCoachPlugin';
 import EntityDetectionPlugin from './plugins/EntityDetectionPlugin';
+import SceneDetectionPlugin from './plugins/SceneDetectionPlugin';
 import { versioningApi, chaptersApi } from '@/lib/api';
 import { useOutlineStore } from '@/stores/outlineStore';
 
@@ -54,6 +55,7 @@ export default function ManuscriptEditor({
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [latestEditorState, setLatestEditorState] = useState<EditorState | null>(null);
   const [chapterTitle, setChapterTitle] = useState<string>('');
+  const [currentSceneContext, setCurrentSceneContext] = useState<any>(null);
 
   const {
     getBeatByChapterId,
@@ -84,6 +86,25 @@ export default function ManuscriptEditor({
     };
 
     fetchChapterTitle();
+  }, [chapterId]);
+
+  // Handle scene changes from SceneDetectionPlugin
+  const handleSceneChange = useCallback(async (sceneIndex: number, cursorPosition: number) => {
+    if (!chapterId) return;
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/chapters/${chapterId}/scene-context?cursor_position=${cursorPosition}`
+      );
+      const data = await response.json();
+
+      if (data.success) {
+        setCurrentSceneContext(data.scene);
+      }
+    } catch (error) {
+      console.error('Failed to fetch scene context:', error);
+      // Don't show error to user - scene context is optional enhancement
+    }
   }, [chapterId]);
 
   // Configure Lexical editor
@@ -281,6 +302,14 @@ export default function ManuscriptEditor({
 
             {/* Entity Detection plugin - auto-detect entities for Codex */}
             {manuscriptId && <EntityDetectionPlugin manuscriptId={manuscriptId} enabled={true} />}
+
+            {/* Scene Detection plugin - tracks which scene cursor is in */}
+            {chapterId && (
+              <SceneDetectionPlugin
+                chapterId={chapterId}
+                onSceneChange={handleSceneChange}
+              />
+            )}
           </div>
 
           {/* Status indicators - Maxwell Style */}
@@ -335,6 +364,7 @@ export default function ManuscriptEditor({
               manuscriptId={manuscriptId}
               chapterId={chapterId}
               onViewBeat={onViewBeat}
+              currentSceneContext={currentSceneContext}
             />
           )}
 

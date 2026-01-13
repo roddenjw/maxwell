@@ -65,7 +65,7 @@ class Chapter(Base):
     # Relationships
     manuscript = relationship("Manuscript", back_populates="chapters")
     parent = relationship("Chapter", remote_side=[id], backref="children")
-    # chapter_scenes = relationship("ChapterScene", back_populates="chapter", cascade="all, delete-orphan")  # Commented out to fix import issue
+    chapter_scenes = relationship("ChapterScene", back_populates="chapter", cascade="all, delete-orphan")
 
     def __repr__(self):
         type_str = "Folder" if self.is_folder else "Chapter"

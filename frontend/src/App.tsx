@@ -513,6 +513,16 @@ function App() {
     }
   }, [activeView, currentChapterId]); // Run when activeView OR currentChapterId changes
 
+  // Listen for openSettings custom event from brainstorming components
+  useEffect(() => {
+    const handleOpenSettings = () => {
+      setShowSettings(true);
+    };
+
+    window.addEventListener('openSettings', handleOpenSettings);
+    return () => window.removeEventListener('openSettings', handleOpenSettings);
+  }, []);
+
   // Define keyboard shortcuts
   const shortcuts: KeyboardShortcut[] = [
     {

@@ -135,7 +135,7 @@ export default function IdeaResultsPanel() {
 
       {/* Help Text */}
       <div className="text-xs text-gray-500 italic">
-        Tip: Click on any character to expand and see their full profile based on Brandon Sanderson's
+        Tip: Click on any character to expand and see their full profile based on the
         WANT/NEED/FLAW/STRENGTH/ARC framework
       </div>
     </div>

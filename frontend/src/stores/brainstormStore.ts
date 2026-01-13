@@ -9,6 +9,7 @@ import type {
   BrainstormIdea,
   BrainstormSessionType,
   BrainstormTechnique,
+  BrainstormContext,
 } from '@/types/brainstorm';
 import { brainstormingApi } from '@/lib/api';
 
@@ -20,6 +21,7 @@ interface BrainstormStore {
   selectedIdeaIds: Set<string>;
   isGenerating: boolean;
   currentTechnique: BrainstormTechnique | null;
+  manuscriptContext: BrainstormContext | null; // Auto-loaded outline + entities
   totalCost: number;
   totalTokens: number;
 
@@ -32,6 +34,7 @@ interface BrainstormStore {
   createSession: (manuscriptId: string, sessionType: BrainstormSessionType, context: any, outlineId?: string) => Promise<BrainstormSession>;
   loadSession: (sessionId: string) => Promise<void>;
   loadManuscriptSessions: (manuscriptId: string) => Promise<void>;
+  loadManuscriptContext: (manuscriptId: string) => Promise<void>; // NEW
   setCurrentSession: (session: BrainstormSession | null) => void;
   updateSessionStatus: (sessionId: string, status: string) => Promise<void>;
 
@@ -74,6 +77,7 @@ export const useBrainstormStore = create<BrainstormStore>((set, get) => ({
   selectedIdeaIds: new Set(),
   isGenerating: false,
   currentTechnique: null,
+  manuscriptContext: null,
   totalCost: 0,
   totalTokens: 0,
   isModalOpen: false,
@@ -129,6 +133,17 @@ export const useBrainstormStore = create<BrainstormStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to load manuscript sessions:', error);
       throw error;
+    }
+  },
+
+  loadManuscriptContext: async (manuscriptId) => {
+    try {
+      const context = await brainstormingApi.getBrainstormContext(manuscriptId);
+      set({ manuscriptContext: context });
+    } catch (error) {
+      console.error('Failed to load manuscript context:', error);
+      // Don't throw - context loading is optional, app should still work
+      set({ manuscriptContext: null });
     }
   },
 
@@ -294,6 +309,7 @@ export const useBrainstormStore = create<BrainstormStore>((set, get) => ({
       selectedIdeaIds: new Set(),
       isGenerating: false,
       currentTechnique: null,
+      manuscriptContext: null,
       totalCost: 0,
       totalTokens: 0,
       isModalOpen: false,

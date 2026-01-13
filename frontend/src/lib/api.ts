@@ -39,8 +39,11 @@ import type {
   BrainstormSession,
   BrainstormIdea,
   BrainstormSessionStats,
+  BrainstormContext,
   CreateSessionRequest,
   CharacterGenerationRequest,
+  PlotGenerationRequest,
+  LocationGenerationRequest,
   UpdateIdeaRequest,
   IntegrateCodexRequest,
 } from '@/types/brainstorm';
@@ -1127,6 +1130,22 @@ export const brainstormingApi = {
   },
 
   /**
+   * Get manuscript context for brainstorming (outline + existing entities)
+   */
+  async getBrainstormContext(manuscriptId: string): Promise<BrainstormContext> {
+    const response = await fetch(
+      `${API_BASE_URL}/brainstorming/manuscripts/${manuscriptId}/context`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get brainstorm context');
+    }
+
+    return response.json();
+  },
+
+  /**
    * Update session status
    */
   async updateSessionStatus(sessionId: string, status: string): Promise<void> {
@@ -1162,6 +1181,54 @@ export const brainstormingApi = {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || 'Failed to generate characters');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Generate plot ideas using AI
+   */
+  async generatePlots(
+    sessionId: string,
+    request: PlotGenerationRequest
+  ): Promise<BrainstormIdea[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/brainstorming/sessions/${sessionId}/generate/plots`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate plots');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Generate location ideas using AI
+   */
+  async generateLocations(
+    sessionId: string,
+    request: LocationGenerationRequest
+  ): Promise<BrainstormIdea[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/brainstorming/sessions/${sessionId}/generate/locations`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate locations');
     }
 
     return response.json();

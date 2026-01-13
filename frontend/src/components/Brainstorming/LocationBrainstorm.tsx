@@ -1,16 +1,16 @@
 /**
- * CharacterBrainstorm - Character generation form using WANT/NEED/FLAW/STRENGTH/ARC framework
- * Creates compelling characters with detailed personality, backstory, and motivations
+ * LocationBrainstorm - Location/setting generation form for worldbuilding
+ * Generates rich location details with atmosphere, culture, geography, and history
  */
 
 import { useState, useEffect } from 'react';
 
-import type { CharacterGenerationRequest } from '@/types/brainstorm';
+import type { LocationGenerationRequest } from '@/types/brainstorm';
 
 import { brainstormingApi } from '@/lib/api';
 import { useBrainstormStore } from '@/stores/brainstormStore';
 
-export default function CharacterBrainstorm() {
+export default function LocationBrainstorm() {
   const {
     currentSession,
     setGenerating,
@@ -21,13 +21,12 @@ export default function CharacterBrainstorm() {
 
   const [genre, setGenre] = useState('');
   const [premise, setPremise] = useState('');
-  const [characterIdeas, setCharacterIdeas] = useState('');
   const [numIdeas, setNumIdeas] = useState(5);
   const [error, setError] = useState<string | null>(null);
   const [storedApiKey, setStoredApiKey] = useState<string | null>(null);
   const [useCustomContext, setUseCustomContext] = useState(false);
 
-  const estimatedCost = numIdeas * 0.015; // ~$0.015 per character idea
+  const estimatedCost = numIdeas * 0.014; // ~$0.014 per location idea
 
   // Check for stored API key on mount
   useEffect(() => {
@@ -82,15 +81,14 @@ export default function CharacterBrainstorm() {
       setError(null);
       setGenerating(true);
 
-      const request: CharacterGenerationRequest = {
+      const request: LocationGenerationRequest = {
         api_key: storedApiKey,
         genre: genre.trim(),
-        story_premise: premise.trim(),
-        character_ideas: characterIdeas.trim() || undefined,
+        premise: premise.trim(),
         num_ideas: numIdeas,
       };
 
-      const ideas = await brainstormingApi.generateCharacters(
+      const ideas = await brainstormingApi.generateLocations(
         currentSession.id,
         request
       );
@@ -102,7 +100,7 @@ export default function CharacterBrainstorm() {
       setPremise('');
     } catch (err) {
       console.error('Generation error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to generate characters');
+      setError(err instanceof Error ? err.message : 'Failed to generate location ideas');
     } finally {
       setGenerating(false);
     }
@@ -113,10 +111,10 @@ export default function CharacterBrainstorm() {
       {/* Header */}
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-2">
-          Character Development
+          Location & Worldbuilding
         </h3>
         <p className="text-sm text-gray-600">
-          Generate compelling characters using the WANT/NEED/FLAW/STRENGTH/ARC methodology
+          Generate immersive locations with rich atmosphere, culture, geography, and hidden secrets
         </p>
       </div>
 
@@ -145,17 +143,33 @@ export default function CharacterBrainstorm() {
           </div>
         )}
 
+        {/* Existing Locations (only show when using manuscript context) */}
+        {!useCustomContext && manuscriptContext?.existing_entities.locations.length > 0 && (
+          <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+            <p className="text-sm font-medium text-gray-700 mb-2">
+              Existing Locations:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {manuscriptContext.existing_entities.locations.map(loc => (
+                <span key={loc.id} className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
+                  {loc.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Genre */}
         <div>
-          <label htmlFor="genre" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="location-genre" className="block text-sm font-medium text-gray-700 mb-1">
             Genre *
           </label>
           <input
-            id="genre"
+            id="location-genre"
             type="text"
             value={genre}
             onChange={(e) => setGenre(e.target.value)}
-            placeholder="e.g., Epic Fantasy, Science Fiction, Mystery"
+            placeholder="e.g., Urban Fantasy, Space Opera, Historical Fiction"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isGenerating}
           />
@@ -163,63 +177,28 @@ export default function CharacterBrainstorm() {
 
         {/* Story Premise */}
         <div>
-          <label htmlFor="premise" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="location-premise" className="block text-sm font-medium text-gray-700 mb-1">
             Story Premise *
           </label>
           <textarea
-            id="premise"
+            id="location-premise"
             value={premise}
             onChange={(e) => setPremise(e.target.value)}
-            placeholder="Describe your story's core concept, setting, and central conflict..."
+            placeholder="Describe your story's world, tone, and the role locations play in your narrative..."
             rows={4}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isGenerating}
           />
         </div>
 
-        {/* Character Ideas (Optional) */}
-        <div>
-          <label htmlFor="characterIdeas" className="block text-sm font-medium text-gray-700 mb-1">
-            Initial Character Ideas <span className="text-gray-500 font-normal">(Optional)</span>
-          </label>
-          <textarea
-            id="characterIdeas"
-            value={characterIdeas}
-            onChange={(e) => setCharacterIdeas(e.target.value)}
-            placeholder="Share any baseline ideas you have about characters - roles, personality traits, conflicts, or rough concepts. The AI will help develop them into full characters with wants, needs, flaws, and arcs."
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isGenerating}
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Example: "A young blacksmith who discovers magical abilities" or "Siblings on opposite sides of a war"
-          </p>
-        </div>
-
-        {/* Existing Characters (only show when using manuscript context) */}
-        {!useCustomContext && manuscriptContext?.existing_entities.characters.length > 0 && (
-          <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
-            <p className="text-sm font-medium text-gray-700 mb-2">
-              Existing Characters:
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {manuscriptContext.existing_entities.characters.map(char => (
-                <span key={char.id} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
-                  {char.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Number of Ideas */}
         <div>
-          <label htmlFor="numIdeas" className="block text-sm font-medium text-gray-700 mb-1">
-            Number of Characters: {numIdeas}
+          <label htmlFor="location-numIdeas" className="block text-sm font-medium text-gray-700 mb-1">
+            Number of Locations: {numIdeas}
           </label>
           <div className="flex items-center gap-4">
             <input
-              id="numIdeas"
+              id="location-numIdeas"
               type="range"
               min="1"
               max="10"
@@ -259,6 +238,8 @@ export default function CharacterBrainstorm() {
               </p>
               <button
                 onClick={() => {
+                  // Trigger settings modal
+                  // This will be handled by the parent component
                   const event = new CustomEvent('openSettings');
                   window.dispatchEvent(event);
                 }}
@@ -277,7 +258,7 @@ export default function CharacterBrainstorm() {
             <span className="text-blue-700">${estimatedCost.toFixed(3)}</span>
           </div>
           <p className="text-xs text-blue-600 mt-1">
-            Based on {numIdeas} character{numIdeas !== 1 ? 's' : ''} × ~$0.015 each
+            Based on {numIdeas} location{numIdeas !== 1 ? 's' : ''} × ~$0.014 each
           </p>
         </div>
 
@@ -312,10 +293,10 @@ export default function CharacterBrainstorm() {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 />
               </svg>
-              Generating Characters...
+              Generating Locations...
             </span>
           ) : (
-            'Generate Character Ideas'
+            'Generate Location Ideas'
           )}
         </button>
       </div>
@@ -323,14 +304,14 @@ export default function CharacterBrainstorm() {
       {/* Info Box */}
       <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
         <h4 className="text-sm font-semibold text-gray-900 mb-2">
-          Character Development Framework
+          Worldbuilding Elements Generated
         </h4>
         <ul className="text-xs text-gray-700 space-y-1">
-          <li><strong>WANT:</strong> What the character thinks they need (surface goal)</li>
-          <li><strong>NEED:</strong> What they actually need (deeper truth)</li>
-          <li><strong>FLAW:</strong> Internal weakness preventing growth</li>
-          <li><strong>STRENGTH:</strong> Core ability or positive trait</li>
-          <li><strong>ARC:</strong> Journey from WANT to NEED realization</li>
+          <li><strong>Atmosphere:</strong> Sensory details and emotional tone of the location</li>
+          <li><strong>Culture:</strong> Social norms, customs, and way of life</li>
+          <li><strong>Geography:</strong> Physical layout, climate, and natural features</li>
+          <li><strong>History:</strong> Past events that shaped the location</li>
+          <li><strong>Secrets:</strong> Hidden elements that add narrative depth</li>
         </ul>
       </div>
     </div>

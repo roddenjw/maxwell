@@ -13,6 +13,7 @@ import EmotionalArc from './EmotionalArc';
 import CharacterLocationTracker from './CharacterLocationTracker';
 import ConflictTracker from './ConflictTracker';
 import TimelineOrchestrator from './TimelineOrchestrator';
+import GanttTimelineView from './GanttTimelineView';
 
 interface TimelineSidebarProps {
   manuscriptId: string;
@@ -31,6 +32,7 @@ export default function TimelineSidebar({
 
   const tabs = [
     { id: 'visual' as const, label: 'Visual', icon: '📜' },
+    { id: 'gantt' as const, label: 'Gantt', icon: '📊' },
     { id: 'events' as const, label: 'Events', icon: '🎬' },
     { id: 'inconsistencies' as const, label: 'Issues', icon: '⚠️', badge: pendingCount },
     { id: 'orchestrator' as const, label: 'Orchestrator', icon: '🎭' },
@@ -123,6 +125,7 @@ export default function TimelineSidebar({
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'visual' && <InteractiveTimeline manuscriptId={manuscriptId} />}
+        {activeTab === 'gantt' && <GanttTimelineView manuscriptId={manuscriptId} />}
         {activeTab === 'events' && <EventList manuscriptId={manuscriptId} />}
         {activeTab === 'inconsistencies' && <InconsistencyList manuscriptId={manuscriptId} />}
         {activeTab === 'orchestrator' && <TimelineOrchestrator manuscriptId={manuscriptId} />}

@@ -16,6 +16,7 @@ from app.database import get_db
 from app.models.manuscript import Chapter
 from app.models.outline import PlotBeat
 from app.services.manuscript_aggregation_service import manuscript_aggregation_service
+from app.services.scene_detection_service import scene_detection_service
 
 
 router = APIRouter(prefix="/api/chapters", tags=["chapters"])
@@ -282,6 +283,55 @@ async def get_chapter(
     return {
         "success": True,
         "data": serialize_chapter(chapter)
+    }
+
+
+@router.get("/{chapter_id}/scene-context")
+async def get_scene_context(
+    chapter_id: str,
+    cursor_position: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get scene context for the scene containing the cursor position.
+
+    This endpoint is used by the SceneDetectionPlugin to provide real-time
+    scene context in the BeatContextPanel while the writer is working.
+
+    Args:
+        chapter_id: Chapter ID
+        cursor_position: Character offset in chapter content (0-indexed)
+
+    Returns:
+        {
+            "success": True,
+            "scene": {
+                "scene_id": "uuid",
+                "sequence_order": 2,
+                "start_position": 4500,
+                "end_position": 7800,
+                "word_count": 1200,
+                "summary": "Hero confronts villain",
+                "title": "The Confrontation",
+                "total_scenes_in_chapter": 5
+            } or null if no scenes exist
+        }
+    """
+    # Verify chapter exists
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+
+    # Get scene context from scene detection service
+    scene_info = scene_detection_service.get_scene_at_position(
+        db=db,
+        chapter_id=chapter_id,
+        cursor_position=cursor_position
+    )
+
+    return {
+        "success": True,
+        "scene": scene_info  # Will be null if no scenes exist
     }
 
 

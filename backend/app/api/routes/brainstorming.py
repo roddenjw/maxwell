@@ -12,6 +12,7 @@ from datetime import datetime
 from app.database import get_db
 from app.models.brainstorm import BrainstormSession, BrainstormIdea
 from app.models.entity import Entity
+from app.models.outline import PlotBeat, Outline
 from app.services.brainstorming_service import BrainstormingService
 
 router = APIRouter(prefix="/api/brainstorming", tags=["brainstorming"])
@@ -41,6 +42,21 @@ class CharacterGenerationRequest(BaseModel):
     api_key: str
     genre: str
     story_premise: str
+    character_ideas: Optional[str] = None  # Optional initial character ideas from writer
+    num_ideas: int = 5
+
+
+class PlotGenerationRequest(BaseModel):
+    api_key: str
+    genre: str
+    premise: str
+    num_ideas: int = 5
+
+
+class LocationGenerationRequest(BaseModel):
+    api_key: str
+    genre: str
+    premise: str
     num_ideas: int = 5
 
 
@@ -135,6 +151,42 @@ async def get_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/manuscripts/{manuscript_id}/context")
+async def get_brainstorm_context(
+    manuscript_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get manuscript context for brainstorming (outline + entities)"""
+    try:
+        # Get active outline
+        outline = db.query(Outline).filter(
+            Outline.manuscript_id == manuscript_id,
+            Outline.is_active == True
+        ).first()
+
+        # Get existing entities grouped by type
+        entities = db.query(Entity).filter(
+            Entity.manuscript_id == manuscript_id
+        ).all()
+
+        characters = [e for e in entities if e.type == 'CHARACTER']
+        locations = [e for e in entities if e.type == 'LOCATION']
+
+        return {
+            "outline": {
+                "genre": outline.genre if outline else None,
+                "premise": outline.premise if outline else None,
+                "logline": outline.logline if outline else None,
+            },
+            "existing_entities": {
+                "characters": [{"id": c.id, "name": c.name} for c in characters],
+                "locations": [{"id": l.id, "name": l.name} for l in locations],
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/manuscripts/{manuscript_id}/sessions", response_model=List[SessionResponse])
 async def list_manuscript_sessions(
     manuscript_id: str,
@@ -213,6 +265,134 @@ async def generate_character_ideas(
             genre=request.genre,
             existing_characters=existing_characters,
             story_premise=request.story_premise,
+            character_ideas=request.character_ideas,
+            num_ideas=request.num_ideas
+        )
+
+        # Return ideas
+        return [
+            IdeaResponse(
+                id=idea.id,
+                session_id=idea.session_id,
+                idea_type=idea.idea_type,
+                title=idea.title,
+                description=idea.description,
+                idea_metadata=idea.idea_metadata,
+                is_selected=idea.is_selected,
+                user_notes=idea.user_notes,
+                edited_content=idea.edited_content,
+                integrated_to_outline=idea.integrated_to_outline,
+                integrated_to_codex=idea.integrated_to_codex,
+                plot_beat_id=idea.plot_beat_id,
+                entity_id=idea.entity_id,
+                ai_cost=idea.ai_cost,
+                ai_tokens=idea.ai_tokens,
+                ai_model=idea.ai_model,
+                created_at=idea.created_at.isoformat(),
+                updated_at=idea.updated_at.isoformat()
+            )
+            for idea in ideas
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Plot Generation Endpoint =====
+
+@router.post("/sessions/{session_id}/generate/plots", response_model=List[IdeaResponse])
+async def generate_plot_ideas(
+    session_id: str,
+    request: PlotGenerationRequest,
+    db: Session = Depends(get_db)
+):
+    """Generate plot ideas using AI (conflicts, twists, subplots)"""
+    try:
+        service = BrainstormingService(db)
+
+        # Get session to retrieve context
+        session = service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get existing plot beats for context
+        existing_beats = []
+        if session.outline_id:
+            existing_beats = db.query(PlotBeat).filter(
+                PlotBeat.outline_id == session.outline_id
+            ).all()
+
+        # Generate ideas
+        ideas = await service.generate_plot_ideas(
+            session_id=session_id,
+            api_key=request.api_key,
+            genre=request.genre,
+            premise=request.premise,
+            existing_beats=existing_beats,
+            num_ideas=request.num_ideas
+        )
+
+        # Return ideas
+        return [
+            IdeaResponse(
+                id=idea.id,
+                session_id=idea.session_id,
+                idea_type=idea.idea_type,
+                title=idea.title,
+                description=idea.description,
+                idea_metadata=idea.idea_metadata,
+                is_selected=idea.is_selected,
+                user_notes=idea.user_notes,
+                edited_content=idea.edited_content,
+                integrated_to_outline=idea.integrated_to_outline,
+                integrated_to_codex=idea.integrated_to_codex,
+                plot_beat_id=idea.plot_beat_id,
+                entity_id=idea.entity_id,
+                ai_cost=idea.ai_cost,
+                ai_tokens=idea.ai_tokens,
+                ai_model=idea.ai_model,
+                created_at=idea.created_at.isoformat(),
+                updated_at=idea.updated_at.isoformat()
+            )
+            for idea in ideas
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Location Generation Endpoint =====
+
+@router.post("/sessions/{session_id}/generate/locations", response_model=List[IdeaResponse])
+async def generate_location_ideas(
+    session_id: str,
+    request: LocationGenerationRequest,
+    db: Session = Depends(get_db)
+):
+    """Generate location/setting ideas using AI"""
+    try:
+        service = BrainstormingService(db)
+
+        # Get session to retrieve context
+        session = service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get existing locations for context
+        existing_locations = db.query(Entity).filter(
+            Entity.manuscript_id == session.manuscript_id,
+            Entity.type == 'LOCATION'
+        ).all()
+
+        # Generate ideas
+        ideas = await service.generate_location_ideas(
+            session_id=session_id,
+            api_key=request.api_key,
+            genre=request.genre,
+            premise=request.premise,
+            existing_locations=existing_locations,
             num_ideas=request.num_ideas
         )
 

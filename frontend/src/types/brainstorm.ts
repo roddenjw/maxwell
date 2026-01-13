@@ -77,6 +77,21 @@ export interface CharacterGenerationRequest {
   api_key: string;
   genre: string;
   story_premise: string;
+  character_ideas?: string;
+  num_ideas?: number;
+}
+
+export interface PlotGenerationRequest {
+  api_key: string;
+  genre: string;
+  premise: string;
+  num_ideas?: number;
+}
+
+export interface LocationGenerationRequest {
+  api_key: string;
+  genre: string;
+  premise: string;
   num_ideas?: number;
 }
 
@@ -99,4 +114,32 @@ export interface BrainstormModalState {
   manuscriptId?: string;
   outlineId?: string;
   plotBeatId?: string;
+}
+
+// Manuscript context for auto-loading
+export interface BrainstormContext {
+  outline: {
+    genre: string | null;
+    premise: string | null;
+    logline: string | null;
+  };
+  existing_entities: {
+    characters: { id: string; name: string }[];
+    locations: { id: string; name: string }[];
+  };
+}
+
+// Session with preview and stats
+export interface SessionWithPreview {
+  session: BrainstormSession;
+  preview_ideas: {
+    id: string;
+    title: string;
+    description: string;
+  }[];
+  stats: {
+    total_ideas: number;
+    integrated_count: number;
+    pending_count: number;
+  };
 }

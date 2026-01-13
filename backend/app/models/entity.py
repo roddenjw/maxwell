@@ -56,7 +56,7 @@ class Entity(Base):
         back_populates="target_entity",
         cascade="all, delete-orphan"
     )
-    # appearances = relationship("EntityAppearance", back_populates="entity", cascade="all, delete-orphan")  # Commented out to fix import issue
+    appearances = relationship("EntityAppearance", back_populates="entity", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Entity(id={self.id}, type={self.type}, name='{self.name}')>"

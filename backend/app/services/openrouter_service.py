@@ -69,7 +69,9 @@ class OpenRouterService:
         text: str,
         context: str = "",
         suggestion_type: str = "general",
-        max_tokens: int = 500
+        max_tokens: int = 500,
+        temperature: float = 0.7,
+        response_format: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         """
         Get AI-powered writing suggestion
@@ -79,30 +81,53 @@ class OpenRouterService:
             context: Additional context about the manuscript
             suggestion_type: Type of suggestion (general, dialogue, pacing, etc.)
             max_tokens: Maximum tokens in response
+            temperature: Temperature for response randomness (0.0-1.0). Lower values (0.5-0.6)
+                        are better for structured output like JSON. Default 0.7.
+            response_format: Optional response format constraint. Use {"type": "json_object"}
+                           to enforce JSON output at the API level.
 
         Returns:
             Dict with suggestion and usage info
         """
         try:
-            # Build prompt based on suggestion type
-            system_prompt = self._build_system_prompt(suggestion_type)
-            user_prompt = self._build_user_prompt(text, context, suggestion_type)
+            # Use custom prompts if provided (for brainstorming, etc.)
+            # Otherwise build generic writing feedback prompts
+            if context:
+                # Custom prompts: context = system prompt, text = user prompt
+                system_prompt = context
+                user_prompt = text
+            else:
+                # Generic writing feedback: build prompts from text
+                system_prompt = self._build_system_prompt(suggestion_type)
+                user_prompt = self._build_user_prompt(text, context, suggestion_type)
 
             async with httpx.AsyncClient() as client:
+                # Build API payload
+                payload = {
+                    "model": self.DEFAULT_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                }
+
+                # Add response_format if specified
+                if response_format:
+                    payload["response_format"] = response_format
+                    logger.info(f"Using response_format: {response_format}")
+
+                logger.info(f"Sending OpenRouter request with temperature={temperature}, max_tokens={max_tokens}")
+
                 response = await client.post(
                     f"{self.BASE_URL}/chat/completions",
                     headers=self.headers,
-                    json={
-                        "model": self.DEFAULT_MODEL,
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt}
-                        ],
-                        "max_tokens": max_tokens,
-                        "temperature": 0.7,
-                    },
+                    json=payload,
                     timeout=30.0
                 )
+
+                logger.info(f"OpenRouter response status: {response.status_code}")
 
                 if response.status_code != 200:
                     logger.error(f"OpenRouter API error: {response.status_code} - {response.text}")
@@ -116,6 +141,9 @@ class OpenRouterService:
                 # Extract suggestion and usage
                 suggestion = data["choices"][0]["message"]["content"]
                 usage = data.get("usage", {})
+
+                # Debug: Log first 200 chars of response
+                logger.info(f"AI response preview (first 200 chars): {suggestion[:200] if suggestion else 'EMPTY'}")
 
                 return {
                     "success": True,

@@ -13,7 +13,10 @@ import type {
   TravelSpeedProfile,
   LocationDistance,
   ComprehensiveTimelineData,
+  GanttBeat,
+  GanttEvent,
 } from '@/types/timeline';
+import type { PlotBeat } from '@/types/outline';
 
 interface TimelineStore {
   // State
@@ -23,7 +26,11 @@ interface TimelineStore {
   stats: TimelineStats | null;
   selectedEventId: string | null;
   isTimelineOpen: boolean;
-  activeTab: 'visual' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion';
+  activeTab: 'visual' | 'gantt' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion';
+
+  // Gantt Timeline State
+  plotBeats: PlotBeat[];
+  ganttViewData: GanttBeat[] | null;
 
   // Timeline Orchestrator state
   travelLegs: TravelLeg[];
@@ -47,7 +54,7 @@ interface TimelineStore {
   setStats: (stats: TimelineStats) => void;
   setSelectedEvent: (eventId: string | null) => void;
   setTimelineOpen: (isOpen: boolean) => void;
-  setActiveTab: (tab: 'visual' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion') => void;
+  setActiveTab: (tab: 'visual' | 'gantt' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion') => void;
 
   // Timeline Orchestrator actions
   setTravelLegs: (legs: TravelLeg[]) => void;
@@ -58,6 +65,10 @@ interface TimelineStore {
   resolveInconsistency: (id: string, notes: string) => Promise<void>;
   loadComprehensiveData: (manuscriptId: string) => Promise<void>;
   runValidation: (manuscriptId: string) => Promise<void>;
+
+  // Gantt Timeline actions
+  loadOutline: (manuscriptId: string) => Promise<void>;
+  computeGanttData: () => void;
 
   // Computed getters
   getEventById: (eventId: string) => TimelineEvent | undefined;
@@ -75,6 +86,10 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
   selectedEventId: null,
   isTimelineOpen: false,
   activeTab: 'visual',
+
+  // Gantt Timeline state
+  plotBeats: [],
+  ganttViewData: null,
 
   // Timeline Orchestrator state
   travelLegs: [],
@@ -193,6 +208,9 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
           locationDistances: data.location_distances,
           stats: data.stats,
         });
+
+        // Automatically compute Gantt data after loading events (if outline already loaded)
+        get().computeGanttData();
       } else {
         throw new Error('Load returned unsuccessful result');
       }
@@ -230,6 +248,110 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
       console.error('Failed to run timeline validation:', error);
       throw error;
     }
+  },
+
+  // Gantt Timeline actions
+  loadOutline: async (manuscriptId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/outlines/manuscript/${manuscriptId}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to load outline: ${response.status} ${errorText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        const plotBeats = result.data.plot_beats || [];
+        set({ plotBeats });
+
+        // Automatically compute Gantt data after loading outline
+        get().computeGanttData();
+      }
+    } catch (error) {
+      console.error('Failed to load outline for Gantt view:', error);
+      // Don't throw - Gantt view is optional enhancement
+    }
+  },
+
+  computeGanttData: () => {
+    const { plotBeats, events } = get();
+
+    // If no beats, clear gantt data
+    if (!plotBeats || plotBeats.length === 0) {
+      set({ ganttViewData: null });
+      return;
+    }
+
+    // Sort beats by target_position_percent (should already be sorted by order_index)
+    const sortedBeats = [...plotBeats].sort((a, b) => a.target_position_percent - b.target_position_percent);
+
+    // Calculate total word count for proportional sizing
+    const totalWordCount = sortedBeats.reduce((sum, beat) => sum + beat.target_word_count, 0);
+
+    // If no word count, can't compute Gantt
+    if (totalWordCount === 0) {
+      set({ ganttViewData: null });
+      return;
+    }
+
+    // Build Gantt beats with computed positions and widths
+    let cumulativePercent = 0;
+    const ganttBeats: GanttBeat[] = sortedBeats.map((beat, index) => {
+      const widthPercent = (beat.target_word_count / totalWordCount) * 100;
+      const startPercent = cumulativePercent;
+      cumulativePercent += widthPercent;
+
+      // Determine which events fall within this beat
+      // Use order_index to map events to beats
+      // Assume beats are sequential and events are sorted by order_index
+      const beatEvents: GanttEvent[] = [];
+
+      if (events && events.length > 0) {
+        // Calculate event range for this beat based on order_index
+        // If we have N beats and M events, divide events proportionally
+        const eventsPerBeat = events.length / sortedBeats.length;
+        const startEventIndex = Math.floor(index * eventsPerBeat);
+        const endEventIndex = Math.floor((index + 1) * eventsPerBeat);
+
+        const beatEventsList = events.slice(startEventIndex, endEventIndex);
+
+        beatEventsList.forEach((event, eventIndex) => {
+          const positionInBeat = beatEventsList.length > 1
+            ? eventIndex / (beatEventsList.length - 1)
+            : 0.5;
+
+          // Map narrative_importance (1-10) to 'high' | 'medium' | 'low'
+          const importance = event.narrative_importance >= 7
+            ? 'high'
+            : event.narrative_importance >= 4
+            ? 'medium'
+            : 'low';
+
+          beatEvents.push({
+            id: event.id,
+            event_name: event.description,
+            narrative_importance: importance,
+            positionInBeat,
+          });
+        });
+      }
+
+      return {
+        id: beat.id,
+        beat_name: beat.beat_name,
+        beat_label: beat.beat_label,
+        target_word_count: beat.target_word_count,
+        actual_word_count: beat.actual_word_count,
+        is_completed: beat.is_completed,
+        startPercent,
+        widthPercent,
+        events: beatEvents,
+      };
+    });
+
+    set({ ganttViewData: ganttBeats });
   },
 
   // Computed getters

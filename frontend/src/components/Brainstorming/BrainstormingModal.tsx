@@ -1,13 +1,19 @@
 /**
  * BrainstormingModal - Main modal for AI-powered brainstorming
- * Character Generation MVP with Brandon Sanderson's methodology
+ * Multi-type ideation: Characters, Plots, Locations
  */
 
 import { useEffect, useState } from 'react';
 import { useBrainstormStore } from '@/stores/brainstormStore';
 import CharacterBrainstorm from './CharacterBrainstorm';
+import PlotBrainstorm from './PlotBrainstorm';
+import LocationBrainstorm from './LocationBrainstorm';
 import IdeaResultsPanel from './IdeaResultsPanel';
 import IdeaIntegrationPanel from './IdeaIntegrationPanel';
+import SessionHistoryPanel from './SessionHistoryPanel';
+
+type IdeaType = 'character' | 'plot' | 'location';
+type ActiveTab = 'generate' | 'results' | 'history';
 
 export default function BrainstormingModal() {
   const {
@@ -19,21 +25,64 @@ export default function BrainstormingModal() {
     modalManuscriptId,
     modalOutlineId,
     getSessionIdeas,
+    loadManuscriptContext,
   } = useBrainstormStore();
 
   const [isInitialized, setIsInitialized] = useState(false);
-  const [activeTab, setActiveTab] = useState<'generate' | 'results'>('generate');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('generate');
+  const [ideaType, setIdeaType] = useState<IdeaType>('character');
 
-  // Initialize session when modal opens
+  // Handle idea type change - create new session
+  const handleIdeaTypeChange = async (newType: IdeaType) => {
+    if (newType === ideaType) return;
+
+    setIdeaType(newType);
+    setIsInitialized(false);
+    setActiveTab('generate');
+
+    // Create new session for the new type
+    if (modalManuscriptId) {
+      try {
+        await createSession(
+          modalManuscriptId,
+          getSessionType(newType),
+          {
+            technique: newType,
+            timestamp: new Date().toISOString(),
+          },
+          modalOutlineId || undefined
+        );
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Failed to create session:', error);
+      }
+    }
+  };
+
+  // Map UI type to session type
+  const getSessionType = (type: IdeaType) => {
+    switch (type) {
+      case 'character':
+        return 'CHARACTER';
+      case 'plot':
+        return 'PLOT_BEAT';
+      case 'location':
+        return 'WORLD';
+      default:
+        return 'CHARACTER';
+    }
+  };
+
+  // Initialize session when modal opens or idea type changes
   useEffect(() => {
     if (isModalOpen && modalManuscriptId && !currentSession && !isInitialized) {
       const initSession = async () => {
         try {
           await createSession(
             modalManuscriptId,
-            'CHARACTER',
+            getSessionType(ideaType),
             {
-              technique: 'character',
+              technique: ideaType,
               timestamp: new Date().toISOString(),
             },
             modalOutlineId || undefined
@@ -52,7 +101,7 @@ export default function BrainstormingModal() {
       setIsInitialized(false);
       setActiveTab('generate');
     }
-  }, [isModalOpen, modalManuscriptId, currentSession, createSession, modalOutlineId, isInitialized]);
+  }, [isModalOpen, modalManuscriptId, currentSession, createSession, modalOutlineId, isInitialized, ideaType]);
 
   // Auto-switch to results tab when ideas are generated
   useEffect(() => {
@@ -64,19 +113,30 @@ export default function BrainstormingModal() {
     }
   }, [currentSession, getSessionIdeas, activeTab]);
 
+  // Load manuscript context when modal opens
+  useEffect(() => {
+    if (isModalOpen && modalManuscriptId) {
+      loadManuscriptContext(modalManuscriptId);
+    }
+  }, [isModalOpen, modalManuscriptId, loadManuscriptContext]);
+
   if (!isModalOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-gray-900">
-              Character Brainstorming
+              {ideaType === 'character' && 'Character Brainstorming'}
+              {ideaType === 'plot' && 'Plot Brainstorming'}
+              {ideaType === 'location' && 'Location Brainstorming'}
             </h2>
             <p className="text-sm text-gray-600 mt-1">
-              AI-powered character generation using Brandon Sanderson's methodology
+              {ideaType === 'character' && 'AI-powered character generation with detailed personality, backstory, and motivations'}
+              {ideaType === 'plot' && 'Generate compelling plot ideas, conflicts, twists, and subplots'}
+              {ideaType === 'location' && 'Create immersive locations with rich worldbuilding details'}
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -101,7 +161,43 @@ export default function BrainstormingModal() {
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Type Selection Tabs */}
+        <div className="bg-gray-50 border-b border-gray-200">
+          <div className="flex px-6 py-2 gap-2">
+            <button
+              onClick={() => handleIdeaTypeChange('character')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                ideaType === 'character'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              👤 Characters
+            </button>
+            <button
+              onClick={() => handleIdeaTypeChange('plot')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                ideaType === 'plot'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              📖 Plots
+            </button>
+            <button
+              onClick={() => handleIdeaTypeChange('location')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                ideaType === 'location'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              🌍 Locations
+            </button>
+          </div>
+        </div>
+
+        {/* Workflow Tabs */}
         <div className="border-b border-gray-200">
           <div className="flex">
             <button
@@ -129,16 +225,30 @@ export default function BrainstormingModal() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'history'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              History
+            </button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden">
-          {activeTab === 'generate' ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {activeTab === 'generate' && (
             <div className="h-full overflow-y-auto px-6 py-6">
-              <CharacterBrainstorm />
+              {ideaType === 'character' && <CharacterBrainstorm />}
+              {ideaType === 'plot' && <PlotBrainstorm />}
+              {ideaType === 'location' && <LocationBrainstorm />}
             </div>
-          ) : (
+          )}
+
+          {activeTab === 'results' && (
             <div className="h-full grid grid-cols-3 gap-6 p-6 overflow-hidden">
               {/* Results Panel - 2 columns */}
               <div className="col-span-2 overflow-y-auto">
@@ -149,6 +259,17 @@ export default function BrainstormingModal() {
               <div className="overflow-y-auto">
                 <IdeaIntegrationPanel />
               </div>
+            </div>
+          )}
+
+          {activeTab === 'history' && modalManuscriptId && (
+            <div className="h-full overflow-y-auto px-6 py-6">
+              <SessionHistoryPanel
+                manuscriptId={modalManuscriptId}
+                onResumeSession={(session) => {
+                  setActiveTab('results');
+                }}
+              />
             </div>
           )}
         </div>

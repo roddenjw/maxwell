@@ -15,6 +15,7 @@ Outline
    5b. Driving off of feedback point 5a. We should have an AI Component here to help brainstorm how to move the story between the beats. For example if the Inciting Incident is "Boy finds magic sword" and the First Plot Point is "Boy fights evil wizard" help the author get them from point a to point b following best practices for structuring and outlining stories.
 6. Story premise in the outline view seems to just be taking text from the actual manuscript and not creating a premise. How should this work?
 7. After running AI insights for story beat suggestions users should be able to provide feedback to the beat suggestion, what they liked and didn't liked and then regenerate a few suggestions for that beat with their refinements added.
+8. The outlines tab on the left just opens a page in the middle with no real content besides placeholder text and a sidebar windown on the right. Closing the side causes an 'Oops! Something went wrong.' error. Additionally this middle part of the outline seems to serve no purpose. Why dont we allow the collapsible sidebar for outline in the text editor but clicking the outline tab displays all the outline info in the larger middle window. You can see this in the Outline Photo.png
 
 Timeline View:
 

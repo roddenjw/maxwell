@@ -12,6 +12,7 @@ export { default as EnhancedTimelineGraph } from './EnhancedTimelineGraph';
 export { default as TimelineHeatmap } from './TimelineHeatmap';
 export { default as CharacterNetwork } from './CharacterNetwork';
 export { default as EmotionalArc } from './EmotionalArc';
+export { default as GanttTimelineView } from './GanttTimelineView';
 export { default as TimelineSidebar } from './TimelineSidebar';
 
 // Timeline Orchestrator Components

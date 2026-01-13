@@ -13,12 +13,14 @@ interface BeatContextPanelProps {
   manuscriptId: string;
   chapterId: string;
   onViewBeat?: (beatId: string) => void;
+  currentSceneContext?: any; // NEW - scene metadata from SceneDetectionPlugin
 }
 
 const BeatContextPanel = React.memo(function BeatContextPanel({
   manuscriptId,
   chapterId,
   onViewBeat,
+  currentSceneContext,
 }: BeatContextPanelProps) {
   // Use ref to track previous completion state for this component instance
   const prevCompletedRef = useRef<boolean | undefined>(undefined);
@@ -274,6 +276,58 @@ const BeatContextPanel = React.memo(function BeatContextPanel({
                 {beat.beat_description.length > 120
                   ? beat.beat_description.substring(0, 120) + '...'
                   : beat.beat_description}
+              </div>
+            </div>
+          )}
+
+          {/* Scene Context Section (NEW) */}
+          {currentSceneContext && (
+            <div className="pt-3 border-t border-slate-ui/30">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-sans font-semibold text-blue-600 uppercase flex items-center gap-1">
+                  <span>📍</span>
+                  <span>Current Scene</span>
+                </div>
+                <span className="text-xs font-sans text-midnight font-semibold">
+                  Scene {currentSceneContext.sequence_order + 1} of {currentSceneContext.total_scenes_in_chapter}
+                </span>
+              </div>
+
+              {/* Scene Summary */}
+              {currentSceneContext.summary && (
+                <div className="mb-2">
+                  <div className="text-xs font-sans text-faded-ink mb-1">Goal:</div>
+                  <div className="text-sm font-sans text-midnight leading-relaxed">
+                    {currentSceneContext.summary}
+                  </div>
+                </div>
+              )}
+
+              {/* Scene Word Count */}
+              <div className="flex items-center justify-between text-xs font-sans">
+                <span className="text-faded-ink">Scene length:</span>
+                <span className="font-semibold text-midnight">
+                  {currentSceneContext.word_count.toLocaleString()} words
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Show prompt to add scenes if none exist */}
+          {!currentSceneContext && beat && (
+            <div className="pt-3 border-t border-slate-ui/30">
+              <div className="text-center py-4">
+                <div className="text-2xl mb-2">📍</div>
+                <p className="text-xs font-sans text-faded-ink mb-3">
+                  This chapter has no scenes yet. Add scene breaks to track progress within this beat.
+                </p>
+                <button
+                  onClick={() => alert('Scene breaks: Type "---" on a new line to insert a scene divider')}
+                  className="px-3 py-1.5 text-xs bg-blue-500/10 text-blue-600 border border-blue-500/30 hover:bg-blue-500/20 font-sans font-medium"
+                  style={{ borderRadius: '2px' }}
+                >
+                  Learn About Scene Breaks
+                </button>
               </div>
             </div>
           )}
