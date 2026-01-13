@@ -9,3 +9,4 @@ export { default as SwitchStructureModal } from './SwitchStructureModal';
 export { default as OutlineCompletionDonut } from './OutlineCompletionDonut';
 export { default as TimelineView } from './TimelineView';
 export { default as ProgressDashboard } from './ProgressDashboard';
+export { default as BeatSuggestionCard } from './BeatSuggestionCard';

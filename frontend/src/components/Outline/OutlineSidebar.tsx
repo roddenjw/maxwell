@@ -5,6 +5,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
+import { toast } from '@/stores/toastStore';
 import PlotBeatCard from './PlotBeatCard';
 import CreateOutlineModal from './CreateOutlineModal';
 import SwitchStructureModal from './SwitchStructureModal';
@@ -38,6 +39,9 @@ export default function OutlineSidebar({
     getCompletionPercentage,
     expandedBeatId,
     setExpandedBeat,
+    getBeatAISuggestions,
+    beatSuggestions,
+    getApiKey,
   } = useOutlineStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -132,10 +136,22 @@ export default function OutlineSidebar({
     }
   };
 
-  const handleGetAIIdeas = (beatId: string) => {
-    // Open the AI panel
-    setShowAIPanel(true);
-    // The AISuggestionsPanel will allow users to generate suggestions for specific beats
+  const handleGetAIIdeas = async (beatId: string) => {
+    const apiKey = getApiKey();
+
+    if (!apiKey) {
+      toast.error('Please set your OpenRouter API key in the AI panel first');
+      setShowAIPanel(true); // Open AI panel to settings tab
+      return;
+    }
+
+    try {
+      await getBeatAISuggestions(beatId);
+      toast.success('AI suggestions generated!');
+    } catch (error) {
+      console.error('Failed to get AI suggestions:', error);
+      toast.error('Failed to generate AI suggestions. Check your API key.');
+    }
   };
 
   // Navigate to a beat (from timeline or other views)

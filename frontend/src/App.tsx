@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import ManuscriptEditor from './components/Editor/ManuscriptEditor'
 import ManuscriptLibrary from './components/ManuscriptLibrary'
 import { TimeMachine } from './components/TimeMachine'
@@ -472,13 +472,13 @@ function App() {
     }
   }
 
-  // Reload chapter content when switching to views that show the editor
+  // Reload chapter content when switching views OR when chapter changes
   // This ensures the editor always has the latest saved content
   useEffect(() => {
     const viewsWithEditor = ['chapters', 'codex', 'coach'];
 
     // Only reload if:
-    // 1. We're switching to a view that shows the editor
+    // 1. We're in a view that shows the editor
     // 2. There's a current chapter selected
     // 3. We're not already in a saving state (to avoid conflicts)
     if (viewsWithEditor.includes(activeView) && currentChapterId && saveStatus !== 'saving') {
@@ -505,12 +505,13 @@ function App() {
           }
         } catch (error) {
           console.error('Failed to reload chapter content:', error);
+          toast.error('Failed to load chapter content');
         }
       };
 
       reloadChapterContent();
     }
-  }, [activeView]); // Only run when activeView changes
+  }, [activeView, currentChapterId]); // Run when activeView OR currentChapterId changes
 
   // Define keyboard shortcuts
   const shortcuts: KeyboardShortcut[] = [

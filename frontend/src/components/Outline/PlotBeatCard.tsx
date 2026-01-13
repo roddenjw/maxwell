@@ -5,7 +5,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
-import type { PlotBeat } from '@/types/outline';
+import { toast } from '@/stores/toastStore';
+import type { PlotBeat, BeatSuggestion } from '@/types/outline';
+import BeatSuggestionCard from './BeatSuggestionCard';
 
 interface Chapter {
   id: string;
@@ -27,10 +29,13 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
   const [notes, setNotes] = useState(beat.user_notes);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loadingChapters, setLoadingChapters] = useState(false);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [showAISuggestions, setShowAISuggestions] = useState(false);
   const notesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isExpanded = expandedBeatId === beat.id;
-  const hasAISuggestions = beatSuggestions.has(beat.id);
+  const suggestions = beatSuggestions.get(beat.id);
+  const hasAISuggestions = suggestions && suggestions.suggestions.length > 0;
 
   // Update local notes when beat changes
   useEffect(() => {
@@ -115,6 +120,39 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
     setExpandedBeat(isExpanded ? null : beat.id);
   };
 
+  const handleGetAIIdeas = async () => {
+    if (!onGetAIIdeas) return;
+
+    setIsLoadingAI(true);
+    try {
+      await onGetAIIdeas(beat.id);
+      setShowAISuggestions(true); // Auto-expand suggestions after loading
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
+  const handleApplySuggestion = async (suggestion: BeatSuggestion, index: number) => {
+    if (!suggestions) return;
+
+    try {
+      // Update beat description with suggestion
+      await updateBeat(beat.id, {
+        beat_description: suggestion.description
+      });
+
+      toast.success('Suggestion applied to beat description');
+    } catch (error) {
+      console.error('Failed to apply suggestion:', error);
+      toast.error('Failed to apply suggestion');
+    }
+  };
+
+  const handleDismissSuggestion = (index: number) => {
+    // Note: The actual mutation happens in BeatSuggestionCard's onDismiss
+    // This is just a placeholder for future persistence if needed
+  };
+
   const wordCountProgress = beat.target_word_count > 0
     ? Math.min(100, (beat.actual_word_count / beat.target_word_count) * 100)
     : 0;
@@ -190,6 +228,17 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
               }`}>
                 {beat.beat_label}
               </h4>
+
+              {/* AI Badge (if suggestions available) */}
+              {hasAISuggestions && suggestions && (
+                <span
+                  className="flex-shrink-0 px-2 py-0.5 text-xs font-sans font-semibold uppercase bg-purple-100 text-purple-700 border border-purple-300"
+                  style={{ borderRadius: '2px' }}
+                  title={`${suggestions.suggestions.length} AI suggestions available`}
+                >
+                  🤖 AI
+                </span>
+              )}
 
               {/* Status Pill */}
               <span
@@ -289,6 +338,40 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
             </div>
           )}
 
+          {/* AI Suggestions Section */}
+          {hasAISuggestions && suggestions && (
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-2">
+                <h5 className="text-sm font-sans font-semibold text-purple-900 flex items-center gap-2">
+                  <span>🤖</span>
+                  <span>AI Content Suggestions</span>
+                  <span className="text-xs text-purple-600 font-normal">
+                    ({suggestions.suggestions.filter(s => !s.used).length} active)
+                  </span>
+                </h5>
+                <button
+                  onClick={() => setShowAISuggestions(!showAISuggestions)}
+                  className="text-xs text-purple-600 hover:text-purple-800 font-medium"
+                >
+                  {showAISuggestions ? 'Hide' : 'Show'}
+                </button>
+              </div>
+
+              {showAISuggestions && (
+                <div className="p-3 bg-purple-50 border-2 border-purple-300 space-y-2">
+                  {suggestions.suggestions.map((suggestion, idx) => (
+                    <BeatSuggestionCard
+                      key={idx}
+                      suggestion={suggestion}
+                      onApply={() => handleApplySuggestion(suggestion, idx)}
+                      onDismiss={() => handleDismissSuggestion(idx)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Compact Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
             {beat.chapter_id && linkedChapter ? (
@@ -342,15 +425,32 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
             {/* Get AI Ideas Button */}
             {onGetAIIdeas && (
               <button
-                onClick={() => onGetAIIdeas(beat.id)}
-                className="ml-auto px-3 py-1.5 text-sm bg-purple-500/10 text-purple-600 border border-purple-500/30 hover:bg-purple-500/20 font-sans font-medium transition-colors flex items-center gap-1.5"
+                onClick={handleGetAIIdeas}
+                disabled={isLoadingAI}
+                className={`ml-auto px-3 py-1.5 text-sm ${
+                  isLoadingAI
+                    ? 'bg-gray-100 text-gray-400 cursor-wait'
+                    : 'bg-purple-500/10 text-purple-600 hover:bg-purple-500/20'
+                } border border-purple-500/30 font-sans font-medium transition-colors flex items-center gap-1.5`}
                 style={{ borderRadius: '2px' }}
                 title="Get AI-powered content suggestions for this beat"
               >
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                <span>{hasAISuggestions ? 'View AI Ideas' : 'AI Ideas'}</span>
+                {isLoadingAI ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    <span>{hasAISuggestions ? 'View AI Ideas' : 'AI Ideas'}</span>
+                  </>
+                )}
               </button>
             )}
           </div>

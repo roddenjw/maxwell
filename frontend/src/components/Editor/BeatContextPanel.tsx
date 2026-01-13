@@ -32,7 +32,13 @@ const BeatContextPanel = React.memo(function BeatContextPanel({
     beatContextPanelCollapsed,
     toggleBeatContextPanel,
     notifiedCompletedBeats,
+    beatSuggestions,
+    getApiKey,
+    getBeatAISuggestions,
   } = useOutlineStore();
+
+  const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
 
   // Get the beat linked to this chapter
   const beat = getBeatByChapterId?.(chapterId) || null;
@@ -269,6 +275,116 @@ const BeatContextPanel = React.memo(function BeatContextPanel({
                   ? beat.beat_description.substring(0, 120) + '...'
                   : beat.beat_description}
               </div>
+            </div>
+          )}
+
+          {/* AI Suggestions Section */}
+          {beat && beatSuggestions.has(beat.id) && (
+            <div className="pt-3 border-t border-slate-ui/30">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-sans font-semibold text-purple-600 uppercase flex items-center gap-1">
+                  <span>🤖</span>
+                  <span>AI Ideas</span>
+                  <span className="text-purple-500 normal-case font-normal">
+                    ({beatSuggestions.get(beat.id).suggestions.filter(s => !s.used).length})
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowAISuggestions(!showAISuggestions)}
+                  className="text-xs text-purple-600 hover:text-purple-800 font-medium"
+                >
+                  {showAISuggestions ? 'Hide' : 'Show'}
+                </button>
+              </div>
+
+              {showAISuggestions && (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {beatSuggestions.get(beat.id).suggestions
+                    .filter(s => !s.used)
+                    .slice(0, 3)
+                    .map((suggestion, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2 bg-purple-50 border border-purple-200 text-xs"
+                        style={{ borderRadius: '2px' }}
+                      >
+                        <div className="flex items-start gap-2 mb-1">
+                          <span className="text-purple-600 font-sans font-semibold flex-1">
+                            {suggestion.title}
+                          </span>
+                          <span className="text-[10px] uppercase text-purple-500 font-sans font-bold">
+                            {suggestion.type}
+                          </span>
+                        </div>
+                        <p className="text-purple-700 line-clamp-2 mb-2">
+                          {suggestion.description}
+                        </p>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(suggestion.description);
+                            toast.success('Copied to clipboard');
+                          }}
+                          className="text-[10px] text-purple-600 hover:text-purple-800 font-medium uppercase"
+                        >
+                          Copy to clipboard
+                        </button>
+                      </div>
+                    ))}
+                  {beatSuggestions.get(beat.id).suggestions.length > 3 && (
+                    <button
+                      onClick={() => onViewBeat?.(beat.id)}
+                      className="w-full text-xs text-purple-600 hover:text-purple-800 font-medium py-1"
+                    >
+                      View all {beatSuggestions.get(beat.id).suggestions.length} suggestions in outline →
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Quick AI Trigger (if no suggestions yet) */}
+          {beat && !beatSuggestions.has(beat.id) && (
+            <div className="pt-3 border-t border-slate-ui/30">
+              <button
+                onClick={async () => {
+                  const apiKey = getApiKey();
+                  if (!apiKey) {
+                    toast.error('Please set your OpenRouter API key first');
+                    return;
+                  }
+
+                  setIsLoadingAI(true);
+                  try {
+                    await getBeatAISuggestions(beat.id);
+                    setShowAISuggestions(true);
+                    toast.success('AI suggestions generated!');
+                  } catch (error) {
+                    console.error('Failed to get AI suggestions:', error);
+                    toast.error('Failed to generate suggestions');
+                  } finally {
+                    setIsLoadingAI(false);
+                  }
+                }}
+                disabled={isLoadingAI}
+                className="w-full px-3 py-2 text-xs bg-purple-500/10 text-purple-600 border border-purple-500/30 hover:bg-purple-500/20 font-sans font-medium flex items-center justify-center gap-2"
+                style={{ borderRadius: '2px' }}
+              >
+                {isLoadingAI ? (
+                  <>
+                    <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Getting AI ideas...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>🤖</span>
+                    <span>Get AI Ideas for This Beat</span>
+                  </>
+                )}
+              </button>
             </div>
           )}
 

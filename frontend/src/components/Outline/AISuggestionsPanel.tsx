@@ -161,7 +161,36 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto relative">
+        {/* Loading Overlay */}
+        {isAnalyzing && (
+          <div
+            className="absolute inset-0 bg-white/95 flex items-center justify-center z-50"
+            style={{ borderRadius: '2px' }}
+          >
+            <div className="text-center max-w-sm p-6">
+              <div className="text-6xl mb-4 animate-pulse">🤖</div>
+              <h3 className="font-serif text-xl font-bold text-midnight mb-2">
+                Analyzing Your Outline...
+              </h3>
+              <p className="text-sm font-sans text-faded-ink mb-4">
+                This may take 30-60 seconds
+              </p>
+              <div className="w-full h-2 bg-slate-ui/30 rounded-full overflow-hidden">
+                <div className="h-full bg-bronze animate-pulse" style={{ width: '60%' }} />
+              </div>
+              <p className="text-xs font-sans text-faded-ink mt-3">
+                Estimated cost: $0.01-0.05
+              </p>
+              <p className="text-xs font-sans text-purple-600 mt-2 font-medium">
+                {selectedAnalyses.length === 0
+                  ? 'Running all analysis types'
+                  : `Running: ${selectedAnalyses.join(', ')}`}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Settings Tab */}
         {activeTab === 'settings' && (
           <div className="p-6 space-y-6">
@@ -264,8 +293,27 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
                 </button>
 
                 {hasResults && aiSuggestions?.cost && (
-                  <div className="text-center text-xs font-sans text-faded-ink">
-                    Last analysis cost: {aiSuggestions.cost.formatted}
+                  <div className="p-3 bg-green-50 border-l-4 border-green-500 text-sm">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-sans font-semibold text-green-800 flex items-center gap-2">
+                        <span>💰</span>
+                        <span>Last Analysis Cost</span>
+                      </span>
+                      <span className="text-lg font-mono text-green-900 font-bold">
+                        {aiSuggestions.cost.formatted}
+                      </span>
+                    </div>
+                    {aiSuggestions.usage && (
+                      <div className="text-xs font-sans text-green-700 flex items-center justify-between">
+                        <span>
+                          {aiSuggestions.usage.total_tokens.toLocaleString()} total tokens
+                        </span>
+                        <span className="text-faded-ink">
+                          ({aiSuggestions.usage.prompt_tokens.toLocaleString()} prompt +
+                          {aiSuggestions.usage.completion_tokens.toLocaleString()} completion)
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </>

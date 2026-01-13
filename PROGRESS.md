@@ -1,7 +1,7 @@
 # Maxwell Project Progress
 
-**Last Updated:** 2026-01-10
-**Overall Completion:** 72% across all phases
+**Last Updated:** 2026-01-12
+**Overall Completion:** 75% across all phases
 **Current Focus:** Phase 4 (Story Structure) & Phase 5 (Brainstorming)
 
 ---
@@ -13,7 +13,7 @@
 | **Phase 1: MVP Core** | ✅ Complete | 100% | Dec 21, 2025 | Editor, chapters, export |
 | **Phase 2: Codex** | ✅ Complete | 100% | Dec 22, 2025 | Entity extraction, relationships |
 | **Phase 3: AI Integration** | ✅ Complete | 100% | Jan 2, 2026 | BYOK, Fast Coach, OpenRouter |
-| **Phase 4: Story Structure** | 🔄 In Progress | 85% | Jan 15, 2026 | Writing integration complete |
+| **Phase 4: Story Structure** | 🔄 In Progress | 95% | Jan 15, 2026 | AI beat analysis complete |
 | **Phase 5: Brainstorming** | 🔄 In Progress | 40% | Jan 25, 2026 | Character gen complete |
 | **Phase 6: Timeline Orchestrator** | ✅ Complete | 100% | Jan 7, 2026 | Performance optimized |
 | **Phase 7: PLG Features** | ⏳ Planned | 0% | Feb 2026 | Viral mechanics |
@@ -22,7 +22,7 @@
 
 ## Active Work (Current Sprint: Jan 7-14, 2026)
 
-### Phase 4: Story Structure & Outline Engine (85% complete)
+### Phase 4: Story Structure & Outline Engine (95% complete)
 
 **✅ Completed Features:**
 - Backend story structure templates (9 types: Hero's Journey, Save the Cat, 3-Act, etc.)
@@ -35,15 +35,22 @@
 - Frontend: Switch structure modal (320 lines)
 - Outline store with state management
 - Checkpoint tracking system (backend complete)
-- **NEW: Beat Context Panel** - Collapsible sidebar showing current beat while writing
-- **NEW: Outline Reference Sidebar** - Full outline view accessible during writing
-- **NEW: Auto-complete beats** - Automatically mark beats complete when chapter reaches target word count
-- **NEW: Writing integration** - Breadcrumb navigation, keyboard shortcuts (Cmd+B, Cmd+Shift+O)
-- **NEW: Progress visualization** - Replaced donut chart with compact dual-metric progress bar (beats + word count)
-- **NEW: Beat navigation** - Auto-scroll and highlight beats when clicked from breadcrumb or timeline
+- **Beat Context Panel** - Collapsible sidebar showing current beat while writing
+- **Outline Reference Sidebar** - Full outline view accessible during writing
+- **Auto-complete beats** - Automatically mark beats complete when chapter reaches target word count
+- **Writing integration** - Breadcrumb navigation, keyboard shortcuts (Cmd+B, Cmd+Shift+O)
+- **Progress visualization** - Replaced donut chart with compact dual-metric progress bar (beats + word count)
+- **Beat navigation** - Auto-scroll and highlight beats when clicked from breadcrumb or timeline
+- **AI-powered beat analysis** - Complete frontend integration with backend (Jan 12)
+  - BeatSuggestionCard component for displaying AI suggestions
+  - "Get AI Ideas" button on PlotBeatCard with loading states
+  - Inline suggestions display with apply/dismiss actions
+  - 🤖 AI badge on beats with suggestions available
+  - AISuggestionsPanel enhancements (loading overlay, cost display)
+  - BeatContextPanel shows AI insights while writing
+  - Full BYOK integration with OpenRouter API
 
 **🔄 In Progress:**
-- AI-powered beat analysis (backend ready, frontend integration pending)
 - Scene-level guidance tied to plot beats
 
 **⏳ Next Up:**
@@ -123,6 +130,41 @@
 ---
 
 ## Recent Completions (Last 2 Weeks)
+
+### January 12, 2026
+- ✅ **AI-Powered Beat Analysis Frontend Integration Complete (Phase 4 - 95%)**
+  - **BeatSuggestionCard Component**: New component for displaying AI suggestions (138 lines)
+    - Type-based icons: 🎬 scene, 👤 character, 💬 dialogue, 🔀 subplot
+    - Expand/collapse functionality for descriptions
+    - "Use" button to apply suggestion to beat description
+    - "Dismiss" button to mark suggestions as used
+    - Visual dimming for used suggestions
+  - **PlotBeatCard Enhancements**: AI suggestions integration
+    - "Get AI Ideas" button with loading spinner
+    - Inline suggestions display in expandable section
+    - Apply/dismiss handlers with toast notifications
+    - 🤖 AI badge appears on beat headers when suggestions available
+    - Auto-expand suggestions after loading
+  - **OutlineSidebar Integration**: Wired up AI functionality
+    - `onGetAIIdeas` callback properly connected to PlotBeatCard
+    - API key validation before triggering analysis
+    - Error handling with user-friendly messages
+  - **AISuggestionsPanel Enhancements**: Better UX during analysis
+    - Loading overlay with animated 🤖 icon and progress bar
+    - Enhanced cost display with token usage breakdown
+    - Shows which analysis types are running
+    - Improved empty state handling
+  - **BeatContextPanel Integration**: AI insights while writing
+    - Shows AI suggestions in top-right Beat Context Panel
+    - Quick "Get AI Ideas" button if no suggestions exist
+    - Compact suggestion display (max 3 shown)
+    - "Copy to clipboard" for each suggestion
+    - "View all suggestions" link to open full outline
+  - **Bug Fix (P0)**: Fixed chapter loading in DocumentNavigator
+    - Added `currentChapterId` to useEffect dependencies in App.tsx
+    - Removed debouncing that was causing editor focus issues
+    - Chapter navigation now works correctly when clicking in DocumentNavigator while on "chapters" view
+  - **Impact**: Writers can now get AI-powered content suggestions for any plot beat, with seamless integration throughout the outline workflow
 
 ### January 10, 2026
 - ✅ **Outline Reference Tools for Writers Complete (Phase 4 - 85%)**
@@ -242,11 +284,11 @@
 - **Phase 1:** 5 core features (editor, manuscripts, versioning, export, navigation)
 - **Phase 2:** 6 codex features (entities, relationships, NLP suggestions, graph viz, analytics, merge)
 - **Phase 3:** 3 AI features (Fast Coach, OpenRouter BYOK, Recap Engine)
-- **Phase 4:** 4 outline features (templates, plot beats, progress tracking, wizard)
+- **Phase 4:** 5 outline features (templates, plot beats, progress tracking, wizard, AI beat analysis)
 - **Phase 5:** 2 brainstorming features (character generation, idea management)
 - **Phase 6:** 5 timeline features (events, validation, teaching, visualization, orchestration)
 
-**Total Features Shipped:** 25 major features
+**Total Features Shipped:** 26 major features
 
 ### API Coverage
 - **Total Endpoints:** 104 REST API endpoints
@@ -271,24 +313,18 @@
 ### Component Breakdown (Frontend)
 - **Codex:** 8 components (EntityList, EntityCard, EntityDetail, RelationshipGraph, etc.)
 - **Timeline:** 9 components (TimelineSidebar, TimelineOrchestrator, EventCard, etc.)
-- **Outline:** 7 components (OutlineSidebar, PlotBeatCard, CreateModal, TimelineView, ProgressDashboard, etc.)
+- **Outline:** 8 components (OutlineSidebar, PlotBeatCard, BeatSuggestionCard, CreateModal, TimelineView, ProgressDashboard, etc.)
 - **Brainstorming:** 5 components (BrainstormingModal, CharacterBrainstorm, IdeaCard, etc.)
 - **Editor:** 6 components (ManuscriptEditor, EditorToolbar, AutoSavePlugin, BeatContextPanel, OutlineReferenceSidebar, etc.)
 - **Common:** 6 components (ToastContainer, SkeletonLoader, Modals, etc.)
 
-**Total Components:** 52+ React components
+**Total Components:** 53+ React components
 
 ---
 
 ## Technical Debt & Known Issues
 
 ### High Priority (P0 - Blockers)
-- 🐛 **Chapter loading not working when clicking in DocumentNavigator**
-  - Status: Under investigation
-  - Impact: Users cannot navigate to chapters via tree
-  - Workaround: Use search or recent chapters
-  - Target: Fix by Jan 10
-
 - 🐛 **Drag-and-drop chapter reordering not implemented**
   - Status: Design complete, implementation pending
   - Impact: Users must manually set order_index
@@ -492,9 +528,12 @@
   - Update phase completion table
   - Celebrate wins in team communication
 
-- ✏️ **After major features ship**
-  - Add to metrics
-  - Update feature counts
+- ✏️ **After major features ship** (REQUIRED - DO NOT SKIP)
+  - Add entry to "Recent Completions" with date and detailed notes
+  - Update phase completion percentages in table
+  - Update feature counts in metrics section
+  - Remove fixed bugs from "Technical Debt & Known Issues"
+  - Update component counts if new components were added
   - Note any architectural changes
 
 ### Update Process

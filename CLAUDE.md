@@ -313,7 +313,12 @@ See [QUICK_REFERENCE.md](QUICK_REFERENCE.md#troubleshooting) for more solutions
 1. Run tests: `pytest` (backend) and `npm test` (frontend)
 2. Check types: `npx tsc --noEmit` (frontend)
 3. Use conventional commits: `feat:`, `fix:`, `refactor:`, etc.
-4. Update PROGRESS.md if you completed a feature
+4. **ALWAYS update PROGRESS.md when you complete a feature or fix a bug**
+   - Add entry to "Recent Completions" with date and details
+   - Update phase completion percentages
+   - Mark completed items in "Active Work" sections
+   - Remove fixed bugs from "Technical Debt & Known Issues"
+   - Update component/feature counts if applicable
 
 See [WORKFLOW.md](WORKFLOW.md) for full development workflow
 
