@@ -9,11 +9,12 @@ import type { Entity } from '@/types/codex';
 import EntityCard from './EntityCard';
 import EntityDetail from './EntityDetail';
 import MergeEntitiesModal from './MergeEntitiesModal';
+import EntityTemplateWizard from './EntityTemplateWizard';
 
 import { codexApi } from '@/lib/api';
 import { useCodexStore } from '@/stores/codexStore';
 import { useBrainstormStore } from '@/stores/brainstormStore';
-import { EntityType } from '@/types/codex';
+import { EntityType, TemplateType } from '@/types/codex';
 
 interface EntityListProps {
   manuscriptId: string;
@@ -34,11 +35,12 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
   const [filterType, setFilterType] = useState<EntityType | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set());
   const [showMergeModal, setShowMergeModal] = useState(false);
 
-  // Create form state
+  // Create form state (for quick create)
   const [newEntityName, setNewEntityName] = useState('');
   const [newEntityType, setNewEntityType] = useState<EntityType>(EntityType.CHARACTER);
 
@@ -92,6 +94,39 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
       setShowCreateForm(false);
 
       // Select new entity
+      setSelectedEntity(entity.id);
+    } catch (err) {
+      setError('Failed to create entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleWizardComplete = async (entityData: {
+    name: string;
+    type: EntityType;
+    template_type: TemplateType;
+    template_data: any;
+    aliases: string[];
+  }) => {
+    try {
+      setCreating(true);
+      setError(null);
+
+      const entity = await codexApi.createEntity({
+        manuscript_id: manuscriptId,
+        type: entityData.type,
+        name: entityData.name,
+        aliases: entityData.aliases,
+        template_type: entityData.template_type,
+        template_data: entityData.template_data,
+      });
+
+      // Add to store
+      setEntities([...entities, entity]);
+
+      // Close wizard and select new entity
+      setShowWizard(false);
       setSelectedEntity(entity.id);
     } catch (err) {
       setError('Failed to create entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
@@ -282,20 +317,46 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
     );
   }
 
+  // If wizard is open, show the template wizard
+  if (showWizard) {
+    return (
+      <EntityTemplateWizard
+        manuscriptId={manuscriptId}
+        onComplete={handleWizardComplete}
+        onCancel={() => setShowWizard(false)}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
-      {/* Header with Create Button */}
+      {/* Header with Create Buttons */}
       <div className="p-4 border-b border-slate-ui space-y-2">
+        {/* Primary: Guided Creation */}
         <button
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          className="w-full bg-bronze text-white px-4 py-2 text-sm font-sans hover:bg-bronze/90 transition-colors"
+          onClick={() => setShowWizard(true)}
+          className="w-full bg-bronze text-white px-4 py-2 text-sm font-sans hover:bg-bronze/90 transition-colors flex items-center justify-center gap-2"
           style={{ borderRadius: '2px' }}
         >
-          + Create Entity
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          <span>Create with Template</span>
         </button>
+
+        {/* Secondary: Quick Create */}
+        <button
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className="w-full bg-white text-bronze border border-bronze px-4 py-2 text-sm font-sans hover:bg-bronze/10 transition-colors"
+          style={{ borderRadius: '2px' }}
+        >
+          Quick Create (Name Only)
+        </button>
+
+        {/* Brainstorm */}
         <button
           onClick={handleBrainstorm}
-          className="w-full bg-white text-bronze border-2 border-bronze px-4 py-2 text-sm font-sans hover:bg-bronze/10 transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-white text-bronze border border-bronze px-4 py-2 text-sm font-sans hover:bg-bronze/10 transition-colors flex items-center justify-center gap-2"
           style={{ borderRadius: '2px' }}
           title="AI-powered character generation using Brandon Sanderson's methodology"
         >

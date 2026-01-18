@@ -747,3 +747,144 @@ Respond in JSON format:
                 "success": False,
                 "error": str(e)
             }
+
+    async def generate_bridge_scenes(
+        self,
+        from_beat: PlotBeat,
+        to_beat: PlotBeat,
+        outline: Outline,
+        db: Session
+    ) -> Dict[str, Any]:
+        """
+        Generate scene suggestions to bridge the gap between two beats.
+
+        This AI-powered feature helps writers create scenes that naturally
+        connect major story beats, ensuring smooth narrative flow.
+
+        Args:
+            from_beat: The beat to start from
+            to_beat: The beat to arrive at
+            outline: The outline containing these beats
+            db: Database session
+
+        Returns:
+            Dict with scene suggestions and usage info
+        """
+        try:
+            # Get manuscript context for more relevant suggestions
+            manuscript_context = _get_manuscript_context(db, outline)
+
+            system_prompt = """You are a master storyteller helping bridge two story beats with compelling scenes.
+Your suggestions should:
+- Create natural narrative flow between the beats
+- Maintain consistent tone and pacing
+- Develop characters and relationships
+- Build tension or provide necessary relief
+- Set up future events organically"""
+
+            user_prompt = f"""A writer needs help bridging the gap between two story beats.
+
+**Story Context:**
+- Genre: {outline.genre or "Not specified"}
+- Structure: {outline.structure_type}
+- Premise: {outline.premise or "Not specified"}
+- Target Length: {outline.target_word_count:,} words
+
+**FROM BEAT ({int(from_beat.target_position_percent * 100)}% through story):**
+Title: {from_beat.beat_label}
+Description: {from_beat.beat_description or "No description"}
+Writer's Notes: {from_beat.user_notes or "No notes"}
+
+**TO BEAT ({int(to_beat.target_position_percent * 100)}% through story):**
+Title: {to_beat.beat_label}
+Description: {to_beat.beat_description or "No description"}
+Writer's Notes: {to_beat.user_notes or "No notes"}
+
+**Manuscript Excerpts:**
+{manuscript_context[:5000]}
+
+Generate 2-3 scene suggestions that would naturally bridge these beats.
+
+For each scene provide:
+1. A compelling title
+2. A detailed description (2-3 sentences) of what happens
+3. The emotional purpose (what the reader should feel)
+4. Suggested word count (typically 500-1500 words for bridge scenes)
+
+Respond in JSON format:
+{{
+  "scenes": [
+    {{
+      "title": "Scene title",
+      "description": "What happens in the scene...",
+      "emotional_purpose": "How this advances the emotional journey",
+      "suggested_word_count": 1000
+    }}
+  ],
+  "bridging_analysis": "Brief explanation of the narrative gap and how these scenes fill it"
+}}"""
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.openrouter.BASE_URL}/chat/completions",
+                    headers=self.openrouter.headers,
+                    json={
+                        "model": self.openrouter.DEFAULT_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "max_tokens": 2000,
+                        "temperature": 0.7,  # Balanced creativity
+                        "response_format": {"type": "json_object"}
+                    },
+                    timeout=60.0
+                )
+
+                if response.status_code != 200:
+                    if response.status_code == 402:
+                        return {
+                            "success": False,
+                            "error": "insufficient_credits",
+                            "message": "Your OpenRouter API key has insufficient credits."
+                        }
+                    elif response.status_code == 401:
+                        return {
+                            "success": False,
+                            "error": "invalid_api_key",
+                            "message": "Your OpenRouter API key is invalid."
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"api_error_{response.status_code}",
+                            "message": f"OpenRouter API error: {response.status_code}"
+                        }
+
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+                parsed = json.loads(content)
+
+                # Calculate cost
+                usage = data.get("usage", {})
+                cost = OpenRouterService.calculate_cost(usage)
+
+                return {
+                    "success": True,
+                    "scenes": parsed.get("scenes", []),
+                    "bridging_analysis": parsed.get("bridging_analysis", ""),
+                    "from_beat_id": from_beat.id,
+                    "to_beat_id": to_beat.id,
+                    "usage": usage,
+                    "cost": {
+                        "total_usd": round(cost, 4),
+                        "formatted": f"${cost:.4f}"
+                    }
+                }
+
+        except Exception as e:
+            logger.error(f"Bridge scene generation failed: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }

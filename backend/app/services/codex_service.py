@@ -23,7 +23,9 @@ class CodexService:
         entity_type: str,
         name: str,
         aliases: Optional[List[str]] = None,
-        attributes: Optional[Dict[str, Any]] = None
+        attributes: Optional[Dict[str, Any]] = None,
+        template_type: Optional[str] = None,
+        template_data: Optional[Dict[str, Any]] = None
     ) -> Entity:
         """
         Create a new entity
@@ -34,6 +36,8 @@ class CodexService:
             name: Entity name
             aliases: Alternative names
             attributes: Type-specific attributes
+            template_type: Template type (CHARACTER, LOCATION, ITEM, MAGIC_SYSTEM, etc.)
+            template_data: Structured template data
 
         Returns:
             Created Entity
@@ -45,7 +49,9 @@ class CodexService:
                 type=entity_type,
                 name=name,
                 aliases=aliases or [],
-                attributes=attributes or {}
+                attributes=attributes or {},
+                template_type=template_type,
+                template_data=template_data or {}
             )
             db.add(entity)
             db.commit()
@@ -113,7 +119,9 @@ class CodexService:
         name: Optional[str] = None,
         entity_type: Optional[str] = None,
         aliases: Optional[List[str]] = None,
-        attributes: Optional[Dict[str, Any]] = None
+        attributes: Optional[Dict[str, Any]] = None,
+        template_type: Optional[str] = None,
+        template_data: Optional[Dict[str, Any]] = None
     ) -> Optional[Entity]:
         """
         Update entity
@@ -123,6 +131,8 @@ class CodexService:
             name: New name
             aliases: New aliases
             attributes: New attributes
+            template_type: Template type
+            template_data: Structured template data
 
         Returns:
             Updated Entity or None
@@ -142,6 +152,10 @@ class CodexService:
                 entity.aliases = aliases
             if attributes is not None:
                 entity.attributes = attributes
+            if template_type is not None:
+                entity.template_type = template_type
+            if template_data is not None:
+                entity.template_data = template_data
 
             entity.updated_at = datetime.utcnow()
 

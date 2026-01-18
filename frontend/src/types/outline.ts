@@ -35,6 +35,20 @@ export interface SceneCreate {
   user_notes?: string;
 }
 
+export interface BridgeSceneSuggestion {
+  title: string;
+  description: string;
+  emotional_purpose: string;
+  suggested_word_count: number;
+}
+
+export interface BridgeScenesResult {
+  scenes: BridgeSceneSuggestion[];
+  bridging_analysis: string;
+  from_beat_id: string;
+  to_beat_id: string;
+}
+
 export interface Outline {
   id: string;
   manuscript_id: string;

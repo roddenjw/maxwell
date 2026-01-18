@@ -14,7 +14,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.outline import Outline, PlotBeat, ITEM_TYPE_BEAT, ITEM_TYPE_SCENE
+from app.models.outline import (
+    Outline, PlotBeat, ITEM_TYPE_BEAT, ITEM_TYPE_SCENE,
+    OUTLINE_SCOPE_MANUSCRIPT, OUTLINE_SCOPE_SERIES, OUTLINE_SCOPE_WORLD
+)
 from app.models.manuscript import Chapter
 from app.services.openrouter_service import OpenRouterService
 from app.services.ai_outline_service import AIOutlineService
@@ -22,6 +25,11 @@ from app.services.story_structures import (
     create_plot_beats_from_template,
     get_available_structures,
     get_structure_template,
+)
+from app.services.series_structure_templates import (
+    get_series_structure,
+    get_series_structure_for_db,
+    list_series_structures,
 )
 from app.services.manuscript_aggregation_service import manuscript_aggregation_service
 
@@ -49,6 +57,9 @@ def serialize_plot_beat(beat: PlotBeat) -> dict:
         "content_summary": beat.content_summary or "",
         "chapter_id": beat.chapter_id,
         "is_completed": beat.is_completed,
+        # Series outline linking
+        "linked_manuscript_outline_id": beat.linked_manuscript_outline_id,
+        "target_book_index": beat.target_book_index,
         "created_at": beat.created_at.isoformat() if beat.created_at else None,
         "updated_at": beat.updated_at.isoformat() if beat.updated_at else None,
         "completed_at": beat.completed_at.isoformat() if beat.completed_at else None,
@@ -60,8 +71,13 @@ def serialize_outline(outline: Outline) -> dict:
     return {
         "id": outline.id,
         "manuscript_id": outline.manuscript_id,
+        "series_id": outline.series_id,
+        "world_id": outline.world_id,
+        "scope": outline.scope or OUTLINE_SCOPE_MANUSCRIPT,
         "structure_type": outline.structure_type,
         "genre": outline.genre,
+        "arc_type": outline.arc_type,
+        "book_count": outline.book_count,
         "target_word_count": outline.target_word_count,
         "premise": outline.premise or "",
         "logline": outline.logline or "",
@@ -727,6 +743,100 @@ async def get_beat_content_suggestions(
         )
 
 
+class BridgeScenesRequest(BaseModel):
+    """Request model for generating bridge scene suggestions"""
+    from_beat_id: str  # The beat to start from
+    to_beat_id: str  # The beat to arrive at
+    api_key: str  # OpenRouter API key
+
+
+@router.post("/{outline_id}/ai-bridge-scenes")
+async def generate_bridge_scenes(
+    outline_id: str,
+    request: BridgeScenesRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Generate AI-powered scene suggestions to bridge the gap between two beats.
+
+    This feature helps writers create scenes that naturally connect major story
+    beats, ensuring smooth narrative flow. Returns 2-3 scene suggestions with
+    titles, descriptions, emotional purposes, and suggested word counts.
+
+    Requires user's OpenRouter API key (BYOK pattern)
+    """
+    try:
+        # Fetch outline
+        outline = db.query(Outline).filter(Outline.id == outline_id).first()
+        if not outline:
+            raise HTTPException(status_code=404, detail="Outline not found")
+
+        # Fetch from_beat
+        from_beat = db.query(PlotBeat).filter(
+            PlotBeat.id == request.from_beat_id,
+            PlotBeat.outline_id == outline_id
+        ).first()
+        if not from_beat:
+            raise HTTPException(status_code=404, detail="From beat not found in this outline")
+
+        # Fetch to_beat
+        to_beat = db.query(PlotBeat).filter(
+            PlotBeat.id == request.to_beat_id,
+            PlotBeat.outline_id == outline_id
+        ).first()
+        if not to_beat:
+            raise HTTPException(status_code=404, detail="To beat not found in this outline")
+
+        # Validate beats are adjacent (to_beat should come after from_beat)
+        if from_beat.order_index >= to_beat.order_index:
+            raise HTTPException(
+                status_code=400,
+                detail="From beat must come before to beat in the outline"
+            )
+
+        # Validate API key
+        if not request.api_key or len(request.api_key) < 10:
+            raise HTTPException(status_code=400, detail="Invalid API key")
+
+        # Initialize AI service
+        ai_service = AIOutlineService(request.api_key)
+
+        # Generate bridge scene suggestions
+        result = await ai_service.generate_bridge_scenes(
+            from_beat=from_beat,
+            to_beat=to_beat,
+            outline=outline,
+            db=db
+        )
+
+        if not result["success"]:
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("message", result.get("error", "Bridge scene generation failed"))
+            )
+
+        return {
+            "success": True,
+            "data": {
+                "scenes": result.get("scenes", []),
+                "bridging_analysis": result.get("bridging_analysis", ""),
+                "from_beat_id": request.from_beat_id,
+                "to_beat_id": request.to_beat_id
+            },
+            "usage": result.get("usage", {}),
+            "cost": result.get("cost", {})
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Bridge scene generation error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Bridge scene generation failed: {str(e)}"
+        )
+
+
 class GenerateChaptersRequest(BaseModel):
     """Request model for chapter generation"""
     generation_strategy: str = "one-per-beat"  # "one-per-beat", "act-folders", "custom"
@@ -1333,3 +1443,372 @@ async def get_outline_progress(
             "actual_word_count": sum(beat.actual_word_count for beat in beats),
         }
     }
+
+
+# ===== SERIES/WORLD OUTLINE ENDPOINTS =====
+
+class SeriesOutlineCreate(BaseModel):
+    """Request model for creating a series-level outline"""
+    series_id: str
+    structure_type: str  # 'trilogy-arc', 'duology-arc', 'ongoing-series', 'saga-arc'
+    genre: Optional[str] = None
+    target_word_count: Optional[int] = 240000  # Default trilogy length
+    premise: Optional[str] = ""
+    logline: Optional[str] = ""
+    synopsis: Optional[str] = ""
+
+
+class WorldOutlineCreate(BaseModel):
+    """Request model for creating a world-level outline"""
+    world_id: str
+    structure_type: str
+    genre: Optional[str] = None
+    target_word_count: Optional[int] = 500000  # Default saga length
+    premise: Optional[str] = ""
+    logline: Optional[str] = ""
+    synopsis: Optional[str] = ""
+
+
+class LinkBeatToManuscriptRequest(BaseModel):
+    """Request model for linking a series beat to a manuscript outline"""
+    beat_id: str
+    manuscript_outline_id: str
+
+
+@router.get("/series-structures")
+async def list_series_structure_templates():
+    """Get list of available series structure templates"""
+    return {
+        "success": True,
+        "structures": list_series_structures()
+    }
+
+
+@router.get("/series-structures/{structure_type}")
+async def get_series_structure_template(structure_type: str):
+    """Get detailed information about a specific series structure"""
+    try:
+        structure = get_series_structure(structure_type)
+        return {
+            "success": True,
+            "structure": structure
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/series/{series_id}")
+async def create_series_outline(
+    series_id: str,
+    outline: SeriesOutlineCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new series-level outline from a series structure template.
+
+    Series outlines span multiple books and track the overall arc of a series.
+    """
+    from app.models.world import Series
+
+    # Validate series exists
+    series = db.query(Series).filter(Series.id == series_id).first()
+    if not series:
+        raise HTTPException(status_code=404, detail="Series not found")
+
+    # Validate structure type
+    try:
+        structure = get_series_structure_for_db(outline.structure_type)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Deactivate other outlines for this series
+    db.query(Outline).filter(
+        Outline.series_id == series_id,
+        Outline.scope == OUTLINE_SCOPE_SERIES,
+        Outline.is_active == True
+    ).update({"is_active": False})
+
+    # Create series outline
+    new_outline = Outline(
+        id=str(uuid.uuid4()),
+        series_id=series_id,
+        scope=OUTLINE_SCOPE_SERIES,
+        structure_type=outline.structure_type,
+        genre=outline.genre,
+        arc_type=structure["arc_type"],
+        book_count=structure["book_count"],
+        target_word_count=outline.target_word_count,
+        premise=outline.premise,
+        logline=outline.logline,
+        synopsis=outline.synopsis,
+        is_active=True
+    )
+
+    db.add(new_outline)
+    db.flush()
+
+    # Create plot beats from series template
+    for beat_data in structure["beats"]:
+        target_wc = int(outline.target_word_count * beat_data["target_position_percent"])
+        new_beat = PlotBeat(
+            id=str(uuid.uuid4()),
+            outline_id=new_outline.id,
+            beat_name=beat_data["beat_name"],
+            beat_label=beat_data["beat_label"],
+            beat_description=beat_data["beat_description"],
+            target_position_percent=beat_data["target_position_percent"],
+            target_word_count=target_wc,
+            order_index=beat_data["order_index"],
+            target_book_index=beat_data["target_book_index"],
+        )
+        db.add(new_beat)
+
+    db.commit()
+    db.refresh(new_outline)
+    _ = new_outline.plot_beats
+
+    return {"success": True, "data": serialize_outline(new_outline)}
+
+
+@router.get("/series/{series_id}")
+async def get_series_outlines(
+    series_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get all outlines for a series"""
+    outlines = db.query(Outline).filter(
+        Outline.series_id == series_id,
+        Outline.scope == OUTLINE_SCOPE_SERIES
+    ).order_by(Outline.created_at.desc()).all()
+
+    return {
+        "success": True,
+        "data": [serialize_outline(o) for o in outlines]
+    }
+
+
+@router.get("/series/{series_id}/active")
+async def get_active_series_outline(
+    series_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get the active outline for a series"""
+    outline = db.query(Outline).filter(
+        Outline.series_id == series_id,
+        Outline.scope == OUTLINE_SCOPE_SERIES,
+        Outline.is_active == True
+    ).first()
+
+    if not outline:
+        raise HTTPException(status_code=404, detail="No active outline found for series")
+
+    _ = outline.plot_beats
+    return {"success": True, "data": serialize_outline(outline)}
+
+
+@router.get("/series/{series_id}/structure")
+async def get_series_structure_with_manuscripts(
+    series_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get full series structure including linked manuscript outlines.
+
+    Returns the series outline with information about how manuscript outlines
+    are linked to series-level beats.
+    """
+    from app.models.world import Series
+    from app.models.manuscript import Manuscript
+
+    series = db.query(Series).filter(Series.id == series_id).first()
+    if not series:
+        raise HTTPException(status_code=404, detail="Series not found")
+
+    # Get active series outline
+    series_outline = db.query(Outline).filter(
+        Outline.series_id == series_id,
+        Outline.scope == OUTLINE_SCOPE_SERIES,
+        Outline.is_active == True
+    ).first()
+
+    # Get all manuscripts in the series
+    manuscripts = db.query(Manuscript).filter(
+        Manuscript.series_id == series_id
+    ).order_by(Manuscript.order_index).all()
+
+    # Get manuscript outlines
+    manuscript_outlines = {}
+    for ms in manuscripts:
+        ms_outline = db.query(Outline).filter(
+            Outline.manuscript_id == ms.id,
+            Outline.scope == OUTLINE_SCOPE_MANUSCRIPT,
+            Outline.is_active == True
+        ).first()
+        if ms_outline:
+            _ = ms_outline.plot_beats
+            manuscript_outlines[ms.id] = serialize_outline(ms_outline)
+
+    result = {
+        "series": {
+            "id": series.id,
+            "name": series.name,
+            "description": series.description,
+        },
+        "series_outline": serialize_outline(series_outline) if series_outline else None,
+        "manuscripts": [
+            {
+                "id": ms.id,
+                "title": ms.title,
+                "order_index": ms.order_index,
+                "outline": manuscript_outlines.get(ms.id)
+            }
+            for ms in manuscripts
+        ]
+    }
+
+    return {"success": True, "data": result}
+
+
+@router.post("/world/{world_id}")
+async def create_world_outline(
+    world_id: str,
+    outline: WorldOutlineCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a world-level meta-arc outline.
+
+    World outlines provide the highest-level narrative arc that spans
+    all series within a world.
+    """
+    from app.models.world import World
+
+    # Validate world exists
+    world = db.query(World).filter(World.id == world_id).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+
+    # Validate structure type (use series structures for world too)
+    try:
+        structure = get_series_structure_for_db(outline.structure_type)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Deactivate other outlines for this world
+    db.query(Outline).filter(
+        Outline.world_id == world_id,
+        Outline.scope == OUTLINE_SCOPE_WORLD,
+        Outline.is_active == True
+    ).update({"is_active": False})
+
+    # Create world outline
+    new_outline = Outline(
+        id=str(uuid.uuid4()),
+        world_id=world_id,
+        scope=OUTLINE_SCOPE_WORLD,
+        structure_type=outline.structure_type,
+        genre=outline.genre,
+        arc_type=structure["arc_type"],
+        book_count=structure["book_count"],
+        target_word_count=outline.target_word_count,
+        premise=outline.premise,
+        logline=outline.logline,
+        synopsis=outline.synopsis,
+        is_active=True
+    )
+
+    db.add(new_outline)
+    db.flush()
+
+    # Create plot beats
+    for beat_data in structure["beats"]:
+        target_wc = int(outline.target_word_count * beat_data["target_position_percent"])
+        new_beat = PlotBeat(
+            id=str(uuid.uuid4()),
+            outline_id=new_outline.id,
+            beat_name=beat_data["beat_name"],
+            beat_label=beat_data["beat_label"],
+            beat_description=beat_data["beat_description"],
+            target_position_percent=beat_data["target_position_percent"],
+            target_word_count=target_wc,
+            order_index=beat_data["order_index"],
+            target_book_index=beat_data["target_book_index"],
+        )
+        db.add(new_beat)
+
+    db.commit()
+    db.refresh(new_outline)
+    _ = new_outline.plot_beats
+
+    return {"success": True, "data": serialize_outline(new_outline)}
+
+
+@router.get("/world/{world_id}")
+async def get_world_outlines(
+    world_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get all outlines for a world"""
+    outlines = db.query(Outline).filter(
+        Outline.world_id == world_id,
+        Outline.scope == OUTLINE_SCOPE_WORLD
+    ).order_by(Outline.created_at.desc()).all()
+
+    return {
+        "success": True,
+        "data": [serialize_outline(o) for o in outlines]
+    }
+
+
+@router.post("/{outline_id}/link-manuscript")
+async def link_beat_to_manuscript_outline(
+    outline_id: str,
+    request: LinkBeatToManuscriptRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Link a series/world beat to a manuscript outline.
+
+    This creates a connection between high-level series arcs and
+    specific manuscript implementations.
+    """
+    # Validate the outline exists and is series/world scope
+    outline = db.query(Outline).filter(Outline.id == outline_id).first()
+    if not outline:
+        raise HTTPException(status_code=404, detail="Outline not found")
+
+    if outline.scope == OUTLINE_SCOPE_MANUSCRIPT:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot link beats from manuscript-level outlines. Use series or world outlines."
+        )
+
+    # Validate the beat exists and belongs to this outline
+    beat = db.query(PlotBeat).filter(
+        PlotBeat.id == request.beat_id,
+        PlotBeat.outline_id == outline_id
+    ).first()
+    if not beat:
+        raise HTTPException(status_code=404, detail="Beat not found in this outline")
+
+    # Validate the manuscript outline exists and is manuscript scope
+    ms_outline = db.query(Outline).filter(
+        Outline.id == request.manuscript_outline_id
+    ).first()
+    if not ms_outline:
+        raise HTTPException(status_code=404, detail="Manuscript outline not found")
+
+    if ms_outline.scope != OUTLINE_SCOPE_MANUSCRIPT:
+        raise HTTPException(
+            status_code=400,
+            detail="Target outline must be a manuscript-level outline"
+        )
+
+    # Link the beat
+    beat.linked_manuscript_outline_id = request.manuscript_outline_id
+    beat.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(beat)
+
+    return {"success": True, "data": serialize_plot_beat(beat)}

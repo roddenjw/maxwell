@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 
 from app.services.codex_service import codex_service
 from app.services.nlp_service import nlp_service
+from app.services.ai_entity_service import ai_entity_service
 
 
 router = APIRouter(prefix="/api/codex", tags=["codex"])
@@ -21,6 +22,8 @@ class CreateEntityRequest(BaseModel):
     name: str
     aliases: Optional[List[str]] = None
     attributes: Optional[Dict[str, Any]] = None
+    template_type: Optional[str] = None  # CHARACTER, LOCATION, ITEM, MAGIC_SYSTEM, CREATURE, ORGANIZATION
+    template_data: Optional[Dict[str, Any]] = None
 
 
 class UpdateEntityRequest(BaseModel):
@@ -28,6 +31,8 @@ class UpdateEntityRequest(BaseModel):
     type: Optional[str] = None
     aliases: Optional[List[str]] = None
     attributes: Optional[Dict[str, Any]] = None
+    template_type: Optional[str] = None
+    template_data: Optional[Dict[str, Any]] = None
 
 
 class AddAppearanceRequest(BaseModel):
@@ -59,6 +64,17 @@ class AnalyzeTextRequest(BaseModel):
     text: str
 
 
+class AIFieldSuggestionRequest(BaseModel):
+    """Request for AI-generated field content"""
+    api_key: str
+    entity_name: str
+    entity_type: str
+    template_type: str
+    field_path: str
+    existing_data: Optional[Dict[str, Any]] = None
+    manuscript_context: Optional[str] = None
+
+
 # Entity Endpoints
 
 @router.post("/entities")
@@ -70,7 +86,9 @@ async def create_entity(request: CreateEntityRequest):
             entity_type=request.type,
             name=request.name,
             aliases=request.aliases,
-            attributes=request.attributes
+            attributes=request.attributes,
+            template_type=request.template_type,
+            template_data=request.template_data
         )
 
         return {
@@ -79,6 +97,8 @@ async def create_entity(request: CreateEntityRequest):
                 "id": entity.id,
                 "manuscript_id": entity.manuscript_id,
                 "type": entity.type,
+                "template_type": entity.template_type,
+                "template_data": entity.template_data,
                 "name": entity.name,
                 "aliases": entity.aliases,
                 "attributes": entity.attributes,
@@ -104,6 +124,8 @@ async def list_entities(manuscript_id: str, type: Optional[str] = None):
                     "id": entity.id,
                     "manuscript_id": entity.manuscript_id,
                     "type": entity.type,
+                    "template_type": entity.template_type,
+                    "template_data": entity.template_data,
                     "name": entity.name,
                     "aliases": entity.aliases,
                     "attributes": entity.attributes,
@@ -127,7 +149,9 @@ async def update_entity(entity_id: str, request: UpdateEntityRequest):
             name=request.name,
             entity_type=request.type,
             aliases=request.aliases,
-            attributes=request.attributes
+            attributes=request.attributes,
+            template_type=request.template_type,
+            template_data=request.template_data
         )
 
         if not entity:
@@ -139,6 +163,8 @@ async def update_entity(entity_id: str, request: UpdateEntityRequest):
                 "id": entity.id,
                 "manuscript_id": entity.manuscript_id,
                 "type": entity.type,
+                "template_type": entity.template_type,
+                "template_data": entity.template_data,
                 "name": entity.name,
                 "aliases": entity.aliases,
                 "attributes": entity.attributes,
@@ -190,6 +216,40 @@ async def add_appearance(request: AddAppearanceRequest):
             "data": {
                 "id": entity.id,
                 "appearance_history": entity.appearance_history
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/entities/ai-field-suggestion")
+async def generate_field_suggestion(request: AIFieldSuggestionRequest):
+    """Generate AI suggestion for a specific entity template field"""
+    try:
+        result = await ai_entity_service.generate_field_suggestion(
+            api_key=request.api_key,
+            entity_name=request.entity_name,
+            entity_type=request.entity_type,
+            template_type=request.template_type,
+            field_path=request.field_path,
+            existing_data=request.existing_data or {},
+            manuscript_context=request.manuscript_context
+        )
+
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "AI generation failed"))
+
+        return {
+            "success": True,
+            "data": {
+                "suggestion": result["suggestion"],
+                "usage": result.get("usage", {}),
+            },
+            "cost": {
+                "total": result.get("cost", 0),
+                "formatted": f"${result.get('cost', 0):.4f}"
             }
         }
     except HTTPException:

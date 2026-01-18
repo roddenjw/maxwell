@@ -33,6 +33,7 @@ import type {
   AIAnalysisResult,
   BeatSuggestionsResult,
   SceneCreate,
+  BridgeScenesResult,
 } from '@/types/outline';
 
 import type {
@@ -398,6 +399,38 @@ export const codexApi = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  /**
+   * Generate AI suggestion for entity template field
+   */
+  async generateFieldSuggestion(data: {
+    api_key: string;
+    entity_name: string;
+    entity_type: string;
+    template_type: string;
+    field_path: string;
+    existing_data?: Record<string, any>;
+    manuscript_context?: string;
+  }): Promise<{ suggestion: string | string[]; usage: any; cost: { total: number; formatted: string } }> {
+    const url = `${API_BASE_URL}/codex/entities/ai-field-suggestion`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error?.message || result.detail || 'AI generation failed');
+    }
+
+    return {
+      suggestion: result.data.suggestion,
+      usage: result.data.usage,
+      cost: result.cost,
+    };
   },
 
   // Relationship Endpoints
@@ -897,6 +930,33 @@ export const outlineApi = {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || 'Failed to generate premise');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Generate AI-powered scene suggestions to bridge the gap between two beats
+   */
+  async generateBridgeScenes(
+    outlineId: string,
+    fromBeatId: string,
+    toBeatId: string,
+    apiKey: string
+  ): Promise<{ data: BridgeScenesResult; usage: any; cost: { total_usd: number; formatted: string } }> {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/ai-bridge-scenes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from_beat_id: fromBeatId,
+        to_beat_id: toBeatId,
+        api_key: apiKey,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate bridge scenes');
     }
 
     return response.json();

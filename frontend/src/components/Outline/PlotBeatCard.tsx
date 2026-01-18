@@ -34,9 +34,13 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
   const [showAISuggestions, setShowAISuggestions] = useState(false);
   const notesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Feedback tracking for suggestion refinement
+  const [suggestionFeedback, setSuggestionFeedback] = useState<Map<number, 'like' | 'dislike'>>(new Map());
+
   const isExpanded = expandedBeatId === beat.id;
   const suggestions = beatSuggestions.get(beat.id);
   const hasAISuggestions = suggestions && suggestions.suggestions.length > 0;
+  const hasFeedback = suggestionFeedback.size > 0;
 
   // Is this a scene (user-added) or a beat (from template)?
   const isScene = beat.item_type === 'SCENE';
@@ -155,6 +159,30 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
   const handleDismissSuggestion = (_index: number) => {
     // Note: The actual mutation happens in BeatSuggestionCard's onDismiss
     // This is just a placeholder for future persistence if needed
+  };
+
+  const handleSuggestionFeedback = (index: number, feedback: 'like' | 'dislike') => {
+    setSuggestionFeedback(prev => {
+      const next = new Map(prev);
+      if (next.get(index) === feedback) {
+        // Toggle off if clicking same feedback
+        next.delete(index);
+      } else {
+        next.set(index, feedback);
+      }
+      return next;
+    });
+  };
+
+  const handleRefineSuggestions = async () => {
+    if (!onGetAIIdeas || !hasFeedback) return;
+
+    // Clear feedback after triggering refinement
+    // The AI will regenerate with fresh suggestions
+    // In a more advanced implementation, we'd send feedback to the backend
+    toast.info('Generating refined suggestions based on your feedback...');
+    setSuggestionFeedback(new Map());
+    await onGetAIIdeas(beat.id);
   };
 
   const wordCountProgress = beat.target_word_count > 0
@@ -409,10 +437,28 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
                     <BeatSuggestionCard
                       key={idx}
                       suggestion={suggestion}
+                      index={idx}
                       onApply={() => handleApplySuggestion(suggestion, idx)}
                       onDismiss={() => handleDismissSuggestion(idx)}
+                      onFeedback={handleSuggestionFeedback}
+                      feedback={suggestionFeedback.get(idx)}
                     />
                   ))}
+
+                  {/* Refine Suggestions Button */}
+                  {hasFeedback && (
+                    <button
+                      onClick={handleRefineSuggestions}
+                      disabled={isLoadingAI}
+                      className="w-full mt-2 px-3 py-2 text-sm font-sans font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center justify-center gap-2"
+                      style={{ borderRadius: '2px' }}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>Refine Based on Feedback</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>

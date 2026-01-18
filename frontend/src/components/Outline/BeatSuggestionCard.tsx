@@ -3,24 +3,35 @@ import type { BeatSuggestion } from '../../types/outline';
 
 interface BeatSuggestionCardProps {
   suggestion: BeatSuggestion;
+  index: number;
   onApply: () => void;
   onDismiss: () => void;
+  onFeedback?: (index: number, feedback: 'like' | 'dislike') => void;
+  feedback?: 'like' | 'dislike' | null;
 }
 
 /**
  * BeatSuggestionCard Component
  *
- * Displays a single AI-generated suggestion for a plot beat with options to apply or dismiss.
- * Part of the AI beat analysis feature.
+ * Displays a single AI-generated suggestion for a plot beat with options to apply, dismiss, or provide feedback.
+ * Part of the AI beat analysis feature with refinement loop support.
  *
  * Features:
  * - Type-based icons (scene, character, dialogue, subplot)
  * - Expandable description
  * - Apply button to use the suggestion
  * - Dismiss button to mark as used
+ * - Like/dislike buttons for refinement feedback
  * - Visual dimming when marked as used
  */
-export default function BeatSuggestionCard({ suggestion, onApply, onDismiss }: BeatSuggestionCardProps) {
+export default function BeatSuggestionCard({
+  suggestion,
+  index,
+  onApply,
+  onDismiss,
+  onFeedback,
+  feedback
+}: BeatSuggestionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Type-based icons and colors
@@ -99,28 +110,64 @@ export default function BeatSuggestionCard({ suggestion, onApply, onDismiss }: B
 
           {/* Apply and Dismiss Buttons (only if not used) */}
           {!suggestion.used && (
-            <div className="flex flex-col gap-1">
-              <button
-                onClick={onApply}
-                className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
-                title="Apply this suggestion to beat description"
-                aria-label="Apply suggestion"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </button>
-              <button
-                onClick={onDismiss}
-                className="p-1 text-gray-500 hover:bg-gray-100 rounded transition-colors"
-                title="Dismiss this suggestion"
-                aria-label="Dismiss suggestion"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+            <>
+              {/* Feedback Buttons */}
+              {onFeedback && (
+                <div className="flex gap-0.5">
+                  <button
+                    onClick={() => onFeedback(index, 'like')}
+                    className={`p-1 rounded transition-colors ${
+                      feedback === 'like'
+                        ? 'bg-green-100 text-green-600'
+                        : 'text-gray-400 hover:bg-green-50 hover:text-green-500'
+                    }`}
+                    title="Like this suggestion (use for refinement)"
+                    aria-label="Like suggestion"
+                  >
+                    <svg className="w-3 h-3" fill={feedback === 'like' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => onFeedback(index, 'dislike')}
+                    className={`p-1 rounded transition-colors ${
+                      feedback === 'dislike'
+                        ? 'bg-red-100 text-red-600'
+                        : 'text-gray-400 hover:bg-red-50 hover:text-red-500'
+                    }`}
+                    title="Dislike this suggestion (avoid in refinement)"
+                    aria-label="Dislike suggestion"
+                  >
+                    <svg className="w-3 h-3" fill={feedback === 'dislike' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018c.163 0 .326.02.485.06L17 4m-7 10v2a2 2 0 002 2h.095c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={onApply}
+                  className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
+                  title="Apply this suggestion to beat description"
+                  aria-label="Apply suggestion"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={onDismiss}
+                  className="p-1 text-gray-500 hover:bg-gray-100 rounded transition-colors"
+                  title="Dismiss this suggestion"
+                  aria-label="Dismiss suggestion"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </>
           )}
 
           {/* Used Badge */}

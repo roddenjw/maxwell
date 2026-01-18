@@ -16,6 +16,16 @@ ENTITY_SCOPE_SERIES = "SERIES"          # Entity shared across series
 ENTITY_SCOPE_WORLD = "WORLD"            # Entity shared across entire world
 
 
+# Entity template type constants (for structured templates)
+TEMPLATE_TYPE_CHARACTER = "CHARACTER"
+TEMPLATE_TYPE_LOCATION = "LOCATION"
+TEMPLATE_TYPE_ITEM = "ITEM"
+TEMPLATE_TYPE_MAGIC_SYSTEM = "MAGIC_SYSTEM"
+TEMPLATE_TYPE_CREATURE = "CREATURE"
+TEMPLATE_TYPE_ORGANIZATION = "ORGANIZATION"
+TEMPLATE_TYPE_CUSTOM = "CUSTOM"  # User-defined structure
+
+
 class Entity(Base):
     """Base entity for characters, locations, items, and lore"""
     __tablename__ = "entities"
@@ -34,6 +44,10 @@ class Entity(Base):
     # Entity type: CHARACTER, LOCATION, ITEM, LORE
     type = Column(String, nullable=False)
 
+    # Template type for structured entity creation (CHARACTER, LOCATION, ITEM, MAGIC_SYSTEM, CREATURE, etc.)
+    # When set, template_data follows a pre-defined structure
+    template_type = Column(String, nullable=True)
+
     # Basic info
     name = Column(String, nullable=False)
     aliases = Column(JSON, default=list)  # Alternative names
@@ -44,6 +58,18 @@ class Entity(Base):
     # For ITEM: description, significance
     # For LORE: description, significance
     attributes = Column(JSON, default=dict)
+
+    # Structured template data (follows template_type structure)
+    # Example CHARACTER template_data:
+    # {
+    #   "role": "Protagonist",
+    #   "physical": {"age": "32", "appearance": "...", "distinguishing_features": "..."},
+    #   "personality": {"traits": [...], "flaws": "...", "strengths": "..."},
+    #   "backstory": {"origin": "...", "key_events": "...", "secrets": "..."},
+    #   "motivation": {"want": "...", "need": "..."},
+    #   "relationships": [{"entity_id": "...", "type": "...", "notes": "..."}]
+    # }
+    template_data = Column(JSON, default=dict)
 
     # Appearance history
     # List of {scene_id, description, timestamp}
@@ -134,3 +160,43 @@ class EntitySuggestion(Base):
 
     def __repr__(self):
         return f"<EntitySuggestion(name='{self.name}', type={self.type}, status={self.status})>"
+
+
+class EntitySourceReference(Base):
+    """
+    Tracks where entity information came from in the manuscript.
+    Links entity template fields to specific text locations for:
+    - Auto-population from manuscript text
+    - Conflict detection ("we found conflicting descriptions")
+    - Source attribution ("this came from Chapter 3")
+    """
+    __tablename__ = "entity_source_references"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    entity_id = Column(String, ForeignKey("entities.id"), nullable=False)
+
+    # Which template field this reference populates
+    # e.g., "physical.appearance", "backstory.origin", "motivation.want"
+    field_path = Column(String, nullable=False)
+
+    # Source location in manuscript
+    chapter_id = Column(String, ForeignKey("chapters.id"), nullable=True)
+
+    # The actual text excerpt that was extracted
+    text_excerpt = Column(Text, nullable=False)
+
+    # Position in chapter (for precise location)
+    character_offset = Column(Integer, nullable=True)
+
+    # Whether user confirmed this auto-extraction
+    is_confirmed = Column(String, default="PENDING")  # PENDING, CONFIRMED, REJECTED
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    entity = relationship("Entity", backref="source_references")
+    chapter = relationship("Chapter", foreign_keys=[chapter_id])
+
+    def __repr__(self):
+        return f"<EntitySourceReference(entity_id={self.entity_id}, field='{self.field_path}')>"

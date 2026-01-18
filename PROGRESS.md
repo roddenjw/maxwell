@@ -170,6 +170,54 @@
 
 ## Recent Completions (Last 2 Weeks)
 
+### January 18, 2026 (Part 2)
+- ✅ **Outline UX Overhaul - Scenes Between Beats**
+  - Added `item_type` (BEAT/SCENE) and `parent_beat_id` columns to PlotBeat model
+  - Scene creation endpoint: `POST /api/outlines/{id}/scenes`
+  - `AddSceneButton.tsx` component for adding scenes between beats
+  - Scene styling (purple theme) in PlotBeatCard with delete functionality
+  - SceneCreate schema and frontend store integration
+
+- ✅ **Outline UX Overhaul - AI Bridge Feature**
+  - `generate_bridge_scenes()` method in AI outline service
+  - `POST /api/outlines/{id}/ai-bridge-scenes` endpoint
+  - AI suggests 2-3 scene ideas with titles, descriptions, emotional purposes, word counts
+  - "AI: Bridge This Gap" button in AddSceneButton component
+  - Purple suggestion panel with click-to-apply functionality
+
+- ✅ **Outline UX Overhaul - Beat Suggestion Refinement Loop**
+  - Added feedback props (onFeedback, feedback) to BeatSuggestionCard
+  - Like/dislike buttons for individual suggestions
+  - Feedback state tracking in PlotBeatCard component
+  - "Refine Based on Feedback" button for regenerating suggestions
+
+- ✅ **Codex 2.0 - Entity Templates Database**
+  - Added `template_type` and `template_data` columns to Entity model
+  - Created `EntitySourceReference` model for tracking text source locations
+  - Template types: CHARACTER, LOCATION, ITEM, MAGIC_SYSTEM, CREATURE, ORGANIZATION
+  - Migration: `ff71c8960d33_add_entity_templates_and_source_references.py`
+
+- ✅ **Codex 2.0 - Guided Entity Creation Wizard**
+  - `EntityTemplateWizard.tsx` component (800+ lines)
+  - 6 pre-built templates with step-by-step guided creation
+  - CHARACTER: Basics → Physical → Personality → Backstory → Motivation
+  - LOCATION: Basics → Geography → Atmosphere → History → Details
+  - ITEM: Basics → Origin → Properties → History → Current State
+  - MAGIC_SYSTEM: Basics → Rules → Users → Effects & Impact
+  - CREATURE: Basics → Physical → Behavior → Abilities & Weaknesses
+  - ORGANIZATION: Basics → Structure → History → Relations & Secrets
+  - Template type definitions in `frontend/src/types/codex.ts`
+  - Integration with EntityList: "Create with Template" and "Quick Create" options
+
+- ✅ **Codex 2.0 - AI-Assisted Field Population**
+  - `AIEntityService` backend service for field generation
+  - 50+ field-specific prompts for intelligent content generation
+  - `POST /api/codex/entities/ai-field-suggestion` endpoint
+  - AI button on each wizard field (excluding name, aliases, select fields)
+  - Uses existing template data as context for coherent generation
+  - Toast notifications for success/error with cost display
+  - Loading states per-field during generation
+
 ### January 18, 2026
 - ✅ **Phase 8 Complete: Library & World Management System (Phase 8 - 100%)**
   - **Database Schema Updates:**

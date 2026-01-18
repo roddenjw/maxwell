@@ -14,20 +14,36 @@ from app.database import Base
 ITEM_TYPE_BEAT = "BEAT"    # Major story beat from structure template
 ITEM_TYPE_SCENE = "SCENE"  # User-added scene between beats
 
+# Outline scope constants
+OUTLINE_SCOPE_MANUSCRIPT = "MANUSCRIPT"  # Single manuscript outline
+OUTLINE_SCOPE_SERIES = "SERIES"          # Series-level outline spanning multiple books
+OUTLINE_SCOPE_WORLD = "WORLD"            # World-level meta-arc across all series
+
 
 class Outline(Base):
-    """Story outline with structure template"""
+    """Story outline with structure template - supports manuscript, series, or world scope"""
     __tablename__ = "outlines"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=False)
+
+    # Scope anchors (one should be set based on scope)
+    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=True)  # For MANUSCRIPT scope
+    series_id = Column(String, ForeignKey("series.id"), nullable=True)  # For SERIES scope
+    world_id = Column(String, ForeignKey("worlds.id"), nullable=True)  # For WORLD scope
+
+    # Scope determines the level of this outline
+    scope = Column(String, default=OUTLINE_SCOPE_MANUSCRIPT, nullable=False)
 
     # Structure configuration
-    structure_type = Column(String, nullable=False)  # 'story-arc-9', 'screenplay-15', 'mythic-quest', '3-act', 'custom'
+    structure_type = Column(String, nullable=False)  # 'story-arc-9', 'screenplay-15', 'mythic-quest', '3-act', 'trilogy-arc', 'custom'
     genre = Column(String, nullable=True)  # 'fantasy', 'thriller', 'romance', 'mystery', 'sci-fi', etc.
 
+    # Series-specific fields
+    arc_type = Column(String, nullable=True)  # For series: 'trilogy', 'ongoing', 'duology', 'saga'
+    book_count = Column(Integer, nullable=True)  # Planned number of books in series
+
     # Target metrics
-    target_word_count = Column(Integer, default=80000)  # Default novel length
+    target_word_count = Column(Integer, default=80000)  # Default novel length (or series total)
 
     # Outline content
     premise = Column(Text, default="")  # One-sentence story premise
@@ -39,15 +55,17 @@ class Outline(Base):
     settings = Column(JSON, default=dict)  # Custom settings for outline
 
     # Status
-    is_active = Column(Boolean, default=True)  # Is this the active outline for the manuscript?
+    is_active = Column(Boolean, default=True)  # Is this the active outline for the manuscript/series/world?
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    manuscript = relationship("Manuscript", backref="outlines")
-    plot_beats = relationship("PlotBeat", back_populates="outline", cascade="all, delete-orphan", order_by="PlotBeat.order_index")
+    manuscript = relationship("Manuscript", backref="outlines", foreign_keys=[manuscript_id])
+    series = relationship("Series", backref="outlines", foreign_keys=[series_id])
+    world = relationship("World", backref="outlines", foreign_keys=[world_id])
+    plot_beats = relationship("PlotBeat", back_populates="outline", cascade="all, delete-orphan", order_by="PlotBeat.order_index", foreign_keys="[PlotBeat.outline_id]")
 
     def __repr__(self):
         return f"<Outline(id={self.id}, structure='{self.structure_type}', genre='{self.genre}')>"
@@ -88,14 +106,19 @@ class PlotBeat(Base):
     # Brainstorming integration
     brainstorm_source_id = Column(String, ForeignKey("brainstorm_ideas.id"), nullable=True)  # Which brainstorm idea generated this?
 
+    # Series outline linking
+    linked_manuscript_outline_id = Column(String, ForeignKey("outlines.id"), nullable=True)  # Link series beat to specific manuscript outline
+    target_book_index = Column(Integer, nullable=True)  # Which book in the series (1, 2, 3...)
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)  # When was this beat completed?
 
     # Relationships
-    outline = relationship("Outline", back_populates="plot_beats")
+    outline = relationship("Outline", back_populates="plot_beats", foreign_keys=[outline_id])
     chapter = relationship("Chapter", foreign_keys=[chapter_id])
+    linked_manuscript_outline = relationship("Outline", foreign_keys=[linked_manuscript_outline_id])
 
     # Self-referential relationship for scenes following a beat
     parent_beat = relationship(

@@ -11,6 +11,159 @@ export enum EntityType {
   LORE = "LORE",
 }
 
+// Template Types for structured entity creation
+export enum TemplateType {
+  CHARACTER = "CHARACTER",
+  LOCATION = "LOCATION",
+  ITEM = "ITEM",
+  MAGIC_SYSTEM = "MAGIC_SYSTEM",
+  CREATURE = "CREATURE",
+  ORGANIZATION = "ORGANIZATION",
+  CUSTOM = "CUSTOM",
+}
+
+// Character template data structure
+export interface CharacterTemplateData {
+  role?: string;
+  physical?: {
+    age?: string;
+    appearance?: string;
+    distinguishing_features?: string;
+  };
+  personality?: {
+    traits?: string[];
+    flaws?: string;
+    strengths?: string;
+  };
+  backstory?: {
+    origin?: string;
+    key_events?: string;
+    secrets?: string;
+  };
+  motivation?: {
+    want?: string;
+    need?: string;
+  };
+  relationships?: Array<{
+    entity_id?: string;
+    entity_name?: string;
+    type?: string;
+    notes?: string;
+  }>;
+}
+
+// Location template data structure
+export interface LocationTemplateData {
+  type?: string;  // city, village, castle, forest, etc.
+  geography?: {
+    terrain?: string;
+    climate?: string;
+    size?: string;
+  };
+  atmosphere?: {
+    mood?: string;
+    sounds?: string;
+    smells?: string;
+  };
+  history?: {
+    founded?: string;
+    key_events?: string;
+    current_state?: string;
+  };
+  notable_features?: string[];
+  inhabitants?: string;
+  secrets?: string;
+}
+
+// Item template data structure
+export interface ItemTemplateData {
+  type?: string;  // weapon, artifact, tool, etc.
+  origin?: {
+    creator?: string;
+    creation_date?: string;
+    creation_story?: string;
+  };
+  properties?: {
+    physical_description?: string;
+    powers?: string;
+    limitations?: string;
+  };
+  history?: {
+    previous_owners?: string;
+    notable_events?: string;
+  };
+  current_owner?: string;
+  significance?: string;
+}
+
+// Magic System template data structure
+export interface MagicSystemTemplateData {
+  name?: string;
+  source?: string;  // where magic comes from
+  rules?: {
+    how_it_works?: string;
+    limitations?: string;
+    costs?: string;
+  };
+  users?: {
+    who_can_use?: string;
+    how_learned?: string;
+    organizations?: string;
+  };
+  effects?: string[];
+  weaknesses?: string;
+  cultural_impact?: string;
+}
+
+// Creature template data structure
+export interface CreatureTemplateData {
+  species?: string;
+  habitat?: string;
+  physical?: {
+    appearance?: string;
+    size?: string;
+    distinguishing_features?: string;
+  };
+  behavior?: {
+    temperament?: string;
+    diet?: string;
+    social_structure?: string;
+  };
+  abilities?: string[];
+  weaknesses?: string;
+  cultural_significance?: string;
+}
+
+// Organization template data structure
+export interface OrganizationTemplateData {
+  type?: string;  // guild, government, cult, etc.
+  purpose?: string;
+  structure?: {
+    leadership?: string;
+    hierarchy?: string;
+    membership_requirements?: string;
+  };
+  history?: {
+    founding?: string;
+    key_events?: string;
+    current_status?: string;
+  };
+  resources?: string;
+  allies?: string;
+  enemies?: string;
+  secrets?: string;
+}
+
+// Union type for all template data
+export type TemplateData =
+  | CharacterTemplateData
+  | LocationTemplateData
+  | ItemTemplateData
+  | MagicSystemTemplateData
+  | CreatureTemplateData
+  | OrganizationTemplateData
+  | Record<string, any>;
+
 // Relationship Types
 export enum RelationshipType {
   ROMANTIC = "ROMANTIC",
@@ -32,7 +185,11 @@ export enum SuggestionStatus {
 export interface Entity {
   id: string;
   manuscript_id: string;
+  world_id?: string;
+  scope?: 'MANUSCRIPT' | 'SERIES' | 'WORLD';
   type: EntityType;
+  template_type?: TemplateType;
+  template_data?: TemplateData;
   name: string;
   aliases: string[];
   attributes: Record<string, any>;
@@ -131,12 +288,16 @@ export interface CreateEntityRequest {
   name: string;
   aliases?: string[];
   attributes?: Record<string, any>;
+  template_type?: TemplateType;
+  template_data?: TemplateData;
 }
 
 export interface UpdateEntityRequest {
   name?: string;
   aliases?: string[];
   attributes?: Record<string, any>;
+  template_type?: TemplateType;
+  template_data?: TemplateData;
 }
 
 export interface CreateRelationshipRequest {
