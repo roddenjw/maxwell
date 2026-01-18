@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import ManuscriptEditor from './components/Editor/ManuscriptEditor'
 import ManuscriptLibrary from './components/ManuscriptLibrary'
+import { WorldLibrary } from './components/WorldLibrary'
 import { TimeMachine } from './components/TimeMachine'
 import { CodexSidebar } from './components/Codex'
 import TimelineSidebar from './components/Timeline/TimelineSidebar'
@@ -58,6 +59,7 @@ function App() {
   const [showWelcome, setShowWelcome] = useState(false)
   const [showTour, setShowTour] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
+  const [libraryView, setLibraryView] = useState<'manuscripts' | 'worlds'>('manuscripts')
 
   // Track unsaved changes and warn before closing
   const { checkNavigateAway } = useUnsavedChanges(saveStatus === 'unsaved' || saveStatus === 'saving')
@@ -118,7 +120,7 @@ function App() {
     analytics.tourSkipped()
   }
 
-  const handleWizardComplete = async (manuscriptId: string, outlineId: string) => {
+  const handleWizardComplete = async (manuscriptId: string, _outlineId: string) => {
     setShowWizard(false)
 
     // Fetch the created manuscript to add to store
@@ -792,14 +794,44 @@ function App() {
     )
   }
 
-  // Show manuscript library by default
+  // Show manuscript/world library by default
   return (
     <>
-      <ManuscriptLibrary
-        onOpenManuscript={handleOpenManuscript}
-        onSettingsClick={() => setShowSettings(true)}
-        onCreateWithWizard={() => setShowWizard(true)}
-      />
+      {libraryView === 'manuscripts' ? (
+        <ManuscriptLibrary
+          onOpenManuscript={handleOpenManuscript}
+          onSettingsClick={() => setShowSettings(true)}
+          onCreateWithWizard={() => setShowWizard(true)}
+        />
+      ) : (
+        <WorldLibrary
+          onOpenManuscript={handleOpenManuscript}
+          onSettingsClick={() => setShowSettings(true)}
+          onCreateWithWizard={() => setShowWizard(true)}
+          onBackToManuscripts={() => setLibraryView('manuscripts')}
+        />
+      )}
+
+      {/* Library View Toggle - Fixed position button */}
+      <button
+        onClick={() => setLibraryView(libraryView === 'manuscripts' ? 'worlds' : 'manuscripts')}
+        className="fixed bottom-6 right-6 px-4 py-3 bg-bronze hover:bg-bronze-dark text-white font-sans text-sm font-medium shadow-book transition-colors flex items-center gap-2 z-40"
+        style={{ borderRadius: '2px' }}
+        title={libraryView === 'manuscripts' ? 'Switch to World Library' : 'Switch to All Manuscripts'}
+      >
+        {libraryView === 'manuscripts' ? (
+          <>
+            <span>&#x1F30D;</span>
+            <span>World Library</span>
+          </>
+        ) : (
+          <>
+            <span>&#x1F4DA;</span>
+            <span>All Manuscripts</span>
+          </>
+        )}
+      </button>
+
       <ToastContainer />
 
       {/* Settings Modal */}

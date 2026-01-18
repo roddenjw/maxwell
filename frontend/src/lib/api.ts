@@ -30,9 +30,9 @@ import type {
   OutlineProgress,
   PlotBeatUpdate,
   OutlineUpdate,
-  AIAnalysisRequest,
   AIAnalysisResult,
   BeatSuggestionsResult,
+  SceneCreate,
 } from '@/types/outline';
 
 import type {
@@ -47,6 +47,22 @@ import type {
   UpdateIdeaRequest,
   IntegrateCodexRequest,
 } from '@/types/brainstorm';
+
+import type {
+  World,
+  Series,
+  ManuscriptBrief,
+  CreateWorldRequest,
+  UpdateWorldRequest,
+  CreateSeriesRequest,
+  UpdateSeriesRequest,
+  AssignManuscriptRequest,
+  CreateWorldEntityRequest,
+  ChangeScopeRequest,
+  CopyEntityRequest,
+  WorldEntityResponse,
+  DeleteResponse,
+} from '@/types/world';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -829,7 +845,7 @@ export const outlineApi = {
   },
 
   /**
-   * Delete a plot beat
+   * Delete a plot beat or scene
    */
   async deleteBeat(beatId: string): Promise<{ success: boolean; message: string }> {
     const response = await fetch(`${API_BASE_URL}/outlines/beats/${beatId}`, {
@@ -842,6 +858,26 @@ export const outlineApi = {
     }
 
     return response.json();
+  },
+
+  /**
+   * Create a scene between beats
+   * Scenes are user-added outline items that bridge major story beats.
+   */
+  async createScene(outlineId: string, data: SceneCreate): Promise<PlotBeat> {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/scenes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create scene');
+    }
+
+    const result = await response.json();
+    return result.data;
   },
 
   /**
@@ -1389,6 +1425,338 @@ export const aiApi = {
 };
 
 /**
+ * Worlds API (Library & World Management)
+ */
+export const worldsApi = {
+  // ========================
+  // World CRUD
+  // ========================
+
+  /**
+   * Create a new world
+   */
+  async createWorld(data: CreateWorldRequest): Promise<World> {
+    const response = await fetch(`${API_BASE_URL}/worlds`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create world');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * List all worlds
+   */
+  async listWorlds(skip = 0, limit = 100): Promise<World[]> {
+    const response = await fetch(`${API_BASE_URL}/worlds?skip=${skip}&limit=${limit}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to list worlds');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get a specific world
+   */
+  async getWorld(worldId: string): Promise<World> {
+    const response = await fetch(`${API_BASE_URL}/worlds/${worldId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get world');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Update a world
+   */
+  async updateWorld(worldId: string, data: UpdateWorldRequest): Promise<World> {
+    const response = await fetch(`${API_BASE_URL}/worlds/${worldId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update world');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Delete a world
+   */
+  async deleteWorld(worldId: string): Promise<DeleteResponse> {
+    const response = await fetch(`${API_BASE_URL}/worlds/${worldId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to delete world');
+    }
+
+    return response.json();
+  },
+
+  // ========================
+  // Series CRUD
+  // ========================
+
+  /**
+   * Create a series in a world
+   */
+  async createSeries(worldId: string, data: CreateSeriesRequest): Promise<Series> {
+    const response = await fetch(`${API_BASE_URL}/worlds/${worldId}/series`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create series');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * List series in a world
+   */
+  async listSeries(worldId: string, skip = 0, limit = 100): Promise<Series[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/worlds/${worldId}/series?skip=${skip}&limit=${limit}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to list series');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get a specific series
+   */
+  async getSeries(seriesId: string): Promise<Series> {
+    const response = await fetch(`${API_BASE_URL}/worlds/series/${seriesId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get series');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Update a series
+   */
+  async updateSeries(seriesId: string, data: UpdateSeriesRequest): Promise<Series> {
+    const response = await fetch(`${API_BASE_URL}/worlds/series/${seriesId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update series');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Delete a series
+   */
+  async deleteSeries(seriesId: string): Promise<DeleteResponse> {
+    const response = await fetch(`${API_BASE_URL}/worlds/series/${seriesId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to delete series');
+    }
+
+    return response.json();
+  },
+
+  // ========================
+  // Manuscript Assignment
+  // ========================
+
+  /**
+   * List manuscripts in a series
+   */
+  async listSeriesManuscripts(seriesId: string, skip = 0, limit = 100): Promise<ManuscriptBrief[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/worlds/series/${seriesId}/manuscripts?skip=${skip}&limit=${limit}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to list series manuscripts');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Assign a manuscript to a series
+   */
+  async assignManuscriptToSeries(
+    seriesId: string,
+    data: AssignManuscriptRequest
+  ): Promise<ManuscriptBrief> {
+    const response = await fetch(`${API_BASE_URL}/worlds/series/${seriesId}/manuscripts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to assign manuscript to series');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Remove a manuscript from a series
+   */
+  async removeManuscriptFromSeries(seriesId: string, manuscriptId: string): Promise<DeleteResponse> {
+    const response = await fetch(
+      `${API_BASE_URL}/worlds/series/${seriesId}/manuscripts/${manuscriptId}`,
+      { method: 'DELETE' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to remove manuscript from series');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * List all manuscripts in a world
+   */
+  async listWorldManuscripts(worldId: string, skip = 0, limit = 100): Promise<ManuscriptBrief[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/worlds/${worldId}/manuscripts?skip=${skip}&limit=${limit}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to list world manuscripts');
+    }
+
+    return response.json();
+  },
+
+  // ========================
+  // World Entities
+  // ========================
+
+  /**
+   * Create a world-scoped entity
+   */
+  async createWorldEntity(worldId: string, data: CreateWorldEntityRequest): Promise<WorldEntityResponse> {
+    const response = await fetch(`${API_BASE_URL}/worlds/${worldId}/entities`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create world entity');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * List world-scoped entities
+   */
+  async listWorldEntities(
+    worldId: string,
+    type?: string,
+    skip = 0,
+    limit = 100
+  ): Promise<WorldEntityResponse[]> {
+    const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+    if (type) params.append('type', type);
+
+    const response = await fetch(`${API_BASE_URL}/worlds/${worldId}/entities?${params}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to list world entities');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Change an entity's scope
+   */
+  async changeEntityScope(entityId: string, data: ChangeScopeRequest): Promise<WorldEntityResponse> {
+    const response = await fetch(`${API_BASE_URL}/worlds/entities/${entityId}/scope`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to change entity scope');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Copy a world entity to a manuscript
+   */
+  async copyEntityToManuscript(
+    entityId: string,
+    data: CopyEntityRequest
+  ): Promise<WorldEntityResponse> {
+    const response = await fetch(`${API_BASE_URL}/worlds/entities/${entityId}/copy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to copy entity to manuscript');
+    }
+
+    return response.json();
+  },
+};
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
@@ -1408,5 +1776,6 @@ export default {
   analytics: analyticsApi,
   brainstorming: brainstormingApi,
   ai: aiApi,
+  worlds: worldsApi,
   healthCheck,
 };

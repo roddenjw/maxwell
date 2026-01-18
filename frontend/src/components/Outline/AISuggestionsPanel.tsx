@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
-import type { Outline, PlotBeat } from '@/types/outline';
+import type { Outline } from '@/types/outline';
 
 interface AISuggestionsPanelProps {
   outline: Outline;

@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.outline import Outline, PlotBeat
+from app.models.outline import Outline, PlotBeat, ITEM_TYPE_BEAT, ITEM_TYPE_SCENE
 from app.models.manuscript import Chapter
 from app.services.openrouter_service import OpenRouterService
 from app.services.ai_outline_service import AIOutlineService
@@ -36,6 +36,8 @@ def serialize_plot_beat(beat: PlotBeat) -> dict:
     return {
         "id": beat.id,
         "outline_id": beat.outline_id,
+        "item_type": beat.item_type or ITEM_TYPE_BEAT,  # BEAT or SCENE
+        "parent_beat_id": beat.parent_beat_id,  # For scenes: the beat this scene follows
         "beat_name": beat.beat_name,
         "beat_label": beat.beat_label,
         "beat_description": beat.beat_description or "",
@@ -92,9 +94,20 @@ class PlotBeatUpdate(BaseModel):
     is_completed: Optional[bool] = None
 
 
+class SceneCreate(BaseModel):
+    """Request model for creating a scene between beats"""
+    scene_label: str  # User-facing title for the scene
+    scene_description: Optional[str] = ""  # What should happen in this scene
+    after_beat_id: str  # The beat ID this scene should follow
+    target_word_count: Optional[int] = 1000  # Default 1000 words for scenes (lower than beats)
+    user_notes: Optional[str] = ""
+
+
 class PlotBeatResponse(BaseModel):
     id: str
     outline_id: str
+    item_type: str  # BEAT or SCENE
+    parent_beat_id: Optional[str]  # For scenes: the beat this scene follows
     beat_name: str
     beat_label: str
     beat_description: str
@@ -1191,15 +1204,108 @@ async def delete_plot_beat(
     beat_id: str,
     db: Session = Depends(get_db)
 ):
-    """Delete a plot beat"""
+    """Delete a plot beat or scene"""
     beat = db.query(PlotBeat).filter(PlotBeat.id == beat_id).first()
     if not beat:
         raise HTTPException(status_code=404, detail="Plot beat not found")
 
+    # Get outline ID for reordering after deletion
+    outline_id = beat.outline_id
+    deleted_order = beat.order_index
+
     db.delete(beat)
+
+    # Reorder remaining items to close the gap
+    remaining_items = db.query(PlotBeat).filter(
+        PlotBeat.outline_id == outline_id,
+        PlotBeat.order_index > deleted_order
+    ).all()
+    for item in remaining_items:
+        item.order_index -= 1
+
     db.commit()
 
     return {"success": True, "message": "Plot beat deleted"}
+
+
+@router.post("/{outline_id}/scenes")
+async def create_scene(
+    outline_id: str,
+    scene: SceneCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new scene between beats in an outline.
+
+    Scenes are user-added outline items that bridge major story beats.
+    They have lower default word counts (500-1500 words) and are inserted
+    after a specified beat, shifting all subsequent items.
+    """
+    # Validate outline exists
+    outline = db.query(Outline).filter(Outline.id == outline_id).first()
+    if not outline:
+        raise HTTPException(status_code=404, detail="Outline not found")
+
+    # Validate the parent beat exists and belongs to this outline
+    parent_beat = db.query(PlotBeat).filter(
+        PlotBeat.id == scene.after_beat_id,
+        PlotBeat.outline_id == outline_id
+    ).first()
+    if not parent_beat:
+        raise HTTPException(status_code=404, detail="Parent beat not found in this outline")
+
+    # Calculate new scene's order_index (insert after parent beat)
+    new_order_index = parent_beat.order_index + 1
+
+    # Shift all items after the insertion point
+    items_to_shift = db.query(PlotBeat).filter(
+        PlotBeat.outline_id == outline_id,
+        PlotBeat.order_index >= new_order_index
+    ).all()
+    for item in items_to_shift:
+        item.order_index += 1
+
+    # Count existing scenes after this beat to generate unique name
+    existing_scenes = db.query(PlotBeat).filter(
+        PlotBeat.outline_id == outline_id,
+        PlotBeat.item_type == ITEM_TYPE_SCENE,
+        PlotBeat.parent_beat_id == scene.after_beat_id
+    ).count()
+
+    # Calculate position percent (midway between parent beat and next beat)
+    next_beat = db.query(PlotBeat).filter(
+        PlotBeat.outline_id == outline_id,
+        PlotBeat.order_index == new_order_index + 1,  # After our new scene
+        PlotBeat.item_type == ITEM_TYPE_BEAT
+    ).first()
+
+    if next_beat:
+        # Position scene between parent beat and next beat
+        position = (parent_beat.target_position_percent + next_beat.target_position_percent) / 2
+    else:
+        # No next beat, position at 90% of the way to 1.0
+        position = parent_beat.target_position_percent + (1.0 - parent_beat.target_position_percent) * 0.5
+
+    # Create the scene
+    new_scene = PlotBeat(
+        id=str(uuid.uuid4()),
+        outline_id=outline_id,
+        item_type=ITEM_TYPE_SCENE,
+        parent_beat_id=scene.after_beat_id,
+        beat_name=f"scene-{parent_beat.beat_name}-{existing_scenes + 1}",
+        beat_label=scene.scene_label,
+        beat_description=scene.scene_description or "",
+        target_position_percent=position,
+        target_word_count=scene.target_word_count or 1000,
+        order_index=new_order_index,
+        user_notes=scene.user_notes or "",
+    )
+
+    db.add(new_scene)
+    db.commit()
+    db.refresh(new_scene)
+
+    return {"success": True, "data": serialize_plot_beat(new_scene)}
 
 
 @router.get("/{outline_id}/progress")

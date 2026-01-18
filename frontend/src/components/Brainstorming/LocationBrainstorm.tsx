@@ -144,13 +144,13 @@ export default function LocationBrainstorm() {
         )}
 
         {/* Existing Locations (only show when using manuscript context) */}
-        {!useCustomContext && manuscriptContext?.existing_entities.locations.length > 0 && (
+        {!useCustomContext && manuscriptContext?.existing_entities?.locations && manuscriptContext.existing_entities.locations.length > 0 && (
           <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
             <p className="text-sm font-medium text-gray-700 mb-2">
               Existing Locations:
             </p>
             <div className="flex flex-wrap gap-2">
-              {manuscriptContext.existing_entities.locations.map(loc => (
+              {manuscriptContext?.existing_entities?.locations?.map(loc => (
                 <span key={loc.id} className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
                   {loc.name}
                 </span>

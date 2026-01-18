@@ -19,7 +19,7 @@ interface AIUsage {
 export default function AISuggestionsPanel({ manuscriptId }: AISuggestionsPanelProps) {
   const { currentEditorText } = useFastCoachStore();
   const [apiKey, setApiKey] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState('anthropic/claude-3.5-sonnet');
+  const [_selectedModel, setSelectedModel] = useState('anthropic/claude-3.5-sonnet');
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [usage, setUsage] = useState<AIUsage | null>(null);

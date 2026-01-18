@@ -24,8 +24,9 @@ interface PlotBeatCardProps {
 }
 
 export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOpenChapter, onGetAIIdeas }: PlotBeatCardProps) {
-  const { updateBeat, expandedBeatId, setExpandedBeat, beatSuggestions } = useOutlineStore();
+  const { updateBeat, deleteItem, expandedBeatId, setExpandedBeat, beatSuggestions } = useOutlineStore();
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [notes, setNotes] = useState(beat.user_notes);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loadingChapters, setLoadingChapters] = useState(false);
@@ -36,6 +37,9 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
   const isExpanded = expandedBeatId === beat.id;
   const suggestions = beatSuggestions.get(beat.id);
   const hasAISuggestions = suggestions && suggestions.suggestions.length > 0;
+
+  // Is this a scene (user-added) or a beat (from template)?
+  const isScene = beat.item_type === 'SCENE';
 
   // Update local notes when beat changes
   useEffect(() => {
@@ -132,7 +136,7 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
     }
   };
 
-  const handleApplySuggestion = async (suggestion: BeatSuggestion, index: number) => {
+  const handleApplySuggestion = async (suggestion: BeatSuggestion, _index: number) => {
     if (!suggestions) return;
 
     try {
@@ -148,7 +152,7 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
     }
   };
 
-  const handleDismissSuggestion = (index: number) => {
+  const handleDismissSuggestion = (_index: number) => {
     // Note: The actual mutation happens in BeatSuggestionCard's onDismiss
     // This is just a placeholder for future persistence if needed
   };
@@ -175,12 +179,29 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
 
   const status = getBeatStatus();
 
+  const handleDeleteScene = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isScene) return;
+    if (!confirm(`Delete scene "${beat.beat_label}"?`)) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteItem(beat.id);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div
       className={`bg-white border-2 transition-all ${
-        beat.is_completed
-          ? 'border-bronze bg-bronze/5'
-          : 'border-slate-ui hover:border-bronze/50'
+        isScene
+          ? beat.is_completed
+            ? 'border-purple-400 bg-purple-50/50 ml-4'
+            : 'border-purple-300/60 bg-purple-50/30 hover:border-purple-400 ml-4'
+          : beat.is_completed
+            ? 'border-bronze bg-bronze/5'
+            : 'border-slate-ui hover:border-bronze/50'
       }`}
       style={{ borderRadius: '2px' }}
     >
@@ -200,8 +221,8 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
             title="Mark as complete (or auto-completes when chapter reaches target word count)"
             className={`flex-shrink-0 mt-1 w-5 h-5 border-2 flex items-center justify-center transition-colors ${
               beat.is_completed
-                ? 'bg-bronze border-bronze'
-                : 'border-slate-ui hover:border-bronze'
+                ? isScene ? 'bg-purple-500 border-purple-500' : 'bg-bronze border-bronze'
+                : isScene ? 'border-purple-400 hover:border-purple-500' : 'border-slate-ui hover:border-bronze'
             }`}
             style={{ borderRadius: '2px' }}
           >
@@ -210,12 +231,21 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
             )}
           </button>
 
-          {/* Beat Info */}
+          {/* Beat/Scene Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-2 mb-1">
-              <span className="text-xs font-sans font-bold text-bronze uppercase tracking-wider">
-                {beat.beat_name}
-              </span>
+              {isScene ? (
+                <span className="text-xs font-sans font-bold text-purple-600 uppercase tracking-wider flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm3 2h6v4H7V5zm8 8v2h1v-2h-1zm-2-2H7v4h6v-4zm2 0h1V9h-1v2zm1-4V5h-1v2h1zM5 5v2H4V5h1zm0 4H4v2h1V9zm-1 4h1v2H4v-2z" clipRule="evenodd" />
+                  </svg>
+                  Scene
+                </span>
+              ) : (
+                <span className="text-xs font-sans font-bold text-bronze uppercase tracking-wider">
+                  {beat.beat_name}
+                </span>
+              )}
               <span className="text-xs font-sans text-faded-ink">
                 {Math.round(beat.target_position_percent * 100)}% through story
               </span>
@@ -224,7 +254,9 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
             {/* Beat Title and Status */}
             <div className="flex items-start gap-2 mb-2">
               <h4 className={`flex-1 font-serif font-bold text-lg ${
-                beat.is_completed ? 'text-bronze' : 'text-midnight'
+                beat.is_completed
+                  ? isScene ? 'text-purple-600' : 'text-bronze'
+                  : 'text-midnight'
               }`}>
                 {beat.beat_label}
               </h4>
@@ -282,6 +314,20 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
               </span>
             </div>
           </div>
+
+          {/* Scene delete button */}
+          {isScene && (
+            <button
+              onClick={handleDeleteScene}
+              disabled={isDeleting}
+              className="flex-shrink-0 text-faded-ink/50 hover:text-red-500 transition-colors p-1"
+              title="Delete scene"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
 
           {/* Expand Icon */}
           <button

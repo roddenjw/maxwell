@@ -13,6 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 # Import database configuration and models
 from app.database import Base, DATABASE_URL
 from app.models import (
+    World, Series,
     Manuscript, Scene, SceneVariant,
     Entity, Relationship, EntitySuggestion,
     Snapshot,

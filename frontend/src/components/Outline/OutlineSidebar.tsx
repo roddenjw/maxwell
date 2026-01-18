@@ -7,6 +7,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
 import { toast } from '@/stores/toastStore';
 import PlotBeatCard from './PlotBeatCard';
+import AddSceneButton from './AddSceneButton';
 import CreateOutlineModal from './CreateOutlineModal';
 import SwitchStructureModal from './SwitchStructureModal';
 import OutlineSettingsModal from './OutlineSettingsModal';
@@ -41,7 +42,7 @@ export default function OutlineSidebar({
     expandedBeatId,
     setExpandedBeat,
     getBeatAISuggestions,
-    beatSuggestions,
+    beatSuggestions: _beatSuggestions,
     getApiKey,
   } = useOutlineStore();
 
@@ -358,28 +359,40 @@ export default function OutlineSidebar({
                 {/* List View */}
                 {viewMode === 'list' && (
                   <div className="p-3 space-y-2">
-                    {outline.plot_beats
-                      .sort((a, b) => a.order_index - b.order_index)
-                      .map((beat) => (
-                        <div
-                          key={beat.id}
-                          ref={(el) => {
-                            if (el) {
-                              beatRefs.current.set(beat.id, el);
-                            } else {
-                              beatRefs.current.delete(beat.id);
-                            }
-                          }}
-                        >
-                          <PlotBeatCard
-                            beat={beat}
-                            manuscriptId={manuscriptId!}
-                            onCreateChapter={onCreateChapter}
-                            onOpenChapter={onOpenChapter}
-                            onGetAIIdeas={handleGetAIIdeas}
-                          />
-                        </div>
-                      ))}
+                    {(() => {
+                      const sortedBeats = outline.plot_beats.sort((a, b) => a.order_index - b.order_index);
+                      return sortedBeats.map((beat, index) => {
+                        const nextBeat = sortedBeats[index + 1];
+                        return (
+                          <div key={beat.id}>
+                            <div
+                              ref={(el) => {
+                                if (el) {
+                                  beatRefs.current.set(beat.id, el);
+                                } else {
+                                  beatRefs.current.delete(beat.id);
+                                }
+                              }}
+                            >
+                              <PlotBeatCard
+                                beat={beat}
+                                manuscriptId={manuscriptId!}
+                                onCreateChapter={onCreateChapter}
+                                onOpenChapter={onOpenChapter}
+                                onGetAIIdeas={handleGetAIIdeas}
+                              />
+                            </div>
+                            {/* Add Scene button between beats (only after BEAT items, not scenes) */}
+                            {beat.item_type === 'BEAT' && (
+                              <AddSceneButton
+                                afterBeat={beat}
+                                nextBeat={nextBeat}
+                              />
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 )}
 

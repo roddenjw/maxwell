@@ -6,7 +6,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
-import type { PlotBeat } from '@/types/outline';
 
 interface OutlineReferenceSidebarProps {
   manuscriptId: string;

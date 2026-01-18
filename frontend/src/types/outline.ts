@@ -3,9 +3,14 @@
  * Matches backend API response structure from app/models/outline.py
  */
 
+// Item type constants
+export type ItemType = 'BEAT' | 'SCENE';
+
 export interface PlotBeat {
   id: string;
   outline_id: string;
+  item_type: ItemType;  // BEAT (major story beat) or SCENE (user-added between beats)
+  parent_beat_id: string | null;  // For scenes: the beat this scene follows
   beat_name: string;
   beat_label: string;
   beat_description: string;
@@ -20,6 +25,14 @@ export interface PlotBeat {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+}
+
+export interface SceneCreate {
+  scene_label: string;
+  scene_description?: string;
+  after_beat_id: string;
+  target_word_count?: number;
+  user_notes?: string;
 }
 
 export interface Outline {

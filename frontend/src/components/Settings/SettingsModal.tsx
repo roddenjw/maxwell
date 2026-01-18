@@ -5,7 +5,6 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from '@/stores/toastStore';
-import analytics from '@/lib/analytics';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -59,7 +58,6 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       if (openRouterKey.trim()) {
         // Save API key to localStorage
         localStorage.setItem('openrouter_api_key', openRouterKey.trim());
-        analytics.exportCompleted('settings', 'api_key_saved', 0); // Track feature adoption
         toast.success('✅ API key saved! AI features enabled.');
       } else {
         // Remove key

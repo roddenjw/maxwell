@@ -7,7 +7,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
 import { toast } from '@/stores/toastStore';
-import type { PlotBeat } from '@/types/outline';
 
 interface BeatContextPanelProps {
   manuscriptId: string;
@@ -340,7 +339,7 @@ const BeatContextPanel = React.memo(function BeatContextPanel({
                   <span>🤖</span>
                   <span>AI Ideas</span>
                   <span className="text-purple-500 normal-case font-normal">
-                    ({beatSuggestions.get(beat.id).suggestions.filter(s => !s.used).length})
+                    ({beatSuggestions.get(beat.id)?.suggestions.filter(s => !s.used).length ?? 0})
                   </span>
                 </div>
                 <button
@@ -353,10 +352,10 @@ const BeatContextPanel = React.memo(function BeatContextPanel({
 
               {showAISuggestions && (
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {beatSuggestions.get(beat.id).suggestions
-                    .filter(s => !s.used)
-                    .slice(0, 3)
-                    .map((suggestion, idx) => (
+                  {beatSuggestions.get(beat.id)?.suggestions
+                    ?.filter(s => !s.used)
+                    ?.slice(0, 3)
+                    ?.map((suggestion, idx) => (
                       <div
                         key={idx}
                         className="p-2 bg-purple-50 border border-purple-200 text-xs"
@@ -384,12 +383,12 @@ const BeatContextPanel = React.memo(function BeatContextPanel({
                         </button>
                       </div>
                     ))}
-                  {beatSuggestions.get(beat.id).suggestions.length > 3 && (
+                  {(beatSuggestions.get(beat.id)?.suggestions?.length ?? 0) > 3 && (
                     <button
                       onClick={() => onViewBeat?.(beat.id)}
                       className="w-full text-xs text-purple-600 hover:text-purple-800 font-medium py-1"
                     >
-                      View all {beatSuggestions.get(beat.id).suggestions.length} suggestions in outline →
+                      View all {beatSuggestions.get(beat.id)?.suggestions?.length ?? 0} suggestions in outline →
                     </button>
                   )}
                 </div>

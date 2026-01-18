@@ -197,13 +197,13 @@ export default function CharacterBrainstorm() {
         </div>
 
         {/* Existing Characters (only show when using manuscript context) */}
-        {!useCustomContext && manuscriptContext?.existing_entities.characters.length > 0 && (
+        {!useCustomContext && manuscriptContext?.existing_entities?.characters && manuscriptContext.existing_entities.characters.length > 0 && (
           <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
             <p className="text-sm font-medium text-gray-700 mb-2">
               Existing Characters:
             </p>
             <div className="flex flex-wrap gap-2">
-              {manuscriptContext.existing_entities.characters.map(char => (
+              {manuscriptContext?.existing_entities?.characters?.map(char => (
                 <span key={char.id} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
                   {char.name}
                 </span>

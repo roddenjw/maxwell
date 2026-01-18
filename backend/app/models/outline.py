@@ -10,6 +10,11 @@ import uuid
 from app.database import Base
 
 
+# Item type constants for PlotBeat
+ITEM_TYPE_BEAT = "BEAT"    # Major story beat from structure template
+ITEM_TYPE_SCENE = "SCENE"  # User-added scene between beats
+
+
 class Outline(Base):
     """Story outline with structure template"""
     __tablename__ = "outlines"
@@ -49,14 +54,20 @@ class Outline(Base):
 
 
 class PlotBeat(Base):
-    """Individual plot beat/story structure checkpoint"""
+    """Individual plot beat/story structure checkpoint or user-added scene"""
     __tablename__ = "plot_beats"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     outline_id = Column(String, ForeignKey("outlines.id"), nullable=False)
 
+    # Item type: BEAT (major story beat) or SCENE (user-added between beats)
+    item_type = Column(String, default=ITEM_TYPE_BEAT, nullable=False)
+
+    # For SCENE items: links to the beat this scene follows
+    parent_beat_id = Column(String, ForeignKey("plot_beats.id"), nullable=True)
+
     # Beat identification
-    beat_name = Column(String, nullable=False)  # 'hook', 'inciting-incident', 'first-plot-point', 'midpoint', etc.
+    beat_name = Column(String, nullable=False)  # 'hook', 'inciting-incident', 'first-plot-point', 'midpoint', or 'scene-{n}' for scenes
     beat_label = Column(String, nullable=False)  # User-facing label (can be customized)
     beat_description = Column(Text, default="")  # Template description of what should happen
 
@@ -86,6 +97,15 @@ class PlotBeat(Base):
     outline = relationship("Outline", back_populates="plot_beats")
     chapter = relationship("Chapter", foreign_keys=[chapter_id])
 
+    # Self-referential relationship for scenes following a beat
+    parent_beat = relationship(
+        "PlotBeat",
+        remote_side=[id],
+        foreign_keys=[parent_beat_id],
+        backref="child_scenes"
+    )
+
     def __repr__(self):
+        type_indicator = "📍" if self.item_type == ITEM_TYPE_BEAT else "🎬"
         status = "✓" if self.is_completed else "○"
-        return f"<PlotBeat(id={self.id}, beat='{self.beat_name}', {status})>"
+        return f"<PlotBeat(id={self.id}, type={type_indicator}, beat='{self.beat_name}', {status})>"

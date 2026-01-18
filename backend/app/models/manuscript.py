@@ -19,6 +19,9 @@ class Manuscript(Base):
     author = Column(String, default="")
     description = Column(Text, default="")
 
+    # Series relationship (nullable for standalone manuscripts)
+    series_id = Column(String, ForeignKey("series.id"), nullable=True)
+
     # Lexical editor state (JSON string)
     lexical_state = Column(Text, default="")
 
@@ -27,13 +30,17 @@ class Manuscript(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Display ordering within series
+    order_index = Column(Integer, default=0)
+
     # Settings
     settings = Column(JSON, default=dict)  # Editor preferences, etc.
 
     # Relationships
+    series = relationship("Series", back_populates="manuscripts")
     scenes = relationship("Scene", back_populates="manuscript", cascade="all, delete-orphan")
     chapters = relationship("Chapter", back_populates="manuscript", cascade="all, delete-orphan")
-    entities = relationship("Entity", back_populates="manuscript", cascade="all, delete-orphan")
+    entities = relationship("Entity", back_populates="manuscript", foreign_keys="Entity.manuscript_id", cascade="all, delete-orphan")
     snapshots = relationship("Snapshot", back_populates="manuscript", cascade="all, delete-orphan")
 
     def __repr__(self):

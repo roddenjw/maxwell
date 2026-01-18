@@ -17,29 +17,11 @@ interface ManuscriptLibraryProps {
 export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, onCreateWithWizard }: ManuscriptLibraryProps) {
   const { manuscripts, fetchManuscripts, createManuscript, deleteManuscript, isLoading, error } = useManuscriptStore();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
 
   // Fetch manuscripts from backend on mount
   useEffect(() => {
     fetchManuscripts();
   }, [fetchManuscripts]);
-
-  const handleCreate = async () => {
-    try {
-      const title = newTitle || 'Untitled Manuscript';
-      const manuscript = await createManuscript(title);
-
-      // Track manuscript creation
-      analytics.manuscriptCreated(manuscript.id, title);
-
-      setNewTitle('');
-      setShowCreateDialog(false);
-      onOpenManuscript(manuscript.id);
-    } catch (error) {
-      console.error('Failed to create manuscript:', error);
-      toast.error('Failed to create manuscript. Please try again.');
-    }
-  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -260,7 +242,6 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
             <button
               onClick={() => {
                 setShowCreateDialog(false);
-                setNewTitle('');
               }}
               className="w-full px-6 py-3 border border-slate-ui text-midnight hover:bg-slate-ui font-sans font-medium uppercase tracking-button transition-colors"
               style={{ borderRadius: '2px' }}

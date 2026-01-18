@@ -13,7 +13,6 @@ import {
   SELECTION_CHANGE_COMMAND,
   $getRoot,
   LexicalNode,
-  TextNode,
 } from 'lexical';
 import { $isSceneBreakNode } from '../nodes/SceneBreakNode';
 
@@ -27,7 +26,7 @@ export default function SceneDetectionPlugin({
   onSceneChange,
 }: SceneDetectionPluginProps): null {
   const [editor] = useLexicalComposerContext();
-  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSceneIndexRef = useRef<number>(-1);
 
   useEffect(() => {

@@ -10,12 +10,26 @@ import uuid
 from app.database import Base
 
 
+# Entity scope constants
+ENTITY_SCOPE_MANUSCRIPT = "MANUSCRIPT"  # Entity belongs to single manuscript
+ENTITY_SCOPE_SERIES = "SERIES"          # Entity shared across series
+ENTITY_SCOPE_WORLD = "WORLD"            # Entity shared across entire world
+
+
 class Entity(Base):
     """Base entity for characters, locations, items, and lore"""
     __tablename__ = "entities"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=False)
+
+    # Manuscript scope (nullable when scope is WORLD or SERIES)
+    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=True)
+
+    # World scope (nullable when scope is MANUSCRIPT)
+    world_id = Column(String, ForeignKey("worlds.id"), nullable=True)
+
+    # Scope determines visibility: MANUSCRIPT, SERIES, or WORLD
+    scope = Column(String, default=ENTITY_SCOPE_MANUSCRIPT, nullable=False)
 
     # Entity type: CHARACTER, LOCATION, ITEM, LORE
     type = Column(String, nullable=False)
@@ -43,7 +57,8 @@ class Entity(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    manuscript = relationship("Manuscript", back_populates="entities")
+    manuscript = relationship("Manuscript", back_populates="entities", foreign_keys=[manuscript_id])
+    world = relationship("World", back_populates="world_entities", foreign_keys=[world_id])
     source_relationships = relationship(
         "Relationship",
         foreign_keys="Relationship.source_entity_id",

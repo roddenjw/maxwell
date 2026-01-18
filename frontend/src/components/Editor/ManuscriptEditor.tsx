@@ -89,7 +89,7 @@ export default function ManuscriptEditor({
   }, [chapterId]);
 
   // Handle scene changes from SceneDetectionPlugin
-  const handleSceneChange = useCallback(async (sceneIndex: number, cursorPosition: number) => {
+  const handleSceneChange = useCallback(async (_sceneIndex: number, cursorPosition: number) => {
     if (!chapterId) return;
 
     try {

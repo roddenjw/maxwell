@@ -10,7 +10,8 @@ import type {
   PlotBeatUpdate,
   OutlineProgress,
   AIAnalysisResult,
-  BeatSuggestionsResult
+  BeatSuggestionsResult,
+  SceneCreate,
 } from '@/types/outline';
 import { outlineApi } from '@/lib/api';
 import { toast } from './toastStore';
@@ -50,6 +51,8 @@ interface OutlineStore {
   loadOutline: (manuscriptId: string) => Promise<void>;
   loadProgress: (outlineId: string) => Promise<void>;
   updateBeat: (beatId: string, updates: PlotBeatUpdate) => Promise<void>;
+  createScene: (data: SceneCreate) => Promise<PlotBeat | null>;
+  deleteItem: (itemId: string) => Promise<void>;
   clearOutline: () => void;
 
   // AI Actions
@@ -205,6 +208,42 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
       console.error('Failed to update beat:', error);
       toast.error('Failed to update plot beat');
       throw error;
+    }
+  },
+
+  createScene: async (data: SceneCreate) => {
+    const currentOutline = get().outline;
+    if (!currentOutline) return null;
+
+    try {
+      const newScene = await outlineApi.createScene(currentOutline.id, data);
+
+      // Reload the full outline to get updated order_index for all items
+      await get().loadOutline(currentOutline.manuscript_id);
+
+      toast.success('Scene added to outline');
+      return newScene;
+    } catch (error: any) {
+      console.error('Failed to create scene:', error);
+      toast.error('Failed to create scene');
+      return null;
+    }
+  },
+
+  deleteItem: async (itemId: string) => {
+    const currentOutline = get().outline;
+    if (!currentOutline) return;
+
+    try {
+      await outlineApi.deleteBeat(itemId);
+
+      // Reload the full outline to get updated order_index for all items
+      await get().loadOutline(currentOutline.manuscript_id);
+
+      toast.success('Item removed from outline');
+    } catch (error: any) {
+      console.error('Failed to delete item:', error);
+      toast.error('Failed to delete item');
     }
   },
 
