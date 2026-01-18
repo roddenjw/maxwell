@@ -42,6 +42,18 @@ Brainstorming
 1. It may be worthwhile to have the entities and lore created from brainstorming output into a standardized format and have these records available as another tab in the library.
 2. Potentially also have the Library view have a higher up view of 'World' or 'Series' and then within this are manuscripts, lore, history, locations, creatures, magic/technology, characters. The worldbuilding components can be related to multiple manuscripts within.
 3. Give users guided help brainstorming locations, creatures, magic/technology, history, and characters.
+4. **AI-Powered Entity Expansion** (2026-01-18): Brainstorming should actively consider existing entities and offer a mixture of ideas:
+   - **New entities**: Generate fresh characters, locations, magic systems from scratch
+   - **Expanded entities**: Build upon existing characters (add backstory, relationships, character arcs)
+   - **Connected entities**: Create new entities that relate to existing ones (mentor for existing character, rival location, complementary magic system)
+   - **Example**: If codex has "Sarah (detective)", AI could generate:
+     - New: Completely new character "Marcus (forensic pathologist)"
+     - Expanded: "Sarah's hidden past as a former thief" or "Sarah's relationship with her estranged sister"
+     - Connected: "Detective partnered with Sarah" or "Criminal Sarah is hunting"
+   - **Implementation approach**:
+     - Add toggle in brainstorming UI: "Generate new entities" vs "Expand existing entities" vs "Both (mixed)"
+     - Pass existing entity details (not just names) to AI prompt for context-aware generation
+     - Tag generated ideas with relationship to existing entities for easy integration
 
 Quick Reference
 
