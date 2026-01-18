@@ -7,6 +7,8 @@ import { useState, useEffect } from 'react';
 import { useWorldStore } from '../../stores/worldStore';
 import { toast } from '../../stores/toastStore';
 import type { World, WorldEntityResponse, CreateWorldEntityRequest } from '../../types/world';
+import { EntityTemplateWizard } from '../Codex';
+import type { EntityType as CodexEntityType, TemplateType } from '../../types/codex';
 
 interface SharedEntityLibraryProps {
   world: World;
@@ -28,6 +30,7 @@ export default function SharedEntityLibrary({ world, onCopyToManuscript }: Share
 
   const [activeTab, setActiveTab] = useState<EntityType>('CHARACTER');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [newEntityName, setNewEntityName] = useState('');
   const [newEntityDescription, setNewEntityDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -72,6 +75,39 @@ export default function SharedEntityLibrary({ world, onCopyToManuscript }: Share
   // Will be enabled when manuscript-selection UI is added
   void onCopyToManuscript; // Acknowledge prop for future use
 
+  const handleWizardComplete = async (entityData: {
+    name: string;
+    type: CodexEntityType;
+    template_type: TemplateType;
+    template_data: any;
+    aliases: string[];
+  }) => {
+    setIsCreating(true);
+    try {
+      // Map codex entity type to world entity type
+      const worldEntityType = entityData.type as 'CHARACTER' | 'LOCATION' | 'ITEM' | 'LORE';
+
+      const data: CreateWorldEntityRequest = {
+        type: worldEntityType,
+        name: entityData.name,
+        aliases: entityData.aliases.length > 0 ? entityData.aliases : undefined,
+        attributes: {
+          ...entityData.template_data,
+          template_type: entityData.template_type,
+        },
+      };
+
+      await createWorldEntity(world.id, data);
+      toast.success(`${entityData.type.charAt(0) + entityData.type.slice(1).toLowerCase()} "${entityData.name}" created!`);
+      setShowWizard(false);
+    } catch (err) {
+      console.error('Failed to create entity:', err);
+      toast.error('Failed to create entity');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="bg-white border border-slate-ui rounded-sm">
       {/* Header */}
@@ -105,13 +141,21 @@ export default function SharedEntityLibrary({ world, onCopyToManuscript }: Share
 
       {/* Content */}
       <div className="p-4">
-        {/* Add Button */}
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="w-full mb-4 px-4 py-2 border-2 border-dashed border-slate-ui hover:border-bronze text-faded-ink hover:text-bronze font-sans text-sm font-medium transition-colors rounded-sm"
-        >
-          + Add {ENTITY_TYPE_INFO[activeTab].label.slice(0, -1)}
-        </button>
+        {/* Add Buttons */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex-1 px-4 py-2 border-2 border-dashed border-slate-ui hover:border-bronze text-faded-ink hover:text-bronze font-sans text-sm font-medium transition-colors rounded-sm"
+          >
+            + Quick Add
+          </button>
+          <button
+            onClick={() => setShowWizard(true)}
+            className="flex-1 px-4 py-2 bg-bronze/10 border-2 border-bronze/30 hover:border-bronze text-bronze font-sans text-sm font-medium transition-colors rounded-sm"
+          >
+            + Use Wizard
+          </button>
+        </div>
 
         {/* Entity List */}
         {isLoading ? (
@@ -266,6 +310,19 @@ export default function SharedEntityLibrary({ world, onCopyToManuscript }: Share
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Entity Template Wizard */}
+      {showWizard && (
+        <div className="fixed inset-0 bg-midnight bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-book rounded-sm">
+            <EntityTemplateWizard
+              manuscriptId={world.id}
+              onComplete={handleWizardComplete}
+              onCancel={() => setShowWizard(false)}
+            />
           </div>
         </div>
       )}

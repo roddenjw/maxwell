@@ -12,8 +12,10 @@ import type {
   AIAnalysisResult,
   BeatSuggestionsResult,
   SceneCreate,
+  SeriesStructureSummary,
+  SeriesStructureWithManuscripts,
 } from '@/types/outline';
-import { outlineApi } from '@/lib/api';
+import { outlineApi, seriesOutlineApi } from '@/lib/api';
 import { toast } from './toastStore';
 
 interface OutlineStore {
@@ -69,6 +71,24 @@ interface OutlineStore {
   getBeatById: (beatId: string) => PlotBeat | undefined;
   getBeatByChapterId: (chapterId: string) => PlotBeat | null;
   getCompletionPercentage: () => number;
+
+  // Series/World Outline State
+  seriesOutline: Outline | null;
+  worldOutline: Outline | null;
+  seriesStructures: SeriesStructureSummary[];
+  seriesStructureWithManuscripts: SeriesStructureWithManuscripts | null;
+  isLoadingSeriesOutline: boolean;
+
+  // Series/World Outline Actions
+  setSeriesOutline: (outline: Outline | null) => void;
+  setWorldOutline: (outline: Outline | null) => void;
+  setSeriesStructures: (structures: SeriesStructureSummary[]) => void;
+  loadSeriesStructures: () => Promise<void>;
+  loadSeriesOutline: (seriesId: string) => Promise<void>;
+  loadWorldOutline: (worldId: string) => Promise<void>;
+  loadSeriesStructureWithManuscripts: (seriesId: string) => Promise<void>;
+  createSeriesOutline: (seriesId: string, structureType: string, genre?: string) => Promise<Outline | null>;
+  createWorldOutline: (worldId: string, structureType: string, genre?: string) => Promise<Outline | null>;
 }
 
 export const useOutlineStore = create<OutlineStore>((set, get) => ({
@@ -219,7 +239,9 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
       const newScene = await outlineApi.createScene(currentOutline.id, data);
 
       // Reload the full outline to get updated order_index for all items
-      await get().loadOutline(currentOutline.manuscript_id);
+      if (currentOutline.manuscript_id) {
+        await get().loadOutline(currentOutline.manuscript_id);
+      }
 
       toast.success('Scene added to outline');
       return newScene;
@@ -238,7 +260,9 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
       await outlineApi.deleteBeat(itemId);
 
       // Reload the full outline to get updated order_index for all items
-      await get().loadOutline(currentOutline.manuscript_id);
+      if (currentOutline.manuscript_id) {
+        await get().loadOutline(currentOutline.manuscript_id);
+      }
 
       toast.success('Item removed from outline');
     } catch (error: any) {
@@ -432,6 +456,102 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     if (total === 0) return 0;
     const completed = get().getCompletedBeatsCount();
     return Math.round((completed / total) * 100);
+  },
+
+  // Series/World Outline State
+  seriesOutline: null,
+  worldOutline: null,
+  seriesStructures: [],
+  seriesStructureWithManuscripts: null,
+  isLoadingSeriesOutline: false,
+
+  // Series/World Outline Actions
+  setSeriesOutline: (seriesOutline) => set({ seriesOutline }),
+
+  setWorldOutline: (worldOutline) => set({ worldOutline }),
+
+  setSeriesStructures: (seriesStructures) => set({ seriesStructures }),
+
+  loadSeriesStructures: async () => {
+    try {
+      const structures = await seriesOutlineApi.listSeriesStructures();
+      set({ seriesStructures: structures });
+    } catch (error: any) {
+      console.error('Failed to load series structures:', error);
+      toast.error('Failed to load series structures');
+    }
+  },
+
+  loadSeriesOutline: async (seriesId: string) => {
+    set({ isLoadingSeriesOutline: true });
+    try {
+      const outline = await seriesOutlineApi.getActiveSeriesOutline(seriesId);
+      set({ seriesOutline: outline, isLoadingSeriesOutline: false });
+    } catch (error: any) {
+      // No active outline is OK, just clear the state
+      set({ seriesOutline: null, isLoadingSeriesOutline: false });
+    }
+  },
+
+  loadWorldOutline: async (worldId: string) => {
+    set({ isLoadingSeriesOutline: true });
+    try {
+      const outlines = await seriesOutlineApi.getWorldOutlines(worldId);
+      // Get the active one or first
+      const activeOutline = outlines.find(o => o.is_active) || outlines[0] || null;
+      set({ worldOutline: activeOutline, isLoadingSeriesOutline: false });
+    } catch (error: any) {
+      set({ worldOutline: null, isLoadingSeriesOutline: false });
+    }
+  },
+
+  loadSeriesStructureWithManuscripts: async (seriesId: string) => {
+    set({ isLoadingSeriesOutline: true });
+    try {
+      const data = await seriesOutlineApi.getSeriesStructureWithManuscripts(seriesId);
+      set({ seriesStructureWithManuscripts: data, isLoadingSeriesOutline: false });
+    } catch (error: any) {
+      console.error('Failed to load series structure:', error);
+      set({ seriesStructureWithManuscripts: null, isLoadingSeriesOutline: false });
+    }
+  },
+
+  createSeriesOutline: async (seriesId: string, structureType: string, genre?: string) => {
+    set({ isLoadingSeriesOutline: true });
+    try {
+      const outline = await seriesOutlineApi.createSeriesOutline(seriesId, {
+        series_id: seriesId,
+        structure_type: structureType,
+        genre,
+      });
+      set({ seriesOutline: outline, isLoadingSeriesOutline: false });
+      toast.success('Series outline created successfully');
+      return outline;
+    } catch (error: any) {
+      console.error('Failed to create series outline:', error);
+      set({ isLoadingSeriesOutline: false });
+      toast.error('Failed to create series outline: ' + error.message);
+      return null;
+    }
+  },
+
+  createWorldOutline: async (worldId: string, structureType: string, genre?: string) => {
+    set({ isLoadingSeriesOutline: true });
+    try {
+      const outline = await seriesOutlineApi.createWorldOutline(worldId, {
+        world_id: worldId,
+        structure_type: structureType,
+        genre,
+      });
+      set({ worldOutline: outline, isLoadingSeriesOutline: false });
+      toast.success('World outline created successfully');
+      return outline;
+    } catch (error: any) {
+      console.error('Failed to create world outline:', error);
+      set({ isLoadingSeriesOutline: false });
+      toast.error('Failed to create world outline: ' + error.message);
+      return null;
+    }
   },
 }));
 

@@ -8,8 +8,9 @@ from app.models.entity import Entity, Relationship, EntitySuggestion, ENTITY_SCO
 from app.models.versioning import Snapshot
 from app.models.coach import WritingProfile, CoachingHistory, FeedbackPattern
 from app.models.recap import Recap
-from app.models.outline import Outline, PlotBeat
+from app.models.outline import Outline, PlotBeat, OUTLINE_SCOPE_MANUSCRIPT, OUTLINE_SCOPE_SERIES, OUTLINE_SCOPE_WORLD
 from app.models.brainstorm import BrainstormSession, BrainstormIdea
+from app.models.entity_state import EntityTimelineState
 
 __all__ = [
     # World/Series hierarchy
@@ -38,7 +39,12 @@ __all__ = [
     # Outline
     "Outline",
     "PlotBeat",
+    "OUTLINE_SCOPE_MANUSCRIPT",
+    "OUTLINE_SCOPE_SERIES",
+    "OUTLINE_SCOPE_WORLD",
     # Brainstorm
     "BrainstormSession",
     "BrainstormIdea",
+    # Entity State
+    "EntityTimelineState",
 ]

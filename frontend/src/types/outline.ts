@@ -6,6 +6,12 @@
 // Item type constants
 export type ItemType = 'BEAT' | 'SCENE';
 
+// Outline scope constants
+export type OutlineScope = 'MANUSCRIPT' | 'SERIES' | 'WORLD';
+
+// Series arc types
+export type ArcType = 'trilogy' | 'duology' | 'ongoing' | 'saga' | string;
+
 export interface PlotBeat {
   id: string;
   outline_id: string;
@@ -22,6 +28,9 @@ export interface PlotBeat {
   content_summary: string;
   chapter_id: string | null;
   is_completed: boolean;
+  // Series outline linking
+  linked_manuscript_outline_id: string | null;
+  target_book_index: number | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -51,15 +60,21 @@ export interface BridgeScenesResult {
 
 export interface Outline {
   id: string;
-  manuscript_id: string;
+  manuscript_id: string | null;
+  series_id: string | null;
+  world_id: string | null;
+  scope: OutlineScope;
   structure_type: string;
   genre: string | null;
+  arc_type: ArcType | null;
+  book_count: number | null;
   target_word_count: number;
   premise: string;
   logline: string;
   synopsis: string;
   notes: string;
   is_active: boolean;
+  settings: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   plot_beats: PlotBeat[];
@@ -156,4 +171,73 @@ export interface BeatSuggestionsResult {
 export interface AIAnalysisRequest {
   api_key: string;
   analysis_types?: ('beat_descriptions' | 'plot_holes' | 'pacing')[];
+}
+
+// === Series/World Outline Types ===
+
+export interface SeriesStructureBeat {
+  beat_name: string;
+  beat_label: string;
+  beat_description: string;
+  target_position_percent: number;
+  order_index: number;
+  target_book_index: number;
+  tips?: string;
+}
+
+export interface SeriesStructure {
+  name: string;
+  description: string;
+  book_count: number | null;
+  arc_type: ArcType;
+  beats: SeriesStructureBeat[];
+}
+
+export interface SeriesStructureSummary {
+  type: string;
+  name: string;
+  description: string;
+  book_count: number | null;
+  arc_type: ArcType;
+  beat_count: number;
+}
+
+export interface SeriesOutlineCreate {
+  series_id: string;
+  structure_type: string;
+  genre?: string;
+  target_word_count?: number;
+  premise?: string;
+  logline?: string;
+  synopsis?: string;
+}
+
+export interface WorldOutlineCreate {
+  world_id: string;
+  structure_type: string;
+  genre?: string;
+  target_word_count?: number;
+  premise?: string;
+  logline?: string;
+  synopsis?: string;
+}
+
+export interface LinkBeatToManuscriptRequest {
+  beat_id: string;
+  manuscript_outline_id: string;
+}
+
+export interface SeriesStructureWithManuscripts {
+  series: {
+    id: string;
+    name: string;
+    description: string;
+  };
+  series_outline: Outline | null;
+  manuscripts: Array<{
+    id: string;
+    title: string;
+    order_index: number;
+    outline: Outline | null;
+  }>;
 }

@@ -34,7 +34,21 @@ import type {
   BeatSuggestionsResult,
   SceneCreate,
   BridgeScenesResult,
+  SeriesStructure,
+  SeriesStructureSummary,
+  SeriesOutlineCreate,
+  WorldOutlineCreate,
+  LinkBeatToManuscriptRequest,
+  SeriesStructureWithManuscripts,
 } from '@/types/outline';
+
+import type {
+  EntityTimelineState,
+  CreateStateRequest,
+  UpdateStateRequest,
+  StateDiffResult,
+  JourneyPoint,
+} from '@/types/entityState';
 
 import type {
   BrainstormSession,
@@ -1817,6 +1831,348 @@ export const worldsApi = {
 };
 
 /**
+ * Entity State API - Track entity states at different narrative points
+ */
+export const entityStateApi = {
+  /**
+   * Create a state snapshot for an entity
+   */
+  async createStateSnapshot(
+    entityId: string,
+    data: CreateStateRequest
+  ): Promise<EntityTimelineState> {
+    const response = await fetch(`${API_BASE_URL}/entities/${entityId}/states`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create state snapshot');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * List all state snapshots for an entity
+   */
+  async listEntityStates(
+    entityId: string,
+    manuscriptId?: string,
+    canonicalOnly = false
+  ): Promise<EntityTimelineState[]> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+    if (canonicalOnly) params.append('canonical_only', 'true');
+
+    const response = await fetch(
+      `${API_BASE_URL}/entities/${entityId}/states?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to list entity states');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Get state at a specific narrative point
+   */
+  async getStateAtPoint(
+    entityId: string,
+    manuscriptId?: string,
+    chapterId?: string,
+    timelineEventId?: string
+  ): Promise<EntityTimelineState | null> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+    if (chapterId) params.append('chapter_id', chapterId);
+    if (timelineEventId) params.append('timeline_event_id', timelineEventId);
+
+    const response = await fetch(
+      `${API_BASE_URL}/entities/${entityId}/states/at?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get state at point');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Compare two state snapshots
+   */
+  async getStateDiff(
+    entityId: string,
+    fromStateId: string,
+    toStateId: string
+  ): Promise<StateDiffResult> {
+    const response = await fetch(`${API_BASE_URL}/entities/${entityId}/states/diff`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from_state_id: fromStateId,
+        to_state_id: toStateId,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get state diff');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Get character journey
+   */
+  async getCharacterJourney(
+    entityId: string,
+    manuscriptId?: string
+  ): Promise<JourneyPoint[]> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+
+    const response = await fetch(
+      `${API_BASE_URL}/entities/${entityId}/journey?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get character journey');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Update a state snapshot
+   */
+  async updateState(
+    entityId: string,
+    stateId: string,
+    data: UpdateStateRequest
+  ): Promise<EntityTimelineState> {
+    const response = await fetch(`${API_BASE_URL}/entities/${entityId}/states/${stateId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update state');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Delete a state snapshot
+   */
+  async deleteState(entityId: string, stateId: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/entities/${entityId}/states/${stateId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to delete state');
+    }
+  },
+
+  /**
+   * Bulk create state snapshots
+   */
+  async bulkCreateStates(
+    entityId: string,
+    states: CreateStateRequest[]
+  ): Promise<EntityTimelineState[]> {
+    const response = await fetch(`${API_BASE_URL}/entities/${entityId}/states/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ states }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to bulk create states');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+};
+
+/**
+ * Series/World Outline API - Multi-book outline management
+ */
+export const seriesOutlineApi = {
+  /**
+   * List available series structure templates
+   */
+  async listSeriesStructures(): Promise<SeriesStructureSummary[]> {
+    const response = await fetch(`${API_BASE_URL}/outlines/series-structures`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to list series structures');
+    }
+
+    const result = await response.json();
+    return result.structures;
+  },
+
+  /**
+   * Get detailed series structure template
+   */
+  async getSeriesStructure(structureType: string): Promise<SeriesStructure> {
+    const response = await fetch(`${API_BASE_URL}/outlines/series-structures/${structureType}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get series structure');
+    }
+
+    const result = await response.json();
+    return result.structure;
+  },
+
+  /**
+   * Create a series-level outline
+   */
+  async createSeriesOutline(seriesId: string, data: SeriesOutlineCreate): Promise<Outline> {
+    const response = await fetch(`${API_BASE_URL}/outlines/series/${seriesId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create series outline');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Get all outlines for a series
+   */
+  async getSeriesOutlines(seriesId: string): Promise<Outline[]> {
+    const response = await fetch(`${API_BASE_URL}/outlines/series/${seriesId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get series outlines');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Get active series outline
+   */
+  async getActiveSeriesOutline(seriesId: string): Promise<Outline> {
+    const response = await fetch(`${API_BASE_URL}/outlines/series/${seriesId}/active`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get active series outline');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Get full series structure with manuscripts
+   */
+  async getSeriesStructureWithManuscripts(seriesId: string): Promise<SeriesStructureWithManuscripts> {
+    const response = await fetch(`${API_BASE_URL}/outlines/series/${seriesId}/structure`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get series structure');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Create a world-level outline
+   */
+  async createWorldOutline(worldId: string, data: WorldOutlineCreate): Promise<Outline> {
+    const response = await fetch(`${API_BASE_URL}/outlines/world/${worldId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create world outline');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Get all outlines for a world
+   */
+  async getWorldOutlines(worldId: string): Promise<Outline[]> {
+    const response = await fetch(`${API_BASE_URL}/outlines/world/${worldId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get world outlines');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Link a series beat to a manuscript outline
+   */
+  async linkBeatToManuscript(
+    outlineId: string,
+    data: LinkBeatToManuscriptRequest
+  ): Promise<PlotBeat> {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/link-manuscript`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to link beat to manuscript');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+};
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
@@ -1837,5 +2193,7 @@ export default {
   brainstorming: brainstormingApi,
   ai: aiApi,
   worlds: worldsApi,
+  entityState: entityStateApi,
+  seriesOutline: seriesOutlineApi,
   healthCheck,
 };
