@@ -596,22 +596,8 @@ async def analyze_outline_with_ai(
                 detail="Not enough context for AI analysis. Please either: (1) Add a premise/logline in outline settings, or (2) Write at least 1-2 chapters of your manuscript."
             )
 
-        # If no premise but has chapters, auto-extract premise from first chapter
-        if not has_premise and has_chapters:
-            try:
-                first_chapter = db.query(Chapter).filter(
-                    Chapter.manuscript_id == outline.manuscript_id,
-                    Chapter.is_folder == 0
-                ).order_by(Chapter.order_index).first()
-
-                if first_chapter and first_chapter.content:
-                    outline.premise = f"[Auto-extracted from manuscript]: {first_chapter.content[:500]}..."
-                    outline.updated_at = datetime.utcnow()
-                    db.commit()
-                    logger.info(f"Auto-extracted premise for outline {outline_id}")
-            except Exception as e:
-                logger.warning(f"Failed to auto-extract premise: {e}")
-                # Continue anyway - we have chapters for context
+        # NOTE: Auto-extraction disabled - premise should be set manually by user
+        # See: OutlineSettingsModal.tsx for premise editing UI
 
         # Initialize AI service with user's key
         ai_service = AIOutlineService(request.api_key)
@@ -1108,6 +1094,23 @@ async def delete_outline(
     db.commit()
 
     return {"success": True, "message": "Outline deleted"}
+
+
+@router.post("/{outline_id}/reset-premise")
+async def reset_premise(
+    outline_id: str,
+    db: Session = Depends(get_db)
+):
+    """Clear auto-extracted premise so user can set it manually via Settings UI"""
+    outline = db.query(Outline).filter(Outline.id == outline_id).first()
+    if not outline:
+        raise HTTPException(status_code=404, detail="Outline not found")
+
+    outline.premise = ""
+    outline.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"success": True, "message": "Premise cleared successfully"}
 
 
 # Plot Beat Endpoints

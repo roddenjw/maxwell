@@ -9,6 +9,7 @@ import { toast } from '@/stores/toastStore';
 import PlotBeatCard from './PlotBeatCard';
 import CreateOutlineModal from './CreateOutlineModal';
 import SwitchStructureModal from './SwitchStructureModal';
+import OutlineSettingsModal from './OutlineSettingsModal';
 // Removed: OutlineCompletionDonut - replaced with compact progress bar
 import TimelineView from './TimelineView';
 import ProgressDashboard from './ProgressDashboard';
@@ -49,6 +50,7 @@ export default function OutlineSidebar({
   const [structureDetails, setStructureDetails] = useState<any>(null);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
   const [showAIPanel, setShowAIPanel] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'analytics'>('list');
   const beatRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -237,6 +239,22 @@ export default function OutlineSidebar({
                   {progress?.actual_word_count.toLocaleString() || 0} / {outline.target_word_count.toLocaleString()} words
                 </span>
               </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="flex-1 px-3 py-2 bg-slate-ui/20 hover:bg-slate-ui/40 text-faded-ink hover:text-midnight font-sans text-xs font-medium uppercase tracking-button transition-colors flex items-center justify-center gap-2"
+                style={{ borderRadius: '2px' }}
+                title="Edit outline settings (premise, genre, etc.)"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Settings
+              </button>
             </div>
           </div>
         )}
@@ -556,6 +574,15 @@ export default function OutlineSidebar({
           outline={outline}
           isOpen={showAIPanel}
           onClose={() => setShowAIPanel(false)}
+        />
+      )}
+
+      {/* Outline Settings Modal */}
+      {outline && (
+        <OutlineSettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          outlineId={outline.id}
         />
       )}
     </div>

@@ -49,4 +49,4 @@ Quick Reference
 
 Entity Creation
 
-1. Allow users to hover over a word or words and turn them into an entity right within the text editor.
+1. Allow users to hover over a word or words and turn them into an entity or entity description right within the text editor.

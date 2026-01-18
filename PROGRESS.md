@@ -1,6 +1,6 @@
 # Maxwell Project Progress
 
-**Last Updated:** 2026-01-13
+**Last Updated:** 2026-01-18
 **Overall Completion:** 83% across all phases
 **Current Focus:** Phase 5 (Brainstorming) - 80% complete
 
@@ -168,6 +168,32 @@
 ---
 
 ## Recent Completions (Last 2 Weeks)
+
+### January 18, 2026
+- ✅ **Outline Settings UI + Premise Auto-Extraction Fix**
+  - **Problem**: Premise field was auto-populating with manuscript chapter content instead of one-sentence story concept
+  - **Root Cause**: AI Insights endpoint auto-extracted first 500 chars from first chapter when premise was empty
+  - **Phase 1: Backend Fixes (Immediate)**:
+    - Disabled aggressive auto-extraction logic in `/api/outlines/{id}/ai-analyze` endpoint
+    - Added premise filtering in brainstorming context endpoint (skips auto-extracted premises)
+    - Added `/api/outlines/{id}/reset-premise` endpoint for manual cleanup
+    - **Impact**: Prevents future auto-extraction, filters out bad premises from brainstorming
+  - **Phase 2: Outline Settings UI (Proper Solution)**:
+    - Created **OutlineSettingsModal.tsx** (228 lines) - Full metadata editor
+    - Added Settings button to OutlineSidebar header (gear icon)
+    - Modal fields: genre, premise, logline, synopsis, target_word_count, notes
+    - Clear help text distinguishes premise from chapter content
+    - Save/cancel functionality with error handling
+    - **Impact**: Writers can now view and edit ALL outline metadata after creation
+  - **Technical Details**:
+    - Backend files: `backend/app/api/routes/outlines.py`, `backend/app/api/routes/brainstorming.py`
+    - Frontend files: `frontend/src/components/Outline/OutlineSettingsModal.tsx`, `OutlineSidebar.tsx`, `index.ts`
+    - 15 line deletion (auto-extraction), 230+ lines added (Settings UI)
+  - **User Impact**:
+    - No more chapter content polluting premise field
+    - First-time UI access to outline metadata (genre, logline, synopsis, notes)
+    - Better brainstorming context (correct premise, not narrative prose)
+    - Teaching moment: Premise vs. chapter content distinction
 
 ### January 13, 2026
 - ✅ **Phase 5 Major Milestone: Multi-Type Ideation + Session History (Phase 5 - 80%)**

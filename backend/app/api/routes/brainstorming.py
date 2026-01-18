@@ -172,10 +172,17 @@ async def get_brainstorm_context(
         characters = [e for e in entities if e.type == 'CHARACTER']
         locations = [e for e in entities if e.type == 'LOCATION']
 
+        # Filter out auto-extracted premises (they're chapter content, not actual premises)
+        premise_value = None
+        if outline and outline.premise:
+            # Skip if it's auto-extracted chapter content
+            if not outline.premise.startswith("[Auto-extracted from manuscript]"):
+                premise_value = outline.premise
+
         return {
             "outline": {
                 "genre": outline.genre if outline else None,
-                "premise": outline.premise if outline else None,
+                "premise": premise_value,
                 "logline": outline.logline if outline else None,
             },
             "existing_entities": {
