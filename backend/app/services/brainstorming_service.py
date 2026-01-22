@@ -761,3 +761,935 @@ Your response must be parseable by JSON.parse(). Anything else will fail."""
             'total_tokens': total_tokens,
             'created_at': session.created_at.isoformat(),
         }
+
+    # ===== Idea Refinement =====
+
+    async def refine_idea(
+        self,
+        original_idea: BrainstormIdea,
+        api_key: str,
+        feedback: str,
+        direction: str = "refine",
+        combine_with: Optional[BrainstormIdea] = None
+    ) -> BrainstormIdea:
+        """
+        Refine an existing idea based on user feedback.
+
+        Directions:
+        - refine: Tweak the idea based on specific feedback
+        - expand: Add more depth and detail
+        - contrast: Create an opposing/contrasting version
+        - combine: Merge elements from two ideas
+        """
+        logger.info(f"Refining idea {original_idea.id} with direction: {direction}")
+
+        # Build refinement prompt based on idea type
+        system_prompt, user_prompt = self._build_refinement_prompt(
+            original_idea=original_idea,
+            feedback=feedback,
+            direction=direction,
+            combine_with=combine_with
+        )
+
+        # Call OpenRouter
+        openrouter = OpenRouterService(api_key)
+        result = await openrouter.get_writing_suggestion(
+            text=user_prompt,
+            context=system_prompt,
+            suggestion_type="refinement",
+            max_tokens=1500,
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+
+        if not result.get("success"):
+            raise Exception(f"Refinement failed: {result.get('error')}")
+
+        # Parse response
+        ai_response = result["suggestion"]
+        refined_data = self._parse_refinement_response(ai_response, original_idea.idea_type)
+
+        # Calculate cost
+        usage = result.get("usage", {})
+        cost = OpenRouterService.calculate_cost(usage)
+
+        # Create new refined idea
+        refined_idea = BrainstormIdea(
+            session_id=original_idea.session_id,
+            idea_type=original_idea.idea_type,
+            title=refined_data.get('name', refined_data.get('title', original_idea.title + ' (Refined)')),
+            description=self._format_refined_description(refined_data, original_idea.idea_type),
+            idea_metadata={
+                **refined_data,
+                'refined_from': original_idea.id,
+                'refinement_direction': direction,
+                'refinement_feedback': feedback
+            },
+            ai_cost=cost,
+            ai_tokens=usage.get("total_tokens", 0),
+            ai_model=result.get("model", "anthropic/claude-3.5-sonnet")
+        )
+
+        self.db.add(refined_idea)
+        self.db.commit()
+        self.db.refresh(refined_idea)
+
+        logger.info(f"Created refined idea {refined_idea.id} from {original_idea.id}")
+        return refined_idea
+
+    def _build_refinement_prompt(
+        self,
+        original_idea: BrainstormIdea,
+        feedback: str,
+        direction: str,
+        combine_with: Optional[BrainstormIdea]
+    ) -> tuple[str, str]:
+        """Build prompt for idea refinement"""
+
+        idea_type = original_idea.idea_type
+        original_content = json.dumps(original_idea.idea_metadata, indent=2)
+
+        direction_instructions = {
+            "refine": "Refine and improve this idea while maintaining its core essence. Apply the user's specific feedback.",
+            "expand": "Expand this idea with much more depth, detail, and nuance. Add layers of complexity.",
+            "contrast": "Create a compelling contrasting version - if the original is dark, make it lighter; if serious, make it humorous, etc.",
+            "combine": "Merge the best elements of both ideas into a cohesive new concept."
+        }
+
+        system_prompt = f"""You are a JSON-generating creative writing assistant specializing in {idea_type.lower()} development.
+
+Your task is to {direction_instructions.get(direction, direction_instructions['refine'])}
+
+Return a single refined {idea_type.lower()} as a valid JSON object.
+
+CRITICAL: Your response must be a valid JSON object starting with {{ and ending with }}. No other text is allowed."""
+
+        combine_context = ""
+        if combine_with:
+            combine_context = f"\n\nSecond idea to combine with:\n{json.dumps(combine_with.idea_metadata, indent=2)}"
+
+        if idea_type == 'CHARACTER':
+            json_structure = """{
+  "name": "Character name",
+  "role": "Story role",
+  "want": "Surface desire",
+  "need": "Deeper need",
+  "flaw": "Character flaw",
+  "strength": "Key strength",
+  "arc": "Character arc",
+  "hook": "Compelling hook",
+  "relationships": "Key relationships",
+  "story_potential": "Story potential"
+}"""
+        elif idea_type == 'PLOT_BEAT':
+            json_structure = """{
+  "type": "plot element type",
+  "title": "Plot title",
+  "description": "Description",
+  "setup": "How to set it up",
+  "escalation": "How it escalates",
+  "resolution": "How it resolves",
+  "stakes": "What's at stake",
+  "connects_to": "Connections",
+  "beat_position": "Position in story"
+}"""
+        else:  # WORLD/LOCATION
+            json_structure = """{
+  "name": "Location name",
+  "type": "Location type",
+  "atmosphere": "Mood and sensory details",
+  "culture": "Culture and inhabitants",
+  "geography": "Physical layout",
+  "history": "Backstory",
+  "story_role": "Narrative function",
+  "secrets": "Hidden elements",
+  "hook": "Compelling hook"
+}"""
+
+        user_prompt = f"""Original {idea_type}:
+{original_content}
+{combine_context}
+
+User Feedback: {feedback}
+
+Please create a refined version that incorporates this feedback. Return as JSON:
+{json_structure}
+
+ONLY return the JSON object, nothing else."""
+
+        return system_prompt, user_prompt
+
+    def _parse_refinement_response(self, ai_response: str, idea_type: str) -> Dict[str, Any]:
+        """Parse refinement AI response"""
+        try:
+            parsed = json.loads(ai_response)
+            if isinstance(parsed, dict):
+                return parsed
+            raise ValueError(f"Unexpected response format: {type(parsed)}")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing failed: {e}")
+            raise ValueError(f"Could not parse AI response: {e}")
+
+    def _format_refined_description(self, data: Dict[str, Any], idea_type: str) -> str:
+        """Format refined idea into description based on type"""
+        if idea_type == 'CHARACTER':
+            return self._format_character_description(data)
+        elif idea_type == 'PLOT_BEAT':
+            return self._format_plot_description(data)
+        else:
+            return self._format_location_description(data)
+
+    # ===== Conflict Generation =====
+
+    async def generate_conflict_ideas(
+        self,
+        session_id: str,
+        api_key: str,
+        genre: str,
+        premise: str,
+        characters: List[Entity],
+        conflict_type: str = "any",
+        num_ideas: int = 5
+    ) -> List[BrainstormIdea]:
+        """
+        Generate conflict scenario ideas.
+
+        Conflict types:
+        - internal: Inner struggles, moral dilemmas
+        - interpersonal: Between characters
+        - external: Character vs environment/society
+        - societal: Larger systemic conflicts
+        - any: Mix of all types
+        """
+        logger.info(f"Generating {num_ideas} conflict ideas for session {session_id}")
+
+        system_prompt, user_prompt = self._build_conflict_prompt(
+            genre=genre,
+            premise=premise,
+            characters=characters,
+            conflict_type=conflict_type,
+            num_ideas=num_ideas
+        )
+
+        openrouter = OpenRouterService(api_key)
+        result = await openrouter.get_writing_suggestion(
+            text=user_prompt,
+            context=system_prompt,
+            suggestion_type="conflict",
+            max_tokens=2500,
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+
+        if not result.get("success"):
+            raise Exception(f"Conflict generation failed: {result.get('error')}")
+
+        ai_response = result["suggestion"]
+        conflicts = self._parse_conflict_response(ai_response)
+
+        usage = result.get("usage", {})
+        cost_per_conflict = OpenRouterService.calculate_cost(usage) / len(conflicts) if conflicts else 0
+
+        ideas = []
+        for conflict_data in conflicts:
+            idea = BrainstormIdea(
+                session_id=session_id,
+                idea_type='CONFLICT',
+                title=conflict_data.get('title', 'Untitled Conflict'),
+                description=self._format_conflict_description(conflict_data),
+                idea_metadata=conflict_data,
+                ai_cost=cost_per_conflict,
+                ai_tokens=usage.get("total_tokens", 0) // len(conflicts),
+                ai_model=result.get("model", "anthropic/claude-3.5-sonnet")
+            )
+            self.db.add(idea)
+            ideas.append(idea)
+
+        self.db.commit()
+        for idea in ideas:
+            self.db.refresh(idea)
+
+        logger.info(f"Created {len(ideas)} conflict ideas")
+        return ideas
+
+    def _build_conflict_prompt(
+        self,
+        genre: str,
+        premise: str,
+        characters: List[Entity],
+        conflict_type: str,
+        num_ideas: int
+    ) -> tuple[str, str]:
+        """Build conflict generation prompt"""
+
+        type_instruction = ""
+        if conflict_type != "any":
+            type_descriptions = {
+                "internal": "internal conflicts (character vs self, moral dilemmas, inner demons)",
+                "interpersonal": "interpersonal conflicts (character vs character, relationships, betrayals)",
+                "external": "external conflicts (character vs nature, environment, obstacles)",
+                "societal": "societal conflicts (character vs system, institutions, cultural norms)"
+            }
+            type_instruction = f"\n\nFocus specifically on {type_descriptions.get(conflict_type, 'varied conflicts')}."
+
+        system_prompt = f"""You are a JSON-generating conflict development assistant for {genre} fiction.
+
+Your task is to create compelling, layered conflicts that drive narrative tension.{type_instruction}
+
+CRITICAL: Your response must be a valid JSON object with a "conflicts" array. No other text allowed."""
+
+        char_context = ""
+        if characters:
+            char_list = [f"- {c.name}: {c.attributes.get('role', 'Character')}" for c in characters]
+            char_context = f"\n\nAvailable Characters:\n" + "\n".join(char_list)
+
+        user_prompt = f"""Story Premise: {premise}{char_context}
+
+Create {num_ideas} compelling conflict scenarios. Each conflict should be a JSON object:
+
+{{
+  "title": "Conflict title (punchy, evocative)",
+  "type": "internal" | "interpersonal" | "external" | "societal",
+  "participants": ["Character names involved"],
+  "core_tension": "The fundamental opposition or struggle",
+  "stakes": "What could be gained or lost",
+  "trigger": "What initiates this conflict",
+  "escalation_points": ["How the conflict intensifies over time"],
+  "possible_resolutions": ["Different ways this could resolve"],
+  "emotional_core": "The underlying emotional truth",
+  "scene_opportunities": ["Specific scenes this conflict enables"],
+  "thematic_connection": "How this ties to larger story themes"
+}}
+
+Return as:
+{{
+  "conflicts": [...]
+}}"""
+
+        return system_prompt, user_prompt
+
+    def _parse_conflict_response(self, ai_response: str) -> List[Dict[str, Any]]:
+        """Parse conflict AI response"""
+        try:
+            parsed = json.loads(ai_response)
+            if isinstance(parsed, dict) and "conflicts" in parsed:
+                return parsed["conflicts"]
+            elif isinstance(parsed, list):
+                return parsed
+            elif isinstance(parsed, dict):
+                return [parsed]
+            raise ValueError(f"Unexpected format: {type(parsed)}")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing failed: {e}")
+            raise ValueError(f"Could not parse AI response: {e}")
+
+    def _format_conflict_description(self, data: Dict[str, Any]) -> str:
+        """Format conflict into readable description"""
+        conflict_type = data.get('type', 'conflict').replace('_', ' ').title()
+        participants = ", ".join(data.get('participants', ['Unknown']))
+
+        description = f"""**{data.get('title', 'Untitled Conflict')}** - {conflict_type}
+
+**Participants**: {participants}
+
+**Core Tension**: {data.get('core_tension', 'Unknown')}
+
+**Stakes**: {data.get('stakes', 'Unknown')}
+
+**Trigger**: {data.get('trigger', 'Unknown')}
+
+**Escalation Points**:
+{chr(10).join('• ' + p for p in data.get('escalation_points', ['To be determined']))}
+
+**Possible Resolutions**:
+{chr(10).join('• ' + r for r in data.get('possible_resolutions', ['To be determined']))}
+
+**Emotional Core**: {data.get('emotional_core', 'Unknown')}
+
+**Scene Opportunities**:
+{chr(10).join('• ' + s for s in data.get('scene_opportunities', ['To be explored']))}
+
+**Thematic Connection**: {data.get('thematic_connection', 'To be determined')}"""
+
+        return description
+
+    # ===== Scene Generation =====
+
+    async def generate_scene_ideas(
+        self,
+        session_id: str,
+        api_key: str,
+        genre: str,
+        premise: str,
+        characters: List[Entity],
+        location: Optional[Entity],
+        beat: Optional[PlotBeat],
+        scene_purpose: str = "any",
+        num_ideas: int = 3
+    ) -> List[BrainstormIdea]:
+        """Generate scene ideas with structure and beats"""
+        logger.info(f"Generating {num_ideas} scene ideas for session {session_id}")
+
+        system_prompt, user_prompt = self._build_scene_prompt(
+            genre=genre,
+            premise=premise,
+            characters=characters,
+            location=location,
+            beat=beat,
+            scene_purpose=scene_purpose,
+            num_ideas=num_ideas
+        )
+
+        openrouter = OpenRouterService(api_key)
+        result = await openrouter.get_writing_suggestion(
+            text=user_prompt,
+            context=system_prompt,
+            suggestion_type="scene",
+            max_tokens=3000,
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+
+        if not result.get("success"):
+            raise Exception(f"Scene generation failed: {result.get('error')}")
+
+        ai_response = result["suggestion"]
+        scenes = self._parse_scene_response(ai_response)
+
+        usage = result.get("usage", {})
+        cost_per_scene = OpenRouterService.calculate_cost(usage) / len(scenes) if scenes else 0
+
+        ideas = []
+        for scene_data in scenes:
+            idea = BrainstormIdea(
+                session_id=session_id,
+                idea_type='SCENE',
+                title=scene_data.get('title', 'Untitled Scene'),
+                description=self._format_scene_description(scene_data),
+                idea_metadata=scene_data,
+                ai_cost=cost_per_scene,
+                ai_tokens=usage.get("total_tokens", 0) // len(scenes),
+                ai_model=result.get("model", "anthropic/claude-3.5-sonnet")
+            )
+            self.db.add(idea)
+            ideas.append(idea)
+
+        self.db.commit()
+        for idea in ideas:
+            self.db.refresh(idea)
+
+        logger.info(f"Created {len(ideas)} scene ideas")
+        return ideas
+
+    def _build_scene_prompt(
+        self,
+        genre: str,
+        premise: str,
+        characters: List[Entity],
+        location: Optional[Entity],
+        beat: Optional[PlotBeat],
+        scene_purpose: str,
+        num_ideas: int
+    ) -> tuple[str, str]:
+        """Build scene generation prompt"""
+
+        purpose_instruction = ""
+        if scene_purpose != "any":
+            purpose_descriptions = {
+                "introduction": "introductory scenes that establish characters, world, or stakes",
+                "conflict": "conflict scenes with rising tension and opposition",
+                "revelation": "revelation scenes where key information is discovered",
+                "climax": "climactic scenes with peak emotional/action intensity",
+                "resolution": "resolution scenes that provide closure or transition"
+            }
+            purpose_instruction = f"\n\nFocus on {purpose_descriptions.get(scene_purpose, 'varied scene types')}."
+
+        system_prompt = f"""You are a JSON-generating scene development assistant for {genre} fiction.
+
+Create vivid, structurally sound scene concepts with clear beats and emotional arcs.{purpose_instruction}
+
+CRITICAL: Your response must be a valid JSON object with a "scenes" array. No other text allowed."""
+
+        context_parts = [f"Story Premise: {premise}"]
+
+        if characters:
+            char_list = [f"- {c.name}: {c.attributes.get('hook', c.attributes.get('role', 'Character'))}" for c in characters]
+            context_parts.append("Characters:\n" + "\n".join(char_list))
+
+        if location:
+            context_parts.append(f"Location: {location.name} - {location.attributes.get('atmosphere', 'Unknown atmosphere')}")
+
+        if beat:
+            context_parts.append(f"Plot Beat: {beat.beat_label} - {beat.description or 'No description'}")
+
+        user_prompt = f"""{chr(10).join(context_parts)}
+
+Create {num_ideas} scene ideas. Each scene should be a JSON object:
+
+{{
+  "title": "Scene title (evocative, specific)",
+  "purpose": "introduction" | "conflict" | "revelation" | "climax" | "resolution",
+  "pov_character": "Whose perspective",
+  "characters_present": ["All characters in scene"],
+  "location": "Where the scene takes place",
+  "opening_hook": "First line or image that pulls readers in",
+  "scene_goal": "What the POV character wants in this scene",
+  "obstacle": "What stands in their way",
+  "outcome": "disaster" | "partial_success" | "success" | "twist",
+  "emotional_arc": {{
+    "start": "Emotional state at beginning",
+    "shift": "What causes the emotional change",
+    "end": "Emotional state at end"
+  }},
+  "scene_beats": [
+    "Beat 1: Setup/establishing moment",
+    "Beat 2: Goal revealed/conflict introduced",
+    "Beat 3: Rising tension",
+    "Beat 4: Peak moment/turning point",
+    "Beat 5: Outcome/transition"
+  ],
+  "sensory_details": ["Key sensory moments to include"],
+  "dialogue_moments": ["Key exchanges or lines"],
+  "subtext": "What's happening beneath the surface"
+}}
+
+Return as:
+{{
+  "scenes": [...]
+}}"""
+
+        return system_prompt, user_prompt
+
+    def _parse_scene_response(self, ai_response: str) -> List[Dict[str, Any]]:
+        """Parse scene AI response"""
+        try:
+            parsed = json.loads(ai_response)
+            if isinstance(parsed, dict) and "scenes" in parsed:
+                return parsed["scenes"]
+            elif isinstance(parsed, list):
+                return parsed
+            elif isinstance(parsed, dict):
+                return [parsed]
+            raise ValueError(f"Unexpected format: {type(parsed)}")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing failed: {e}")
+            raise ValueError(f"Could not parse AI response: {e}")
+
+    def _format_scene_description(self, data: Dict[str, Any]) -> str:
+        """Format scene into readable description"""
+        purpose = data.get('purpose', 'scene').title()
+        characters = ", ".join(data.get('characters_present', ['Unknown']))
+
+        emotional_arc = data.get('emotional_arc', {})
+        beats = data.get('scene_beats', ['To be developed'])
+
+        description = f"""**{data.get('title', 'Untitled Scene')}** - {purpose} Scene
+
+**POV**: {data.get('pov_character', 'Unknown')}
+**Characters**: {characters}
+**Location**: {data.get('location', 'Unknown')}
+
+**Opening Hook**: {data.get('opening_hook', 'To be written')}
+
+**Scene Goal**: {data.get('scene_goal', 'Unknown')}
+**Obstacle**: {data.get('obstacle', 'Unknown')}
+**Outcome**: {data.get('outcome', 'Unknown').replace('_', ' ').title()}
+
+**Emotional Arc**:
+• Start: {emotional_arc.get('start', 'Unknown')}
+• Shift: {emotional_arc.get('shift', 'Unknown')}
+• End: {emotional_arc.get('end', 'Unknown')}
+
+**Scene Beats**:
+{chr(10).join('• ' + b for b in beats)}
+
+**Sensory Details**:
+{chr(10).join('• ' + s for s in data.get('sensory_details', ['To be explored']))}
+
+**Key Dialogue Moments**:
+{chr(10).join('• ' + d for d in data.get('dialogue_moments', ['To be written']))}
+
+**Subtext**: {data.get('subtext', 'To be developed')}"""
+
+        return description
+
+    # ===== Character Development Worksheets =====
+
+    async def generate_character_worksheet(
+        self,
+        session_id: str,
+        api_key: str,
+        character: Optional[Entity],
+        character_name: Optional[str],
+        worksheet_type: str,
+        other_characters: List[Entity]
+    ) -> Dict[str, Any]:
+        """Generate a deep character development worksheet"""
+        logger.info(f"Generating {worksheet_type} worksheet for session {session_id}")
+
+        name = character.name if character else character_name
+        existing_data = character.attributes if character else {}
+
+        system_prompt, user_prompt = self._build_worksheet_prompt(
+            name=name,
+            existing_data=existing_data,
+            worksheet_type=worksheet_type,
+            other_characters=other_characters
+        )
+
+        openrouter = OpenRouterService(api_key)
+        result = await openrouter.get_writing_suggestion(
+            text=user_prompt,
+            context=system_prompt,
+            suggestion_type="worksheet",
+            max_tokens=3500,
+            temperature=0.6,
+            response_format={"type": "json_object"}
+        )
+
+        if not result.get("success"):
+            raise Exception(f"Worksheet generation failed: {result.get('error')}")
+
+        ai_response = result["suggestion"]
+        worksheet = json.loads(ai_response)
+
+        # Add metadata
+        usage = result.get("usage", {})
+        worksheet['_metadata'] = {
+            'character_id': character.id if character else None,
+            'character_name': name,
+            'worksheet_type': worksheet_type,
+            'ai_cost': OpenRouterService.calculate_cost(usage),
+            'ai_tokens': usage.get("total_tokens", 0)
+        }
+
+        # If character exists, optionally update their attributes
+        if character:
+            # Store worksheet in idea for reference
+            idea = BrainstormIdea(
+                session_id=session_id,
+                idea_type='CHARACTER_WORKSHEET',
+                title=f"{name} - {worksheet_type.title()} Worksheet",
+                description=self._format_worksheet_description(worksheet, worksheet_type),
+                idea_metadata=worksheet,
+                ai_cost=worksheet['_metadata']['ai_cost'],
+                ai_tokens=worksheet['_metadata']['ai_tokens'],
+                ai_model=result.get("model", "anthropic/claude-3.5-sonnet")
+            )
+            self.db.add(idea)
+            self.db.commit()
+            self.db.refresh(idea)
+            worksheet['_metadata']['idea_id'] = idea.id
+
+        return worksheet
+
+    def _build_worksheet_prompt(
+        self,
+        name: str,
+        existing_data: Dict[str, Any],
+        worksheet_type: str,
+        other_characters: List[Entity]
+    ) -> tuple[str, str]:
+        """Build character worksheet prompt"""
+
+        worksheet_structures = {
+            "full": """Create a comprehensive character worksheet covering:
+1. Core Identity (name meaning, age, appearance, first impression)
+2. Psychology (fears, desires, beliefs, contradictions, coping mechanisms)
+3. Backstory (formative events, relationships, wounds, defining moments)
+4. Voice (speech patterns, vocabulary, verbal tics, internal monologue style)
+5. Relationships (with each other character)
+6. Arc Potential (starting point, catalyst, transformation, endpoint)""",
+
+            "backstory": """Create a detailed backstory worksheet covering:
+1. Birth & Early Childhood (circumstances, family, formative experiences)
+2. Key Relationships (parents, siblings, mentors, first love, enemies)
+3. Defining Moments (traumas, triumphs, turning points)
+4. Skills & Education (how they learned what they know)
+5. Wounds (emotional scars, unresolved issues)
+6. Secrets (what they hide, why they hide it)""",
+
+            "psychology": """Create a deep psychological profile covering:
+1. Core Beliefs (about self, others, the world)
+2. Defense Mechanisms (how they protect themselves emotionally)
+3. Attachment Style (how they connect with others)
+4. Cognitive Patterns (how they think, biases, blind spots)
+5. Emotional Range (what they feel easily, what they suppress)
+6. Shadow Self (the parts they deny or reject)
+7. Greatest Fear & Deepest Desire (the engine of motivation)""",
+
+            "voice": """Create a voice and dialogue worksheet covering:
+1. Speech Patterns (sentence structure, rhythm, formality level)
+2. Vocabulary (education level, region, profession, era)
+3. Verbal Tics (repeated phrases, filler words, unique expressions)
+4. Internal Monologue (how they think vs how they speak)
+5. Subtext Tendencies (what they say vs what they mean)
+6. Conversation Style (listener vs talker, direct vs indirect)
+7. Sample Dialogue (key emotional situations)""",
+
+            "relationships": """Create a relationship dynamics worksheet covering:
+For each other character, define:
+1. History (how they met, key shared experiences)
+2. Current Status (allies, enemies, complicated)
+3. Power Dynamic (who has power, how it shifts)
+4. Communication Style (how they talk to each other)
+5. Conflict Points (sources of tension)
+6. Mutual Needs (what they provide each other)
+7. Potential Arc (how the relationship could evolve)"""
+        }
+
+        system_prompt = f"""You are a JSON-generating character development specialist.
+
+{worksheet_structures.get(worksheet_type, worksheet_structures['full'])}
+
+Create deep, specific, story-useful content. Avoid generic responses.
+
+CRITICAL: Return a valid JSON object. No other text allowed."""
+
+        existing_context = ""
+        if existing_data:
+            relevant_keys = ['want', 'need', 'flaw', 'strength', 'arc', 'role', 'hook', 'relationships', 'story_potential', 'description']
+            existing_info = {k: v for k, v in existing_data.items() if k in relevant_keys and v}
+            if existing_info:
+                existing_context = f"\n\nExisting Character Data:\n{json.dumps(existing_info, indent=2)}"
+
+        other_char_context = ""
+        if other_characters:
+            char_list = [f"- {c.name}: {c.attributes.get('role', 'Character')}" for c in other_characters]
+            other_char_context = f"\n\nOther Characters in Story:\n" + "\n".join(char_list)
+
+        user_prompt = f"""Character Name: {name}{existing_context}{other_char_context}
+
+Generate a detailed {worksheet_type} worksheet as a JSON object with clearly labeled sections.
+Each section should have rich, specific content that could be directly used in writing.
+
+Make it specific to THIS character - avoid generic advice that could apply to anyone."""
+
+        return system_prompt, user_prompt
+
+    def _format_worksheet_description(self, worksheet: Dict[str, Any], worksheet_type: str) -> str:
+        """Format worksheet into readable description"""
+        sections = []
+        for key, value in worksheet.items():
+            if key.startswith('_'):
+                continue
+            section_title = key.replace('_', ' ').title()
+            if isinstance(value, dict):
+                items = [f"  • {k}: {v}" for k, v in value.items()]
+                sections.append(f"**{section_title}**:\n" + "\n".join(items))
+            elif isinstance(value, list):
+                items = [f"  • {item}" for item in value]
+                sections.append(f"**{section_title}**:\n" + "\n".join(items))
+            else:
+                sections.append(f"**{section_title}**: {value}")
+
+        return "\n\n".join(sections)
+
+    # ===== AI Entity Expansion =====
+
+    async def expand_entity(
+        self,
+        entity: Entity,
+        api_key: str,
+        expansion_type: str,
+        other_entities: List[Entity]
+    ) -> Dict[str, Any]:
+        """Expand an existing entity with AI-generated content"""
+        logger.info(f"Expanding entity {entity.id} with type: {expansion_type}")
+
+        system_prompt, user_prompt = self._build_expansion_prompt(
+            entity=entity,
+            expansion_type=expansion_type,
+            other_entities=other_entities
+        )
+
+        openrouter = OpenRouterService(api_key)
+        result = await openrouter.get_writing_suggestion(
+            text=user_prompt,
+            context=system_prompt,
+            suggestion_type="expansion",
+            max_tokens=2000,
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+
+        if not result.get("success"):
+            raise Exception(f"Expansion failed: {result.get('error')}")
+
+        ai_response = result["suggestion"]
+        expansion = json.loads(ai_response)
+
+        # Merge expansion into entity attributes
+        usage = result.get("usage", {})
+        expansion['_expansion_metadata'] = {
+            'type': expansion_type,
+            'ai_cost': OpenRouterService.calculate_cost(usage),
+            'ai_tokens': usage.get("total_tokens", 0)
+        }
+
+        # Update entity with expanded attributes
+        if 'expanded_attributes' in expansion:
+            for key, value in expansion['expanded_attributes'].items():
+                entity.attributes[key] = value
+            self.db.commit()
+            self.db.refresh(entity)
+
+        return expansion
+
+    def _build_expansion_prompt(
+        self,
+        entity: Entity,
+        expansion_type: str,
+        other_entities: List[Entity]
+    ) -> tuple[str, str]:
+        """Build entity expansion prompt"""
+
+        expansion_instructions = {
+            "deepen": "Add much more depth, nuance, and specific detail to all aspects",
+            "relationships": "Develop detailed relationships with other entities",
+            "history": "Create rich backstory and history",
+            "secrets": "Develop hidden aspects, mysteries, and unrevealed truths",
+            "conflicts": "Identify potential conflicts this entity could drive or be involved in"
+        }
+
+        entity_type = entity.type.lower()
+        system_prompt = f"""You are a JSON-generating {entity_type} development specialist.
+
+Your task: {expansion_instructions.get(expansion_type, 'Expand with more detail')}
+
+Create content that deepens the existing entity without contradicting established facts.
+
+CRITICAL: Return a valid JSON object. No other text allowed."""
+
+        existing_data = json.dumps(entity.attributes, indent=2)
+
+        other_context = ""
+        if other_entities and expansion_type in ['relationships', 'conflicts']:
+            entity_list = [f"- {e.name} ({e.type}): {e.attributes.get('hook', e.attributes.get('role', 'Unknown'))}" for e in other_entities[:10]]
+            other_context = f"\n\nOther Entities:\n" + "\n".join(entity_list)
+
+        user_prompt = f"""Entity: {entity.name} ({entity.type})
+
+Current Data:
+{existing_data}
+{other_context}
+
+Expand this entity focusing on: {expansion_type}
+
+Return as JSON with:
+{{
+  "expanded_attributes": {{ ... new/updated attributes ... }},
+  "suggestions": [ ... ideas for further development ... ],
+  "story_hooks": [ ... specific ways to use this in the narrative ... ]
+}}"""
+
+        return system_prompt, user_prompt
+
+    async def generate_related_entities(
+        self,
+        source_entity: Entity,
+        api_key: str,
+        relationship_type: str,
+        existing_entities: List[Entity]
+    ) -> List[Dict[str, Any]]:
+        """Generate new entities related to an existing one"""
+        logger.info(f"Generating related entities for {source_entity.id}")
+
+        system_prompt, user_prompt = self._build_related_entities_prompt(
+            source_entity=source_entity,
+            relationship_type=relationship_type,
+            existing_entities=existing_entities
+        )
+
+        openrouter = OpenRouterService(api_key)
+        result = await openrouter.get_writing_suggestion(
+            text=user_prompt,
+            context=system_prompt,
+            suggestion_type="related_entities",
+            max_tokens=2500,
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+
+        if not result.get("success"):
+            raise Exception(f"Related entity generation failed: {result.get('error')}")
+
+        ai_response = result["suggestion"]
+        parsed = json.loads(ai_response)
+
+        usage = result.get("usage", {})
+        total_cost = OpenRouterService.calculate_cost(usage)
+
+        related = parsed.get('related_entities', [])
+        for entity in related:
+            entity['_metadata'] = {
+                'source_entity_id': source_entity.id,
+                'relationship_type': relationship_type,
+                'ai_cost': total_cost / len(related) if related else 0
+            }
+
+        return related
+
+    def _build_related_entities_prompt(
+        self,
+        source_entity: Entity,
+        relationship_type: str,
+        existing_entities: List[Entity]
+    ) -> tuple[str, str]:
+        """Build prompt for generating related entities"""
+
+        source_type = source_entity.type
+        relationship_instructions = {
+            "deepen": "Create entities that add depth to the source (mentors, rivals, loved ones)",
+            "relationships": "Create characters with significant relationships to the source",
+            "history": "Create entities from the source's past",
+            "secrets": "Create entities connected to the source's hidden aspects",
+            "conflicts": "Create entities that could drive conflict with the source"
+        }
+
+        system_prompt = f"""You are a JSON-generating entity creation assistant.
+
+Your task: {relationship_instructions.get(relationship_type, 'Create related entities')}
+
+Create entities that complement and enrich the source entity.
+
+CRITICAL: Return a valid JSON object with "related_entities" array. No other text allowed."""
+
+        source_data = json.dumps(source_entity.attributes, indent=2)
+
+        existing_names = [e.name for e in existing_entities]
+        existing_context = f"\n\nExisting entities (avoid duplicates): {', '.join(existing_names)}" if existing_names else ""
+
+        if source_type == 'CHARACTER':
+            entity_template = """{
+  "type": "CHARACTER" | "LOCATION",
+  "name": "Entity name",
+  "role": "Role in story",
+  "relationship_to_source": "How they relate to the source character",
+  "hook": "Compelling one-liner",
+  ... other relevant attributes ...
+}"""
+        else:
+            entity_template = """{
+  "type": "CHARACTER" | "LOCATION" | "LORE",
+  "name": "Entity name",
+  "relationship_to_source": "How they relate to the source",
+  "hook": "Compelling one-liner",
+  ... other relevant attributes ...
+}"""
+
+        user_prompt = f"""Source Entity: {source_entity.name} ({source_type})
+
+Source Data:
+{source_data}
+{existing_context}
+
+Generate 3-5 related entities. Each should be:
+{entity_template}
+
+Return as:
+{{
+  "related_entities": [...]
+}}"""
+
+        return system_prompt, user_prompt

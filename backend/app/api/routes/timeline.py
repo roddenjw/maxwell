@@ -503,6 +503,29 @@ async def get_timeline_stats(manuscript_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== Character Journey API ====================
+
+@router.get("/character-journey/{character_id}")
+async def get_character_journey_summary(character_id: str, manuscript_id: str):
+    """
+    Get comprehensive journey summary for a character.
+
+    Returns total distance traveled, unique locations visited,
+    key events, emotional arc data, and location timeline.
+    """
+    try:
+        summary = timeline_service.get_character_journey_summary(
+            character_id=character_id,
+            manuscript_id=manuscript_id
+        )
+        return {
+            "success": True,
+            "data": summary
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== Timeline Orchestrator API ====================
 
 class TravelSpeedRequest(BaseModel):

@@ -50,8 +50,31 @@ export default function CharacterLocationTracker({ manuscriptId }: CharacterLoca
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <p className="text-faded-ink font-sans text-sm">Loading...</p>
+      <div className="h-full flex flex-col">
+        {/* Header skeleton */}
+        <div className="p-4 border-b border-slate-ui bg-white">
+          <div className="h-6 w-48 bg-slate-ui/30 animate-pulse rounded mb-2" />
+          <div className="h-4 w-64 bg-slate-ui/20 animate-pulse rounded" />
+        </div>
+        <div className="flex-1 flex">
+          {/* Character list skeleton */}
+          <div className="w-64 border-r border-slate-ui bg-vellum p-3">
+            <div className="h-4 w-24 bg-slate-ui/30 animate-pulse rounded mb-4" />
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="p-3 mb-2 bg-white border border-slate-ui rounded-sm">
+                <div className="h-4 w-24 bg-slate-ui/30 animate-pulse rounded mb-2" />
+                <div className="h-3 w-16 bg-slate-ui/20 animate-pulse rounded" />
+              </div>
+            ))}
+          </div>
+          {/* Content skeleton */}
+          <div className="flex-1 p-8 flex items-center justify-center">
+            <div className="text-center">
+              <div className="h-16 w-16 bg-slate-ui/20 animate-pulse rounded-full mx-auto mb-4" />
+              <div className="h-5 w-48 bg-slate-ui/30 animate-pulse rounded mx-auto" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -98,14 +121,39 @@ export default function CharacterLocationTracker({ manuscriptId }: CharacterLoca
 
   if (journeys.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8 text-center">
-        <div>
-          <p className="text-midnight font-garamond font-semibold mb-2">
-            No character location data
-          </p>
-          <p className="text-sm text-faded-ink font-sans">
-            Track your characters' movements through locations by adding them to timeline events
-          </p>
+      <div className="h-full flex flex-col">
+        <div className="p-4 border-b border-slate-ui bg-white">
+          <h3 className="font-garamond text-lg text-midnight mb-2">
+            Character Location Tracker
+          </h3>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-8 text-center">
+          <div className="max-w-md">
+            <span className="text-6xl mb-4 block">🗺️</span>
+            <p className="text-midnight font-garamond text-xl font-semibold mb-3">
+              No character journeys yet
+            </p>
+            <p className="text-sm text-faded-ink font-sans mb-6">
+              Character journeys appear when you add characters to timeline events with locations.
+            </p>
+            <div className="text-left bg-white border border-slate-ui p-4 rounded-sm">
+              <p className="text-xs font-sans text-faded-ink uppercase mb-2">How to get started:</p>
+              <ol className="text-sm font-sans text-midnight space-y-2">
+                <li className="flex gap-2">
+                  <span className="text-bronze font-semibold">1.</span>
+                  <span>Create characters in the Codex</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-bronze font-semibold">2.</span>
+                  <span>Create locations in the Codex</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-bronze font-semibold">3.</span>
+                  <span>Add timeline events with characters and locations</span>
+                </li>
+              </ol>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -143,6 +191,27 @@ export default function CharacterLocationTracker({ manuscriptId }: CharacterLoca
       }
     }
     return changes;
+  };
+
+  // Calculate journey statistics
+  const getJourneyStats = (journey: CharacterJourney) => {
+    const uniqueLocations = new Set(journey.locations.map(l => l.locationName));
+    const locationChanges = getLocationChanges(journey);
+    const mostVisitedLocation = getCharacterLocations(journey).sort((a, b) => b.count - a.count)[0];
+
+    // Calculate "time" span (using order_index as proxy for time)
+    const firstEvent = journey.locations[0];
+    const lastEvent = journey.locations[journey.locations.length - 1];
+    const eventSpan = lastEvent.orderIndex - firstEvent.orderIndex;
+
+    return {
+      totalEvents: journey.locations.length,
+      uniqueLocations: uniqueLocations.size,
+      totalMoves: locationChanges.length,
+      mostVisited: mostVisitedLocation?.name || 'N/A',
+      mostVisitedCount: mostVisitedLocation?.count || 0,
+      eventSpan,
+    };
   };
 
   return (
@@ -229,6 +298,39 @@ export default function CharacterLocationTracker({ manuscriptId }: CharacterLoca
                   </span>
                 </div>
               </div>
+
+              {/* Journey Statistics */}
+              {(() => {
+                const stats = getJourneyStats(selectedJourney);
+                return (
+                  <div className="mb-6 p-4 bg-white border border-slate-ui" style={{ borderRadius: '2px' }}>
+                    <h4 className="text-xs font-sans text-faded-ink uppercase mb-3">
+                      Journey Statistics
+                    </h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <p className="text-2xl font-garamond text-bronze font-semibold">{stats.totalEvents}</p>
+                        <p className="text-xs font-sans text-faded-ink">Events</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-garamond text-bronze font-semibold">{stats.uniqueLocations}</p>
+                        <p className="text-xs font-sans text-faded-ink">Locations</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-garamond text-bronze font-semibold">{stats.totalMoves}</p>
+                        <p className="text-xs font-sans text-faded-ink">Moves</p>
+                      </div>
+                    </div>
+                    {stats.mostVisited && (
+                      <div className="mt-3 pt-3 border-t border-slate-ui">
+                        <p className="text-xs font-sans text-faded-ink">
+                          Most visited: <span className="text-midnight font-semibold">{stats.mostVisited}</span> ({stats.mostVisitedCount}×)
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Location summary */}
               <div className="mb-6 p-4 bg-white border border-slate-ui" style={{ borderRadius: '2px' }}>

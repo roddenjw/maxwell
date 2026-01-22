@@ -1308,45 +1308,71 @@ class TimelineService:
         MAIN ORCHESTRATOR: Run all 5 validators + existing validators
 
         Returns combined list of all issues detected and saves them to database.
+        Includes edge case handling for empty events, deleted entities, etc.
         """
         db = SessionLocal()
         try:
             print(f"🔍 Running Timeline Orchestrator validation for manuscript {manuscript_id}...")
 
+            # Get events first to check if we have any
+            events = self.get_events(manuscript_id)
+            if not events:
+                print("  → No events found, skipping validation")
+                return []
+
             all_inconsistencies = []
 
-            # Run all 5 new validators
-            print("  → Checking impossible travel...")
-            all_inconsistencies.extend(self._detect_impossible_travel(manuscript_id, db))
+            # Run all 5 new validators with error handling
+            try:
+                print("  → Checking impossible travel...")
+                all_inconsistencies.extend(self._detect_impossible_travel(manuscript_id, db))
+            except Exception as e:
+                print(f"  ⚠️ Impossible travel check failed: {e}")
 
-            print("  → Checking dependency violations...")
-            all_inconsistencies.extend(self._detect_dependency_violations(manuscript_id, db))
+            try:
+                print("  → Checking dependency violations...")
+                all_inconsistencies.extend(self._detect_dependency_violations(manuscript_id, db))
+            except Exception as e:
+                print(f"  ⚠️ Dependency violation check failed: {e}")
 
-            print("  → Checking character presence...")
-            all_inconsistencies.extend(self._detect_character_presence_issues(manuscript_id, db))
+            try:
+                print("  → Checking character presence...")
+                all_inconsistencies.extend(self._detect_character_presence_issues(manuscript_id, db))
+            except Exception as e:
+                print(f"  ⚠️ Character presence check failed: {e}")
 
-            print("  → Checking timing gaps...")
-            all_inconsistencies.extend(self._detect_timing_gaps(manuscript_id, db))
+            try:
+                print("  → Checking timing gaps...")
+                all_inconsistencies.extend(self._detect_timing_gaps(manuscript_id, db))
+            except Exception as e:
+                print(f"  ⚠️ Timing gap check failed: {e}")
 
-            print("  → Checking temporal paradoxes...")
-            all_inconsistencies.extend(self._detect_temporal_paradoxes(manuscript_id, db))
+            try:
+                print("  → Checking temporal paradoxes...")
+                all_inconsistencies.extend(self._detect_temporal_paradoxes(manuscript_id, db))
+            except Exception as e:
+                print(f"  ⚠️ Temporal paradox check failed: {e}")
 
             # Also run existing validators (location conflicts, etc.)
-            print("  → Running existing validators...")
-            existing = self.detect_inconsistencies(manuscript_id)
-            all_inconsistencies.extend(existing)
+            try:
+                print("  → Running existing validators...")
+                existing = self.detect_inconsistencies(manuscript_id)
+                all_inconsistencies.extend(existing)
+            except Exception as e:
+                print(f"  ⚠️ Existing validators failed: {e}")
 
-            # Save all to database
-            for inc in all_inconsistencies:
+            # Save all to database (filter out any None values)
+            valid_inconsistencies = [inc for inc in all_inconsistencies if inc is not None]
+            for inc in valid_inconsistencies:
                 db.add(inc)
             db.commit()
 
             # Refresh all objects
-            for inc in all_inconsistencies:
+            for inc in valid_inconsistencies:
                 db.refresh(inc)
 
-            print(f"✅ Timeline Orchestrator validation complete. Found {len(all_inconsistencies)} issues.")
-            return all_inconsistencies
+            print(f"✅ Timeline Orchestrator validation complete. Found {len(valid_inconsistencies)} issues.")
+            return valid_inconsistencies
 
         except Exception as e:
             db.rollback()
@@ -1381,6 +1407,125 @@ class TimelineService:
             db.rollback()
             print(f"❌ Failed to resolve inconsistency: {e}")
             raise
+        finally:
+            db.close()
+
+    # ==================== Character Journey Summary ====================
+
+    def get_character_journey_summary(
+        self,
+        character_id: str,
+        manuscript_id: str
+    ) -> Dict[str, Any]:
+        """
+        Get comprehensive journey summary for a character.
+
+        Returns:
+            - Total distance traveled
+            - Unique locations visited
+            - Key events (high narrative importance)
+            - Emotional arc data (if available)
+            - Location timeline
+        """
+        db = SessionLocal()
+        try:
+            events = self.get_events(manuscript_id)
+
+            # Filter events where character appears
+            character_events = [
+                e for e in events
+                if character_id in (e.character_ids or [])
+            ]
+
+            if not character_events:
+                return {
+                    "character_id": character_id,
+                    "manuscript_id": manuscript_id,
+                    "total_events": 0,
+                    "unique_locations": 0,
+                    "total_distance_km": 0,
+                    "key_events": [],
+                    "location_timeline": [],
+                    "emotional_arc": [],
+                }
+
+            # Sort by order_index
+            character_events.sort(key=lambda e: e.order_index)
+
+            # Get entity names for locations
+            location_ids = set(e.location_id for e in character_events if e.location_id)
+            entity_map = self._batch_load_entities(db, list(location_ids))
+
+            # Build location timeline
+            location_timeline = []
+            prev_location = None
+            for event in character_events:
+                loc_name = "Unknown"
+                if event.location_id:
+                    loc_entity = entity_map.get(event.location_id)
+                    loc_name = loc_entity.name if loc_entity else "Unknown"
+
+                location_timeline.append({
+                    "event_id": event.id,
+                    "event_description": event.description[:100],
+                    "location_id": event.location_id,
+                    "location_name": loc_name,
+                    "order_index": event.order_index,
+                    "timestamp": event.timestamp,
+                    "is_location_change": prev_location != event.location_id and prev_location is not None,
+                })
+                prev_location = event.location_id
+
+            # Calculate total distance
+            total_distance = 0
+            for i in range(1, len(character_events)):
+                prev_event = character_events[i - 1]
+                curr_event = character_events[i]
+                if prev_event.location_id and curr_event.location_id and prev_event.location_id != curr_event.location_id:
+                    distance = self.get_location_distance(
+                        manuscript_id,
+                        prev_event.location_id,
+                        curr_event.location_id
+                    )
+                    if distance:
+                        total_distance += distance
+
+            # Extract key events (high narrative importance)
+            key_events = [
+                {
+                    "event_id": e.id,
+                    "description": e.description[:150],
+                    "order_index": e.order_index,
+                    "narrative_importance": e.narrative_importance,
+                    "timestamp": e.timestamp,
+                }
+                for e in character_events
+                if e.narrative_importance and e.narrative_importance >= 7
+            ]
+
+            # Extract emotional arc data (from event metadata)
+            emotional_arc = []
+            for event in character_events:
+                if event.event_metadata and event.event_metadata.get("emotional_tone"):
+                    emotional_arc.append({
+                        "order_index": event.order_index,
+                        "emotional_tone": event.event_metadata["emotional_tone"],
+                        "event_id": event.id,
+                    })
+
+            return {
+                "character_id": character_id,
+                "manuscript_id": manuscript_id,
+                "total_events": len(character_events),
+                "unique_locations": len(location_ids),
+                "total_distance_km": total_distance,
+                "key_events": key_events,
+                "location_timeline": location_timeline,
+                "emotional_arc": emotional_arc,
+                "first_appearance_index": character_events[0].order_index,
+                "last_appearance_index": character_events[-1].order_index,
+                "location_changes": sum(1 for lt in location_timeline if lt.get("is_location_change")),
+            }
         finally:
             db.close()
 

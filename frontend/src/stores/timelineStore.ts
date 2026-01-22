@@ -26,7 +26,12 @@ interface TimelineStore {
   stats: TimelineStats | null;
   selectedEventId: string | null;
   isTimelineOpen: boolean;
-  activeTab: 'visual' | 'gantt' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion';
+  activeTab: 'visual' | 'gantt' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion' | 'foreshadow';
+
+  // Error handling state
+  loadingError: string | null;
+  isLoading: boolean;
+  retryCount: number;
 
   // Gantt Timeline State
   plotBeats: PlotBeat[];
@@ -54,7 +59,12 @@ interface TimelineStore {
   setStats: (stats: TimelineStats) => void;
   setSelectedEvent: (eventId: string | null) => void;
   setTimelineOpen: (isOpen: boolean) => void;
-  setActiveTab: (tab: 'visual' | 'gantt' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion') => void;
+  setActiveTab: (tab: 'visual' | 'gantt' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion' | 'foreshadow') => void;
+
+  // Error handling actions
+  setLoadingError: (error: string | null) => void;
+  setIsLoading: (loading: boolean) => void;
+  clearError: () => void;
 
   // Timeline Orchestrator actions
   setTravelLegs: (legs: TravelLeg[]) => void;
@@ -86,6 +96,11 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
   selectedEventId: null,
   isTimelineOpen: false,
   activeTab: 'visual',
+
+  // Error handling state
+  loadingError: null,
+  isLoading: false,
+  retryCount: 0,
 
   // Gantt Timeline state
   plotBeats: [],
@@ -136,6 +151,11 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
+  // Error handling actions
+  setLoadingError: (error) => set({ loadingError: error }),
+  setIsLoading: (loading) => set({ isLoading: loading }),
+  clearError: () => set({ loadingError: null, retryCount: 0 }),
+
   // Timeline Orchestrator actions
   setTravelLegs: (legs) => set({ travelLegs: legs }),
 
@@ -180,6 +200,11 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
   },
 
   loadComprehensiveData: async (manuscriptId: string) => {
+    const maxRetries = 3;
+    const { retryCount } = get();
+
+    set({ isLoading: true, loadingError: null });
+
     try {
       const response = await fetch(`/api/timeline/comprehensive/${manuscriptId}`);
 
@@ -199,14 +224,20 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
           is_resolved: Boolean(inc.is_resolved)
         }));
 
+        // Filter out events with missing or invalid data
+        const validEvents = (data.events || []).filter(e => e && e.id && e.description);
+
         set({
-          events: data.events,
+          events: validEvents,
           inconsistencies,
-          characterLocations: data.character_locations,
-          travelLegs: data.travel_legs,
+          characterLocations: data.character_locations || [],
+          travelLegs: data.travel_legs || [],
           travelProfile: data.travel_profile,
-          locationDistances: data.location_distances,
+          locationDistances: data.location_distances || [],
           stats: data.stats,
+          isLoading: false,
+          loadingError: null,
+          retryCount: 0,
         });
 
         // Automatically compute Gantt data after loading events (if outline already loaded)
@@ -216,6 +247,20 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
       }
     } catch (error) {
       console.error('Failed to load comprehensive timeline data:', error);
+
+      // Retry logic
+      if (retryCount < maxRetries) {
+        set({ retryCount: retryCount + 1 });
+        // Exponential backoff: 1s, 2s, 4s
+        const delay = Math.pow(2, retryCount) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return get().loadComprehensiveData(manuscriptId);
+      }
+
+      set({
+        isLoading: false,
+        loadingError: error instanceof Error ? error.message : 'Failed to load timeline data',
+      });
       throw error;
     }
   },

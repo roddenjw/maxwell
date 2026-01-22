@@ -11,6 +11,7 @@ from app.models.recap import Recap
 from app.models.outline import Outline, PlotBeat, OUTLINE_SCOPE_MANUSCRIPT, OUTLINE_SCOPE_SERIES, OUTLINE_SCOPE_WORLD
 from app.models.brainstorm import BrainstormSession, BrainstormIdea
 from app.models.entity_state import EntityTimelineState
+from app.models.foreshadowing import ForeshadowingPair, ForeshadowingType
 
 __all__ = [
     # World/Series hierarchy
@@ -47,4 +48,7 @@ __all__ = [
     "BrainstormIdea",
     # Entity State
     "EntityTimelineState",
+    # Foreshadowing
+    "ForeshadowingPair",
+    "ForeshadowingType",
 ]

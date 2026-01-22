@@ -61,6 +61,14 @@ import type {
   LocationGenerationRequest,
   UpdateIdeaRequest,
   IntegrateCodexRequest,
+  RefineIdeaRequest,
+  ConflictGenerationRequest,
+  SceneGenerationRequest,
+  CharacterWorksheetRequest,
+  ExpandEntityRequest,
+  CharacterWorksheet,
+  EntityExpansion,
+  RelatedEntity,
 } from '@/types/brainstorm';
 
 import type {
@@ -683,6 +691,46 @@ export const timelineApi = {
    */
   async getStats(manuscriptId: string): Promise<{ success: boolean; data: TimelineStats }> {
     return apiFetch(`/timeline/stats/${manuscriptId}`);
+  },
+
+  /**
+   * Get comprehensive journey summary for a character
+   */
+  async getCharacterJourneySummary(
+    characterId: string,
+    manuscriptId: string
+  ): Promise<{
+    character_id: string;
+    manuscript_id: string;
+    total_events: number;
+    unique_locations: number;
+    total_distance_km: number;
+    key_events: Array<{
+      event_id: string;
+      description: string;
+      order_index: number;
+      narrative_importance: number;
+      timestamp: string | null;
+    }>;
+    location_timeline: Array<{
+      event_id: string;
+      event_description: string;
+      location_id: string | null;
+      location_name: string;
+      order_index: number;
+      timestamp: string | null;
+      is_location_change: boolean;
+    }>;
+    emotional_arc: Array<{
+      order_index: number;
+      emotional_tone: string;
+      event_id: string;
+    }>;
+    first_appearance_index: number;
+    last_appearance_index: number;
+    location_changes: number;
+  }> {
+    return apiFetch(`/timeline/character-journey/${characterId}?manuscript_id=${manuscriptId}`);
   },
 };
 
@@ -1424,6 +1472,141 @@ export const brainstormingApi = {
 
     const data = await response.json();
     return data.data;
+  },
+
+  /**
+   * Refine an existing idea based on user feedback
+   */
+  async refineIdea(ideaId: string, request: RefineIdeaRequest): Promise<BrainstormIdea> {
+    const response = await fetch(`${API_BASE_URL}/brainstorming/ideas/${ideaId}/refine`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to refine idea');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Generate conflict ideas using AI
+   */
+  async generateConflicts(
+    sessionId: string,
+    request: ConflictGenerationRequest
+  ): Promise<BrainstormIdea[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/brainstorming/sessions/${sessionId}/generate/conflicts`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate conflicts');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Generate scene ideas using AI
+   */
+  async generateScenes(
+    sessionId: string,
+    request: SceneGenerationRequest
+  ): Promise<BrainstormIdea[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/brainstorming/sessions/${sessionId}/generate/scenes`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate scenes');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Generate character development worksheet
+   */
+  async generateCharacterWorksheet(
+    sessionId: string,
+    request: CharacterWorksheetRequest
+  ): Promise<{ success: boolean; worksheet: CharacterWorksheet }> {
+    const response = await fetch(
+      `${API_BASE_URL}/brainstorming/sessions/${sessionId}/generate/character-worksheet`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate character worksheet');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Expand an existing entity with AI-generated content
+   */
+  async expandEntity(
+    entityId: string,
+    request: ExpandEntityRequest
+  ): Promise<{ success: boolean; entity_id: string; expansion: EntityExpansion }> {
+    const response = await fetch(`${API_BASE_URL}/brainstorming/entities/${entityId}/expand`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to expand entity');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Generate new entities related to an existing one
+   */
+  async generateRelatedEntities(
+    entityId: string,
+    request: ExpandEntityRequest
+  ): Promise<{ success: boolean; source_entity_id: string; related_entities: RelatedEntity[] }> {
+    const response = await fetch(
+      `${API_BASE_URL}/brainstorming/entities/${entityId}/generate-related`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate related entities');
+    }
+
+    return response.json();
   },
 };
 
@@ -2172,6 +2355,184 @@ export const seriesOutlineApi = {
   },
 };
 
+// ==================== Foreshadowing API ====================
+
+import type {
+  ForeshadowingPair,
+  ForeshadowingType,
+  ForeshadowingStats,
+  PayoffSuggestion,
+} from '@/types/foreshadowing';
+
+export const foreshadowingApi = {
+  /**
+   * Create a new foreshadowing pair
+   */
+  async createPair(data: {
+    manuscript_id: string;
+    foreshadowing_event_id: string;
+    foreshadowing_type: ForeshadowingType;
+    foreshadowing_text: string;
+    payoff_event_id?: string;
+    payoff_text?: string;
+    confidence?: number;
+    notes?: string;
+  }): Promise<ForeshadowingPair> {
+    const response = await apiFetch<{ success: boolean; data: ForeshadowingPair }>(
+      '/foreshadowing/pairs',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Get all foreshadowing pairs for a manuscript
+   */
+  async getPairs(
+    manuscriptId: string,
+    options?: {
+      include_resolved?: boolean;
+      foreshadowing_type?: ForeshadowingType;
+    }
+  ): Promise<ForeshadowingPair[]> {
+    const params = new URLSearchParams();
+    if (options?.include_resolved !== undefined) {
+      params.set('include_resolved', String(options.include_resolved));
+    }
+    if (options?.foreshadowing_type) {
+      params.set('foreshadowing_type', options.foreshadowing_type);
+    }
+    const queryString = params.toString();
+    const url = `/foreshadowing/pairs/${manuscriptId}${queryString ? `?${queryString}` : ''}`;
+    const response = await apiFetch<{ success: boolean; data: ForeshadowingPair[] }>(url);
+    return response.data;
+  },
+
+  /**
+   * Get a single foreshadowing pair by ID
+   */
+  async getPair(pairId: string): Promise<ForeshadowingPair> {
+    const response = await apiFetch<{ success: boolean; data: ForeshadowingPair }>(
+      `/foreshadowing/pairs/single/${pairId}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Update a foreshadowing pair
+   */
+  async updatePair(
+    pairId: string,
+    data: {
+      foreshadowing_type?: ForeshadowingType;
+      foreshadowing_text?: string;
+      payoff_event_id?: string;
+      payoff_text?: string;
+      confidence?: number;
+      notes?: string;
+    }
+  ): Promise<ForeshadowingPair> {
+    const response = await apiFetch<{ success: boolean; data: ForeshadowingPair }>(
+      `/foreshadowing/pairs/${pairId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete a foreshadowing pair
+   */
+  async deletePair(pairId: string): Promise<void> {
+    await apiFetch(`/foreshadowing/pairs/${pairId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Link a payoff event to a foreshadowing setup
+   */
+  async linkPayoff(
+    pairId: string,
+    data: {
+      payoff_event_id: string;
+      payoff_text: string;
+    }
+  ): Promise<ForeshadowingPair> {
+    const response = await apiFetch<{ success: boolean; data: ForeshadowingPair }>(
+      `/foreshadowing/pairs/${pairId}/link-payoff`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Unlink a payoff from a foreshadowing setup
+   */
+  async unlinkPayoff(pairId: string): Promise<ForeshadowingPair> {
+    const response = await apiFetch<{ success: boolean; data: ForeshadowingPair }>(
+      `/foreshadowing/pairs/${pairId}/unlink-payoff`,
+      {
+        method: 'POST',
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Get unresolved foreshadowing pairs (Chekhov violations)
+   */
+  async getUnresolved(manuscriptId: string): Promise<ForeshadowingPair[]> {
+    const response = await apiFetch<{ success: boolean; data: ForeshadowingPair[]; count: number }>(
+      `/foreshadowing/unresolved/${manuscriptId}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get foreshadowing pairs involving a specific event
+   */
+  async getForEvent(eventId: string): Promise<{
+    setups: ForeshadowingPair[];
+    payoffs: ForeshadowingPair[];
+  }> {
+    const response = await apiFetch<{
+      success: boolean;
+      data: { setups: ForeshadowingPair[]; payoffs: ForeshadowingPair[] };
+    }>(`/foreshadowing/event/${eventId}`);
+    return response.data;
+  },
+
+  /**
+   * Get foreshadowing statistics for a manuscript
+   */
+  async getStats(manuscriptId: string): Promise<ForeshadowingStats> {
+    const response = await apiFetch<{ success: boolean; data: ForeshadowingStats }>(
+      `/foreshadowing/stats/${manuscriptId}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get suggested potential payoff events for a setup
+   */
+  async getSuggestions(pairId: string): Promise<PayoffSuggestion[]> {
+    const response = await apiFetch<{ success: boolean; data: PayoffSuggestion[] }>(
+      `/foreshadowing/suggestions/${pairId}`
+    );
+    return response.data;
+  },
+};
+
+
 /**
  * Health check
  */
@@ -2195,5 +2556,6 @@ export default {
   worlds: worldsApi,
   entityState: entityStateApi,
   seriesOutline: seriesOutlineApi,
+  foreshadowing: foreshadowingApi,
   healthCheck,
 };

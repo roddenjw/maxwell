@@ -1,6 +1,6 @@
 /**
  * BrainstormingModal - Main modal for AI-powered brainstorming
- * Multi-type ideation: Characters, Plots, Locations
+ * Multi-type ideation: Characters, Plots, Locations, Conflicts, Scenes
  */
 
 import { useEffect, useState } from 'react';
@@ -8,12 +8,15 @@ import { useBrainstormStore } from '@/stores/brainstormStore';
 import CharacterBrainstorm from './CharacterBrainstorm';
 import PlotBrainstorm from './PlotBrainstorm';
 import LocationBrainstorm from './LocationBrainstorm';
+import ConflictBrainstorm from './ConflictBrainstorm';
+import SceneBrainstorm from './SceneBrainstorm';
 import IdeaResultsPanel from './IdeaResultsPanel';
 import IdeaIntegrationPanel from './IdeaIntegrationPanel';
 import SessionHistoryPanel from './SessionHistoryPanel';
+import { MindMapCanvas } from './MindMap';
 
-type IdeaType = 'character' | 'plot' | 'location';
-type ActiveTab = 'generate' | 'results' | 'history';
+type IdeaType = 'character' | 'plot' | 'location' | 'conflict' | 'scene';
+type ActiveTab = 'generate' | 'results' | 'history' | 'mindmap';
 
 export default function BrainstormingModal() {
   const {
@@ -68,6 +71,10 @@ export default function BrainstormingModal() {
         return 'PLOT_BEAT';
       case 'location':
         return 'WORLD';
+      case 'conflict':
+        return 'CONFLICT';
+      case 'scene':
+        return 'SCENE';
       default:
         return 'CHARACTER';
     }
@@ -132,11 +139,15 @@ export default function BrainstormingModal() {
               {ideaType === 'character' && 'Character Brainstorming'}
               {ideaType === 'plot' && 'Plot Brainstorming'}
               {ideaType === 'location' && 'Location Brainstorming'}
+              {ideaType === 'conflict' && 'Conflict Brainstorming'}
+              {ideaType === 'scene' && 'Scene Brainstorming'}
             </h2>
             <p className="text-sm text-gray-600 mt-1">
               {ideaType === 'character' && 'AI-powered character generation with detailed personality, backstory, and motivations'}
               {ideaType === 'plot' && 'Generate compelling plot ideas, conflicts, twists, and subplots'}
               {ideaType === 'location' && 'Create immersive locations with rich worldbuilding details'}
+              {ideaType === 'conflict' && 'Generate layered conflict scenarios with stakes, escalation, and resolution paths'}
+              {ideaType === 'scene' && 'Create structured scene ideas with beats, emotional arcs, and dialogue moments'}
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -163,7 +174,7 @@ export default function BrainstormingModal() {
 
         {/* Type Selection Tabs */}
         <div className="bg-gray-50 border-b border-gray-200">
-          <div className="flex px-6 py-2 gap-2">
+          <div className="flex px-6 py-2 gap-2 flex-wrap">
             <button
               onClick={() => handleIdeaTypeChange('character')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -193,6 +204,26 @@ export default function BrainstormingModal() {
               }`}
             >
               🌍 Locations
+            </button>
+            <button
+              onClick={() => handleIdeaTypeChange('conflict')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                ideaType === 'conflict'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              ⚔️ Conflicts
+            </button>
+            <button
+              onClick={() => handleIdeaTypeChange('scene')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                ideaType === 'scene'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              🎬 Scenes
             </button>
           </div>
         </div>
@@ -226,6 +257,16 @@ export default function BrainstormingModal() {
               )}
             </button>
             <button
+              onClick={() => setActiveTab('mindmap')}
+              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'mindmap'
+                  ? 'border-purple-500 text-purple-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Mind Map
+            </button>
+            <button
               onClick={() => setActiveTab('history')}
               className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'history'
@@ -245,6 +286,8 @@ export default function BrainstormingModal() {
               {ideaType === 'character' && <CharacterBrainstorm />}
               {ideaType === 'plot' && <PlotBrainstorm />}
               {ideaType === 'location' && <LocationBrainstorm />}
+              {ideaType === 'conflict' && <ConflictBrainstorm />}
+              {ideaType === 'scene' && <SceneBrainstorm />}
             </div>
           )}
 
@@ -259,6 +302,18 @@ export default function BrainstormingModal() {
               <div className="overflow-y-auto">
                 <IdeaIntegrationPanel />
               </div>
+            </div>
+          )}
+
+          {activeTab === 'mindmap' && modalManuscriptId && (
+            <div className="h-full">
+              <MindMapCanvas
+                manuscriptId={modalManuscriptId}
+                onSave={(nodes, connections) => {
+                  console.log('Mind map saved:', { nodes, connections });
+                  // TODO: Persist to backend
+                }}
+              />
             </div>
           )}
 

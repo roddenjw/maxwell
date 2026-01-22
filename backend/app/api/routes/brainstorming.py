@@ -91,6 +91,45 @@ class IntegrateCodexRequest(BaseModel):
     entity_type: Optional[str] = None
 
 
+class RefineIdeaRequest(BaseModel):
+    api_key: str
+    feedback: str  # User feedback like "make darker", "more comedic", "stronger motivation"
+    direction: str = "refine"  # "refine", "expand", "contrast", "combine"
+    combine_with_idea_id: Optional[str] = None  # For combining two ideas
+
+
+class ConflictGenerationRequest(BaseModel):
+    api_key: str
+    genre: str
+    premise: str
+    character_ids: Optional[List[str]] = None  # Optional characters to involve
+    conflict_type: str = "any"  # "internal", "interpersonal", "external", "societal", "any"
+    num_ideas: int = 5
+
+
+class SceneGenerationRequest(BaseModel):
+    api_key: str
+    genre: str
+    premise: str
+    beat_id: Optional[str] = None  # Optional outline beat to base scene on
+    character_ids: Optional[List[str]] = None  # Characters in the scene
+    location_id: Optional[str] = None  # Optional location setting
+    scene_purpose: str = "any"  # "introduction", "conflict", "revelation", "climax", "resolution", "any"
+    num_ideas: int = 3
+
+
+class CharacterWorksheetRequest(BaseModel):
+    api_key: str
+    character_id: Optional[str] = None  # Existing entity to develop
+    character_name: Optional[str] = None  # Or just a name for new character
+    worksheet_type: str = "full"  # "full", "backstory", "psychology", "voice", "relationships"
+
+
+class ExpandEntityRequest(BaseModel):
+    api_key: str
+    expansion_type: str = "deepen"  # "deepen", "relationships", "history", "secrets", "conflicts"
+
+
 # ===== Session Management Endpoints =====
 
 @router.post("/sessions", response_model=SessionResponse)
@@ -579,6 +618,353 @@ async def get_session_stats(
             raise HTTPException(status_code=404, detail="Session not found")
 
         return {"success": True, "data": stats}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Idea Refinement Endpoints =====
+
+@router.post("/ideas/{idea_id}/refine", response_model=IdeaResponse)
+async def refine_idea(
+    idea_id: str,
+    request: RefineIdeaRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Refine an existing idea based on user feedback.
+    Creates a new refined version while preserving the original.
+    """
+    try:
+        service = BrainstormingService(db)
+
+        # Get the original idea
+        original_idea = db.query(BrainstormIdea).filter(BrainstormIdea.id == idea_id).first()
+        if not original_idea:
+            raise HTTPException(status_code=404, detail="Idea not found")
+
+        # Get combine target if specified
+        combine_idea = None
+        if request.combine_with_idea_id:
+            combine_idea = db.query(BrainstormIdea).filter(
+                BrainstormIdea.id == request.combine_with_idea_id
+            ).first()
+
+        # Generate refined idea
+        refined_idea = await service.refine_idea(
+            original_idea=original_idea,
+            api_key=request.api_key,
+            feedback=request.feedback,
+            direction=request.direction,
+            combine_with=combine_idea
+        )
+
+        return IdeaResponse(
+            id=refined_idea.id,
+            session_id=refined_idea.session_id,
+            idea_type=refined_idea.idea_type,
+            title=refined_idea.title,
+            description=refined_idea.description,
+            idea_metadata=refined_idea.idea_metadata,
+            is_selected=refined_idea.is_selected,
+            user_notes=refined_idea.user_notes,
+            edited_content=refined_idea.edited_content,
+            integrated_to_outline=refined_idea.integrated_to_outline,
+            integrated_to_codex=refined_idea.integrated_to_codex,
+            plot_beat_id=refined_idea.plot_beat_id,
+            entity_id=refined_idea.entity_id,
+            ai_cost=refined_idea.ai_cost,
+            ai_tokens=refined_idea.ai_tokens,
+            ai_model=refined_idea.ai_model,
+            created_at=refined_idea.created_at.isoformat(),
+            updated_at=refined_idea.updated_at.isoformat()
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Conflict Generation Endpoints =====
+
+@router.post("/sessions/{session_id}/generate/conflicts", response_model=List[IdeaResponse])
+async def generate_conflict_ideas(
+    session_id: str,
+    request: ConflictGenerationRequest,
+    db: Session = Depends(get_db)
+):
+    """Generate conflict scenario ideas using AI"""
+    try:
+        service = BrainstormingService(db)
+
+        # Get session to retrieve context
+        session = service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get specified characters if any
+        characters = []
+        if request.character_ids:
+            characters = db.query(Entity).filter(
+                Entity.id.in_(request.character_ids),
+                Entity.type == 'CHARACTER'
+            ).all()
+        else:
+            # Get all characters for context
+            characters = db.query(Entity).filter(
+                Entity.manuscript_id == session.manuscript_id,
+                Entity.type == 'CHARACTER'
+            ).all()
+
+        # Generate conflict ideas
+        ideas = await service.generate_conflict_ideas(
+            session_id=session_id,
+            api_key=request.api_key,
+            genre=request.genre,
+            premise=request.premise,
+            characters=characters,
+            conflict_type=request.conflict_type,
+            num_ideas=request.num_ideas
+        )
+
+        return [
+            IdeaResponse(
+                id=idea.id,
+                session_id=idea.session_id,
+                idea_type=idea.idea_type,
+                title=idea.title,
+                description=idea.description,
+                idea_metadata=idea.idea_metadata,
+                is_selected=idea.is_selected,
+                user_notes=idea.user_notes,
+                edited_content=idea.edited_content,
+                integrated_to_outline=idea.integrated_to_outline,
+                integrated_to_codex=idea.integrated_to_codex,
+                plot_beat_id=idea.plot_beat_id,
+                entity_id=idea.entity_id,
+                ai_cost=idea.ai_cost,
+                ai_tokens=idea.ai_tokens,
+                ai_model=idea.ai_model,
+                created_at=idea.created_at.isoformat(),
+                updated_at=idea.updated_at.isoformat()
+            )
+            for idea in ideas
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Scene Generation Endpoints =====
+
+@router.post("/sessions/{session_id}/generate/scenes", response_model=List[IdeaResponse])
+async def generate_scene_ideas(
+    session_id: str,
+    request: SceneGenerationRequest,
+    db: Session = Depends(get_db)
+):
+    """Generate scene ideas using AI"""
+    try:
+        service = BrainstormingService(db)
+
+        # Get session to retrieve context
+        session = service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get optional entities
+        characters = []
+        if request.character_ids:
+            characters = db.query(Entity).filter(
+                Entity.id.in_(request.character_ids),
+                Entity.type == 'CHARACTER'
+            ).all()
+
+        location = None
+        if request.location_id:
+            location = db.query(Entity).filter(
+                Entity.id == request.location_id,
+                Entity.type == 'LOCATION'
+            ).first()
+
+        beat = None
+        if request.beat_id:
+            beat = db.query(PlotBeat).filter(PlotBeat.id == request.beat_id).first()
+
+        # Generate scene ideas
+        ideas = await service.generate_scene_ideas(
+            session_id=session_id,
+            api_key=request.api_key,
+            genre=request.genre,
+            premise=request.premise,
+            characters=characters,
+            location=location,
+            beat=beat,
+            scene_purpose=request.scene_purpose,
+            num_ideas=request.num_ideas
+        )
+
+        return [
+            IdeaResponse(
+                id=idea.id,
+                session_id=idea.session_id,
+                idea_type=idea.idea_type,
+                title=idea.title,
+                description=idea.description,
+                idea_metadata=idea.idea_metadata,
+                is_selected=idea.is_selected,
+                user_notes=idea.user_notes,
+                edited_content=idea.edited_content,
+                integrated_to_outline=idea.integrated_to_outline,
+                integrated_to_codex=idea.integrated_to_codex,
+                plot_beat_id=idea.plot_beat_id,
+                entity_id=idea.entity_id,
+                ai_cost=idea.ai_cost,
+                ai_tokens=idea.ai_tokens,
+                ai_model=idea.ai_model,
+                created_at=idea.created_at.isoformat(),
+                updated_at=idea.updated_at.isoformat()
+            )
+            for idea in ideas
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Character Development Worksheet Endpoints =====
+
+@router.post("/sessions/{session_id}/generate/character-worksheet")
+async def generate_character_worksheet(
+    session_id: str,
+    request: CharacterWorksheetRequest,
+    db: Session = Depends(get_db)
+):
+    """Generate a deep character development worksheet"""
+    try:
+        service = BrainstormingService(db)
+
+        # Get session
+        session = service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get character entity if specified
+        character = None
+        if request.character_id:
+            character = db.query(Entity).filter(
+                Entity.id == request.character_id,
+                Entity.type == 'CHARACTER'
+            ).first()
+            if not character:
+                raise HTTPException(status_code=404, detail="Character not found")
+
+        # Get other characters for relationship context
+        other_characters = db.query(Entity).filter(
+            Entity.manuscript_id == session.manuscript_id,
+            Entity.type == 'CHARACTER'
+        ).all()
+        if character:
+            other_characters = [c for c in other_characters if c.id != character.id]
+
+        # Generate worksheet
+        worksheet = await service.generate_character_worksheet(
+            session_id=session_id,
+            api_key=request.api_key,
+            character=character,
+            character_name=request.character_name,
+            worksheet_type=request.worksheet_type,
+            other_characters=other_characters
+        )
+
+        return {
+            "success": True,
+            "worksheet": worksheet
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== AI Entity Expansion Endpoints =====
+
+@router.post("/entities/{entity_id}/expand")
+async def expand_entity(
+    entity_id: str,
+    request: ExpandEntityRequest,
+    db: Session = Depends(get_db)
+):
+    """Expand an existing entity with AI-generated content"""
+    try:
+        service = BrainstormingService(db)
+
+        # Get the entity
+        entity = db.query(Entity).filter(Entity.id == entity_id).first()
+        if not entity:
+            raise HTTPException(status_code=404, detail="Entity not found")
+
+        # Get other entities for context
+        other_entities = db.query(Entity).filter(
+            Entity.manuscript_id == entity.manuscript_id,
+            Entity.id != entity_id
+        ).all()
+
+        # Expand the entity
+        expansion = await service.expand_entity(
+            entity=entity,
+            api_key=request.api_key,
+            expansion_type=request.expansion_type,
+            other_entities=other_entities
+        )
+
+        return {
+            "success": True,
+            "entity_id": entity_id,
+            "expansion": expansion
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/entities/{entity_id}/generate-related")
+async def generate_related_entities(
+    entity_id: str,
+    request: ExpandEntityRequest,
+    db: Session = Depends(get_db)
+):
+    """Generate new entities that are related to an existing entity"""
+    try:
+        service = BrainstormingService(db)
+
+        # Get the source entity
+        entity = db.query(Entity).filter(Entity.id == entity_id).first()
+        if not entity:
+            raise HTTPException(status_code=404, detail="Entity not found")
+
+        # Get existing entities to avoid duplicates
+        existing_entities = db.query(Entity).filter(
+            Entity.manuscript_id == entity.manuscript_id
+        ).all()
+
+        # Generate related entities
+        related = await service.generate_related_entities(
+            source_entity=entity,
+            api_key=request.api_key,
+            relationship_type=request.expansion_type,
+            existing_entities=existing_entities
+        )
+
+        return {
+            "success": True,
+            "source_entity_id": entity_id,
+            "related_entities": related
+        }
     except HTTPException:
         raise
     except Exception as e:

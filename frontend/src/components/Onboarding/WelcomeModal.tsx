@@ -55,6 +55,51 @@ export default function WelcomeModal({ onComplete, onSkip }: WelcomeModalProps) 
       )
     },
     {
+      title: "Story Planning",
+      icon: "🎯",
+      description: "From ideas to structured outline",
+      content: (
+        <div className="space-y-4">
+          <div className="bg-white border-2 border-bronze/30 rounded-sm p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">💡</span>
+              <div>
+                <h4 className="font-sans font-semibold text-midnight">Brainstorming</h4>
+                <p className="text-sm text-faded-ink">
+                  AI-powered idea generation for characters, plots, conflicts, and scenes.
+                  Refine ideas with feedback until they're perfect.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white border-2 border-bronze/30 rounded-sm p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">📋</span>
+              <div>
+                <h4 className="font-sans font-semibold text-midnight">Outline</h4>
+                <p className="text-sm text-faded-ink">
+                  Structure your story with beats and scenes. Get AI suggestions
+                  to fill gaps and analyze your pacing.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white border-2 border-bronze/30 rounded-sm p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">🗺️</span>
+              <div>
+                <h4 className="font-sans font-semibold text-midnight">Mind Map</h4>
+                <p className="text-sm text-faded-ink">
+                  Visualize connections between characters, plots, and themes
+                  on a drag-and-drop canvas.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
       title: "Smart Features",
       icon: "🧠",
       description: "AI-powered writing assistance",
@@ -66,7 +111,8 @@ export default function WelcomeModal({ onComplete, onSkip }: WelcomeModalProps) 
               <div>
                 <h4 className="font-sans font-semibold text-midnight">Codex</h4>
                 <p className="text-sm text-faded-ink">
-                  Automatic character and world tracking. Never forget a detail again.
+                  Automatic character and world tracking. Expand entities with
+                  AI-generated backstories, relationships, and secrets.
                 </p>
               </div>
             </div>
@@ -77,7 +123,7 @@ export default function WelcomeModal({ onComplete, onSkip }: WelcomeModalProps) 
               <div>
                 <h4 className="font-sans font-semibold text-midnight">Timeline</h4>
                 <p className="text-sm text-faded-ink">
-                  Track events and maintain consistency across your story.
+                  Track events, detect inconsistencies, and maintain story continuity.
                 </p>
               </div>
             </div>

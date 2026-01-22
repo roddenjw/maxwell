@@ -6,8 +6,9 @@
 import { useState, useEffect } from 'react';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useCodexStore } from '@/stores/codexStore';
-import { timelineApi } from '@/lib/api';
+import { timelineApi, codexApi } from '@/lib/api';
 import { getManuscriptScale, getLayoutConfig } from '@/lib/timelineUtils';
+import { EntityType } from '@/types/codex';
 
 interface CharacterNetworkProps {
   manuscriptId: string;
@@ -31,9 +32,11 @@ interface NetworkEdge {
 
 export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps) {
   const { events, setEvents } = useTimelineStore();
-  const { entities } = useCodexStore();
+  const { entities, addEntity } = useCodexStore();
   const [loading, setLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [addingToCodex, setAddingToCodex] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   useEffect(() => {
     loadEvents();
@@ -384,15 +387,43 @@ export default function CharacterNetwork({ manuscriptId }: CharacterNetworkProps
               {/* Add to Codex button for detected persons */}
               {isDetectedPerson && (
                 <button
-                  className="w-full px-3 py-2 bg-bronze text-white text-sm font-sans hover:bg-opacity-90 transition-colors"
+                  className="w-full px-3 py-2 bg-bronze text-white text-sm font-sans hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ borderRadius: '2px' }}
-                  onClick={() => {
-                    // TODO: Implement add to Codex functionality
-                    alert(`Add "${selectedNodeData.name}" to Codex - Feature coming soon!`);
+                  disabled={addingToCodex}
+                  onClick={async () => {
+                    setAddError(null);
+                    setAddingToCodex(true);
+                    try {
+                      const newEntity = await codexApi.createEntity({
+                        manuscript_id: manuscriptId,
+                        name: selectedNodeData.name,
+                        type: EntityType.CHARACTER,
+                        attributes: {
+                          source: 'timeline_detection',
+                          appearances: selectedNodeData.appearances,
+                          auto_description: `Auto-detected character with ${selectedNodeData.appearances} appearance(s) in the timeline.`,
+                        },
+                        aliases: [],
+                      });
+                      // Add to local store
+                      addEntity(newEntity);
+                      // Clear selection to refresh the view
+                      setSelectedNode(null);
+                    } catch (err) {
+                      console.error('Failed to add to Codex:', err);
+                      setAddError(err instanceof Error ? err.message : 'Failed to add character');
+                    } finally {
+                      setAddingToCodex(false);
+                    }
                   }}
                 >
-                  + Add to Codex
+                  {addingToCodex ? 'Adding...' : '+ Add to Codex'}
                 </button>
+              )}
+              {addError && (
+                <p className="text-xs font-sans text-redline mt-2">
+                  {addError}
+                </p>
               )}
 
               {isDetectedPerson && (

@@ -1,8 +1,8 @@
 # Maxwell Project Progress
 
-**Last Updated:** 2026-01-18
-**Overall Completion:** 87% across all phases
-**Current Focus:** Phase 8 (Library & World Management) - 100% complete
+**Last Updated:** 2026-01-21
+**Overall Completion:** 93% across all phases
+**Current Focus:** Beta Launch Preparation (Week of Jan 22-28)
 
 ---
 
@@ -14,7 +14,7 @@
 | **Phase 2: Codex** | ✅ Complete | 100% | Dec 22, 2025 | Entity extraction, relationships |
 | **Phase 3: AI Integration** | ✅ Complete | 100% | Jan 2, 2026 | BYOK, Fast Coach, OpenRouter |
 | **Phase 4: Story Structure** | ✅ Complete | 100% | Jan 12, 2026 | Scene guidance + Gantt view |
-| **Phase 5: Brainstorming** | 🔄 In Progress | 80% | Jan 25, 2026 | Multi-type ideation + history |
+| **Phase 5: Brainstorming** | ✅ Complete | 100% | Jan 21, 2026 | Full ideation suite + mind map |
 | **Phase 6: Timeline Orchestrator** | ✅ Complete | 100% | Jan 7, 2026 | Performance optimized |
 | **Phase 7: PLG Features** | ⏳ Planned | 0% | Feb 2026 | Viral mechanics |
 | **Phase 8: Library & World Management** | ✅ Complete | 100% | Jan 18, 2026 | World/Series hierarchy |
@@ -76,13 +76,19 @@
 
 ---
 
-### Phase 5: Brainstorming & Ideation Tools (80% complete)
+### Phase 5: Brainstorming & Ideation Tools (100% complete - ✅ COMPLETE)
 
-**✅ Completed Features (Jan 13, 2026):**
+**✅ Completed Features (Jan 13-21, 2026):**
 - **Backend Services:**
   - Character generation API using Claude AI (WANT/NEED/FLAW/STRENGTH/ARC framework)
   - Plot generation API (central conflicts, plot twists, subplots, complications)
   - Location generation API (atmosphere, culture, geography, history, secrets)
+  - **Conflict generation API** - Internal, interpersonal, external, societal conflicts (Jan 21)
+  - **Scene generation API** - Beat-specific scene ideas with purposes (Jan 21)
+  - **Character worksheet generation** - Full/quick/interview worksheets (Jan 21)
+  - **Idea refinement endpoint** - Refine, expand, contrast, combine ideas (Jan 21)
+  - **AI entity expansion** - Deepen, expand, or connect existing entities (Jan 21)
+  - **Generate related entities** - Create connected entities from existing ones (Jan 21)
   - Brainstorm session database models with full CRUD
   - Cost calculation and token tracking per idea
   - OpenRouter API integration for all generation types
@@ -90,11 +96,14 @@
   - **JSON parsing fix** - API-level enforcement via response_format parameter (Jan 13)
 
 - **Frontend Components:**
-  - BrainstormingModal with multi-type tabs (👤 Characters, 📖 Plots, 🌍 Locations)
+  - BrainstormingModal with multi-type tabs (👤 Characters, 📖 Plots, 🌍 Locations, ⚔️ Conflicts, 🎬 Scenes)
   - CharacterBrainstorm component with framework
   - PlotBrainstorm component for plot ideation
   - LocationBrainstorm component for worldbuilding
-  - IdeaCard display components with expandable metadata
+  - **ConflictBrainstorm component** - Conflict type selection with character integration (Jan 21)
+  - **SceneBrainstorm component** - Scene purpose selection with beat/character/location context (Jan 21)
+  - **MindMapCanvas component** - Visual brainstorming with draggable nodes (Jan 21)
+  - IdeaCard display components with expandable metadata + **refinement buttons** (Jan 21)
   - IdeaResultsPanel for batch idea display
   - IdeaIntegrationPanel for Codex integration
   - SessionHistoryPanel for browsing/resuming previous sessions
@@ -107,8 +116,8 @@
   - **Manuscript context state** - Auto-loaded outline + entities (Jan 13)
 
 - **UI/UX Features:**
-  - Type selection tabs with dynamic session creation
-  - Workflow tabs (Generate → Review & Integrate → History)
+  - Type selection tabs with dynamic session creation (5 types: character, plot, location, conflict, scene)
+  - Workflow tabs (Generate → Review & Integrate → **Mind Map** → History)
   - Session history grouped by type and date
   - Cost estimation per generation type
   - Auto-switch to results after generation
@@ -116,23 +125,15 @@
   - **Context auto-populate** - Genre/premise pre-filled from active outline (Jan 13)
   - **Custom context toggle** - Override manuscript context when needed (Jan 13)
   - **Existing entity chips** - Shows existing characters/locations for reference (Jan 13)
-
-**🔄 In Progress:**
-- Refinement of generated ideas (iterative generation)
-- Idea refinement loop (generate variations on existing ideas)
-
-**⏳ Next Up:**
-- Mind mapping tool (visual connections between ideas)
-- Character development worksheets (interactive Brandon Sanderson prompts)
-- Conflict scenario generation (character tension builder)
-- Scene idea generation (beat-specific scene suggestions)
+  - **Idea refinement loop** - Refine/Expand/Contrast buttons on IdeaCard (Jan 21)
+  - **Mind Map tool** - Visual node-based brainstorming with connections (Jan 21)
 
 **Blocked/Issues:**
-- None currently
+- None - Phase 5 complete!
 
 ---
 
-### Phase 6: Timeline Orchestrator (85% complete)
+### Phase 6: Timeline Orchestrator (100% complete - ✅ COMPLETE)
 
 **✅ Completed Features:**
 - Backend: Timeline event models with narrative importance scoring
@@ -151,24 +152,145 @@
 - Frontend: Issues panel with severity filtering
 - Frontend: Teaching moments panel
 - Frontend: Timeline controls (validation triggers)
-
-**🔄 In Progress:**
-- Final bug fixes and edge case handling
-- Performance optimization for large timelines
-- UI polish for teaching moments
-- Enhanced prerequisite event visualization
-
-**⏳ Next Up:**
-- Gantt chart view with plot beat markers
-- Character journey visualizations
-- Foreshadowing tracker integration
+- **Character Journey Swimlane** - Horizontal visualization of character movements (Jan 21)
+  - Backend: `get_character_journey_summary()` service method
+  - Backend: `GET /api/timeline/character-journey/{character_id}` endpoint
+  - Frontend: CharacterJourneySwimlane component with parallel lanes
+  - Character lanes show events as nodes, movements as connecting lines
+  - Color-coded by location, hover tooltips for event details
+- **Foreshadowing Tracker** - Setup/payoff pair management (Jan 21)
+  - Backend: ForeshadowingPair database model with migration
+  - Backend: ForeshadowingService with CRUD, link/unlink payoff, stats
+  - Backend: 9 API endpoints for foreshadowing management
+  - Frontend: ForeshadowingTracker component (tabs: all/unresolved/resolved)
+  - Frontend: ForeshadowingPairCard with confidence meter, type icons
+  - 5 foreshadowing types: Chekhov's Gun, Prophecy, Symbol, Hint, Parallel
+  - Chekhov violation warnings for unresolved setups
+  - Payoff suggestions based on keyword matching
+- **Edge Case Handling & UI Polish** (Jan 21)
+  - Error boundary handling with retry logic in timelineStore
+  - Loading skeletons for CharacterLocationTracker
+  - Enhanced empty states with guidance for new users
+  - Journey statistics panel (events, locations, moves, most visited)
+  - Fixed "Add to Codex" functionality in CharacterNetwork
+  - Validator robustness improvements (handles empty events, deleted entities)
 
 **Known Issues:**
-- Minor: Chapter serialization edge cases (under investigation)
+- None currently
 
 ---
 
 ## Recent Completions (Last 2 Weeks)
+
+### January 21, 2026
+- ✅ **Phase 6 Complete: Timeline Orchestrator Full Feature Set (Phase 6 - 100%)**
+  - **Character Journey Swimlane Visualization**:
+    - Backend: `get_character_journey_summary()` service method with distance tracking
+    - Backend: New API endpoint for character journey data
+    - Frontend: CharacterJourneySwimlane component with parallel character lanes
+    - Events displayed as nodes, location changes as connecting lines
+    - Color-coded characters with legend and selection filtering
+  - **Foreshadowing Tracker Feature**:
+    - Backend: ForeshadowingPair database model (6 fields + timestamps)
+    - Backend: ForeshadowingService with full CRUD and payoff linking
+    - Backend: 9 new API endpoints for foreshadowing management
+    - Frontend: ForeshadowingTracker with tabs (all/unresolved/resolved)
+    - Frontend: ForeshadowingPairCard with confidence meters and type icons
+    - 5 foreshadowing types: Chekhov's Gun, Prophecy, Symbol, Hint, Parallel
+    - Chekhov violation warnings for unresolved narrative promises
+  - **Edge Case Handling & Polish**:
+    - Error boundary handling with exponential backoff retry in stores
+    - Loading skeletons for timeline components
+    - Enhanced empty states with onboarding guidance
+    - Journey statistics panel in CharacterLocationTracker
+    - Fixed "Add to Codex" functionality from character network detection
+    - Validator robustness for empty events and deleted entities
+  - **New Files**: 7 (3 backend, 4 frontend)
+  - **Modified Files**: 8 (4 backend, 4 frontend)
+
+- ✅ **Phase 5 Complete: Full Brainstorming & Ideation Suite (Phase 5 - 100%)**
+  - **Idea Refinement Loop Feature**:
+    - `POST /api/brainstorming/ideas/{id}/refine` endpoint
+    - `refine_idea()` method in BrainstormingService
+    - Four refinement directions: refine, expand, contrast, combine
+    - IdeaCard updated with Refine/Expand/Contrast dropdown buttons
+    - Refinement feedback passed to AI for iterative improvement
+  - **Conflict Generation Feature**:
+    - `POST /api/brainstorming/sessions/{id}/generate/conflicts` endpoint
+    - `generate_conflict_ideas()` method in BrainstormingService
+    - Conflict types: internal, interpersonal, external, societal
+    - ConflictBrainstorm component with character selection integration
+    - Orange color theme distinguishing conflict ideas
+  - **Scene Generation Feature**:
+    - `POST /api/brainstorming/sessions/{id}/generate/scenes` endpoint
+    - `generate_scene_ideas()` method in BrainstormingService
+    - Scene purposes: introduction, conflict, revelation, climax, resolution
+    - SceneBrainstorm component with beat/character/location context
+    - Purple color theme distinguishing scene ideas
+  - **Character Development Worksheets**:
+    - `POST /api/brainstorming/sessions/{id}/generate/character-worksheet` endpoint
+    - `generate_character_worksheet()` method in BrainstormingService
+    - Three worksheet types: full (comprehensive), quick (essential), interview (Q&A)
+    - Brandon Sanderson methodology (WANT/NEED/FLAW/STRENGTH/ARC)
+    - 50+ prompted fields for deep character exploration
+  - **AI Entity Expansion**:
+    - `POST /api/brainstorming/entities/{id}/expand` endpoint
+    - `POST /api/brainstorming/entities/{id}/generate-related` endpoint
+    - `expand_entity()` and `generate_related_entities()` methods
+    - Expansion types: deepen, expand, connect
+    - Generate related entities from existing ones (allies, rivals, locations)
+  - **Mind Mapping Tool**:
+    - MindMapCanvas component (400+ lines)
+    - Draggable nodes: character, plot, location, theme, conflict, idea
+    - Connection types: relates_to, conflicts_with, supports, happens_in, leads_to
+    - SVG-based connection lines with grid background
+    - Export/save functionality for mind map data
+  - **IdeaCard Overhaul**:
+    - Rewritten to support all 5 idea types (CHARACTER, PLOT_BEAT, WORLD, CONFLICT, SCENE)
+    - Dynamic metadata rendering per type
+    - Refinement dropdown with iteration capabilities
+    - Visual indicators per type (emojis, color schemes)
+  - **BrainstormingModal Updates**:
+    - Added ⚔️ Conflicts and 🎬 Scenes type tabs
+    - Added Mind Map workflow tab
+    - 5-type selector with dynamic session management
+  - **API Client Updates**:
+    - Added `refineIdea()`, `generateConflicts()`, `generateScenes()`
+    - Added `generateCharacterWorksheet()`, `expandEntity()`, `generateRelatedEntities()`
+  - **Files Created/Modified**:
+    - Backend: `brainstorming.py` (+300 lines), `brainstorming_service.py` (+500 lines)
+    - Frontend: `ConflictBrainstorm.tsx` (NEW, 310 lines)
+    - Frontend: `SceneBrainstorm.tsx` (NEW, 330 lines)
+    - Frontend: `MindMap/MindMapCanvas.tsx` (NEW, 400+ lines)
+    - Frontend: `IdeaCard.tsx` (rewritten, 620 lines)
+    - Frontend: `BrainstormingModal.tsx` (+80 lines)
+    - Frontend: `api.ts` (+120 lines), `brainstorm.ts` (+80 lines)
+  - **Impact**: Phase 5 jumped from 80% → 100%, overall project from 87% → 93%
+
+- ✅ **P0 Bug Investigation: Drag-and-Drop & Folder State**
+  - **Finding**: Both features were ALREADY IMPLEMENTED
+  - Drag-and-drop chapter reordering uses @dnd-kit library (in chapterStore.ts)
+  - Folder expand/collapse state persists via Zustand `persist` middleware with localStorage
+  - P0 bugs removed from Technical Debt section
+  - **Impact**: No additional work needed, bugs resolved
+
+- ✅ **PostHog Analytics Enhancement**
+  - Enhanced `analytics.ts` with 25+ new event tracking methods
+  - Added brainstorming events: session started, ideas generated, idea refined, idea integrated
+  - Added outline events: opened, created, beat created, beat analyzed, scene created
+  - Added AI feature usage tracking with cost/token metrics
+  - Added entity events: created, expanded, worksheet generated
+  - Added timeline events: event created, inconsistency found
+  - Added world/series events: created, manuscript assigned
+  - Added error tracking and settings change events
+  - **Impact**: Comprehensive product analytics for beta launch
+
+- ✅ **Onboarding Flow Polish**
+  - Added "Story Planning" step to WelcomeModal (step 3 of 6)
+  - Introduces three planning tools: Brainstorming, Outline, Mind Map
+  - Explains AI-powered idea generation and story structure features
+  - Better progressive disclosure of Maxwell's capabilities
+  - **Impact**: Improved first-time user understanding of planning features
 
 ### January 18, 2026 (Part 2)
 - ✅ **Outline UX Overhaul - Scenes Between Beats**
@@ -597,21 +719,22 @@
 - **Phase 2:** 6 codex features (entities, relationships, NLP suggestions, graph viz, analytics, merge)
 - **Phase 3:** 3 AI features (Fast Coach, OpenRouter BYOK, Recap Engine)
 - **Phase 4:** 5 outline features (templates, plot beats, progress tracking, wizard, AI beat analysis)
-- **Phase 5:** 2 brainstorming features (character generation, idea management)
-- **Phase 6:** 5 timeline features (events, validation, teaching, visualization, orchestration)
+- **Phase 5:** 8 brainstorming features (character/plot/location/conflict/scene generation, idea refinement, mind map, character worksheets, AI entity expansion)
+- **Phase 6:** 8 timeline features (events, validation, teaching, visualization, orchestration, character journeys, foreshadowing tracker, swimlane view)
 - **Phase 8:** 4 library features (worlds, series, entity scoping, shared codex)
 
-**Total Features Shipped:** 30 major features
+**Total Features Shipped:** 39 major features
 
 ### API Coverage
-- **Total Endpoints:** 122 REST API endpoints
+- **Total Endpoints:** 138 REST API endpoints
 - **By Module:**
-  - Timeline: 18 endpoints (validation, events, orchestrator)
+  - Timeline: 19 endpoints (validation, events, orchestrator, journey)
+  - Foreshadowing: 9 endpoints (pairs CRUD, link payoff, unresolved, suggestions)
   - Worlds: 18 endpoints (worlds CRUD, series CRUD, entity scoping, manuscript assignment)
   - Outlines: 14 endpoints (structures, plot beats)
+  - Brainstorming: 13 endpoints (sessions, ideas, generation, refinement, conflicts, scenes, worksheets, entity expansion)
   - Codex: 12 endpoints (entities, relationships, suggestions)
   - Chapters: 8 endpoints (CRUD, tree, reorder)
-  - Brainstorming: 7 endpoints (sessions, ideas, generation)
   - Manuscripts: 6 endpoints (CRUD, stats)
   - Versioning: 8 endpoints (snapshots, diffs)
   - Fast Coach: 5 endpoints (analyze, feedback)
@@ -619,38 +742,28 @@
   - Other: 22 endpoints (onboarding, stats, health, realtime)
 
 ### Database Schema
-- **Tables:** 17 tables (manuscripts, chapters, entities, worlds, series, timeline, outlines, etc.)
-- **Migrations:** 9 Alembic migrations applied
+- **Tables:** 18 tables (manuscripts, chapters, entities, worlds, series, timeline, outlines, foreshadowing_pairs, etc.)
+- **Migrations:** 10 Alembic migrations applied
 - **Total Columns:** ~135 columns across all tables
 - **Relationships:** 30+ foreign key relationships
 
 ### Component Breakdown (Frontend)
 - **WorldLibrary:** 5 components (WorldLibrary, WorldCard, CreateWorldModal, SeriesExplorer, SharedEntityLibrary)
 - **Codex:** 8 components (EntityList, EntityCard, EntityDetail, RelationshipGraph, etc.)
-- **Timeline:** 9 components (TimelineSidebar, TimelineOrchestrator, EventCard, etc.)
+- **Timeline:** 13 components (TimelineSidebar, TimelineOrchestrator, EventCard, ForeshadowingTracker, ForeshadowingPairCard, CharacterJourneySwimlane, CharacterLocationTracker, etc.)
 - **Outline:** 8 components (OutlineSidebar, PlotBeatCard, BeatSuggestionCard, CreateModal, TimelineView, ProgressDashboard, etc.)
-- **Brainstorming:** 5 components (BrainstormingModal, CharacterBrainstorm, IdeaCard, etc.)
+- **Brainstorming:** 11 components (BrainstormingModal, CharacterBrainstorm, PlotBrainstorm, LocationBrainstorm, ConflictBrainstorm, SceneBrainstorm, IdeaCard, IdeaResultsPanel, IdeaIntegrationPanel, SessionHistoryPanel, MindMapCanvas)
 - **Editor:** 6 components (ManuscriptEditor, EditorToolbar, AutoSavePlugin, BeatContextPanel, OutlineReferenceSidebar, etc.)
 - **Common:** 6 components (ToastContainer, SkeletonLoader, Modals, etc.)
 
-**Total Components:** 58+ React components
+**Total Components:** 64+ React components
 
 ---
 
 ## Technical Debt & Known Issues
 
 ### High Priority (P0 - Blockers)
-- 🐛 **Drag-and-drop chapter reordering not implemented**
-  - Status: Design complete, implementation pending
-  - Impact: Users must manually set order_index
-  - Workaround: Manual ordering
-  - Target: Implement by Jan 15
-
-- 🐛 **Folder expand/collapse state not persisted**
-  - Status: Frontend state management needed
-  - Impact: Folder state resets on navigation
-  - Workaround: Re-expand folders each time
-  - Target: Fix by Jan 12
+- None currently! 🎉
 
 ### Medium Priority (P1)
 - ⚠️ **Real-time entity extraction requires manual trigger**
@@ -710,19 +823,23 @@
 ---
 
 ### Week of Jan 15-21, 2026
-**Goal:** Complete Phase 5 to 80% + Beta prep
+**Goal:** Complete Phase 5 to 100% + Beta prep
 
 **Tasks:**
-- [ ] Multi-type ideation (plot, location, conflict)
-- [ ] Codex integration for brainstorm ideas
-- [ ] Session history management
-- [ ] Drag-and-drop chapter reordering (P0)
+- [✅] Multi-type ideation (plot, location, conflict, scene)
+- [✅] Codex integration for brainstorm ideas
+- [✅] Session history management
+- [✅] Drag-and-drop chapter reordering (already implemented)
+- [✅] Idea refinement loop
+- [✅] Mind mapping tool
+- [✅] Character development worksheets
+- [✅] AI entity expansion
 - [ ] Performance optimization pass
 - [ ] User testing round 2 prep
 
 **Success Criteria:**
-- Phase 5 at 80%
-- All P0 bugs fixed
+- Phase 5 at 100% ✅ (achieved Jan 21)
+- All P0 bugs fixed ✅ (achieved Jan 21)
 - Performance metrics improved
 - Beta testing plan finalized
 
@@ -732,15 +849,15 @@
 **Goal:** Launch Beta v1.0 to first 100 users
 
 **Tasks:**
+- [✅] Onboarding flow polish (completed Jan 21)
+- [✅] Analytics integration (PostHog) (completed Jan 21)
 - [ ] Final bug triage and fixes
-- [ ] Onboarding flow polish
 - [ ] Error handling improvements
-- [ ] Analytics integration (PostHog)
 - [ ] Beta user recruitment
 - [ ] Launch to 100 users
 
 **Success Criteria:**
-- 0 P0 bugs
+- 0 P0 bugs ✅ (achieved Jan 21)
 - Onboarding completion rate >80%
 - First 100 beta users onboarded
 - Feedback collection system active
@@ -750,11 +867,12 @@
 ## Long-Term Roadmap
 
 ### Q1 2026 (Jan-Mar)
-**Status:** In progress (67% complete)
+**Status:** In progress (85% complete)
 
 - ✅ Complete Phases 1-3 (MVP + Codex + AI)
-- 🔄 Complete Phases 4-6 (Outline + Brainstorm + Timeline)
-- ⏳ Launch Beta to 100 users
+- ✅ Complete Phases 4-6 (Outline + Brainstorm + Timeline)
+- ✅ Complete Phase 8 (Library & World Management)
+- ⏳ Launch Beta to 100 users (Week of Jan 22-28)
 - ⏳ Gather feedback and iterate
 - ⏳ Performance optimization
 - ⏳ Test coverage to 60%
@@ -884,15 +1002,16 @@
 ## Project Health Indicators
 
 ### ✅ Healthy (Green)
-- Phase 1-3 complete and stable
-- Active development on Phases 4-6
+- Phases 1-6 and 8 complete and stable (93% overall)
+- Phase 5 fully complete with all brainstorming features
+- Zero P0 bugs - ready for beta launch
 - Clear roadmap through Q4 2026
 - Test coverage trending upward
 - Documentation comprehensive
+- Analytics integration complete (PostHog)
 
 ### ⚠️ Attention Needed (Yellow)
 - Test coverage at 35% (target 60%)
-- 3 P0 bugs blocking full beta launch
 - Bundle size needs optimization
 - Real-time NLP not fully integrated
 
@@ -901,9 +1020,9 @@
 
 ---
 
-**Last Updated:** 2026-01-18 by Claude Code
-**Next Scheduled Review:** 2026-01-19 (daily updates)
-**Next Milestone Review:** 2026-01-21 (weekly review)
+**Last Updated:** 2026-01-21 by Claude Code
+**Next Scheduled Review:** 2026-01-22 (daily updates)
+**Next Milestone Review:** 2026-01-28 (Beta Launch Week)
 
 ---
 

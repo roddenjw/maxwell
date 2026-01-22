@@ -23,3 +23,11 @@ export { default as TimelineTeachingPanel } from './TimelineTeachingPanel';
 export { default as TimelineVisualization } from './TimelineVisualization';
 export { default as TimelineEventCard } from './TimelineEventCard';
 export { default as TimelineEventForm } from './TimelineEventForm';
+
+// Character Journey Components
+export { default as CharacterJourneySwimlane } from './CharacterJourneySwimlane';
+export { default as CharacterLocationTracker } from './CharacterLocationTracker';
+
+// Foreshadowing Components
+export { default as ForeshadowingTracker } from './ForeshadowingTracker';
+export { default as ForeshadowingPairCard } from './ForeshadowingPairCard';

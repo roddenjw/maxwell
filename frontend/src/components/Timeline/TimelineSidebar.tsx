@@ -14,6 +14,7 @@ import CharacterLocationTracker from './CharacterLocationTracker';
 import ConflictTracker from './ConflictTracker';
 import TimelineOrchestrator from './TimelineOrchestrator';
 import GanttTimelineView from './GanttTimelineView';
+import ForeshadowingTracker from './ForeshadowingTracker';
 
 interface TimelineSidebarProps {
   manuscriptId: string;
@@ -38,6 +39,7 @@ export default function TimelineSidebar({
     { id: 'orchestrator' as const, label: 'Orchestrator', icon: '🎭' },
     { id: 'locations' as const, label: 'Locations', icon: '🗺️' },
     { id: 'conflicts' as const, label: 'Conflicts', icon: '⚔️' },
+    { id: 'foreshadow' as const, label: 'Foreshadow', icon: '🔮' },
     { id: 'heatmap' as const, label: 'Heatmap', icon: '🔥' },
     { id: 'network' as const, label: 'Network', icon: '🕸️' },
     { id: 'emotion' as const, label: 'Emotion', icon: '💭' },
@@ -131,6 +133,7 @@ export default function TimelineSidebar({
         {activeTab === 'orchestrator' && <TimelineOrchestrator manuscriptId={manuscriptId} />}
         {activeTab === 'locations' && <CharacterLocationTracker manuscriptId={manuscriptId} />}
         {activeTab === 'conflicts' && <ConflictTracker manuscriptId={manuscriptId} />}
+        {activeTab === 'foreshadow' && <ForeshadowingTracker manuscriptId={manuscriptId} />}
         {activeTab === 'heatmap' && <TimelineHeatmap manuscriptId={manuscriptId} />}
         {activeTab === 'network' && <CharacterNetwork manuscriptId={manuscriptId} />}
         {activeTab === 'emotion' && <EmotionalArc manuscriptId={manuscriptId} />}
