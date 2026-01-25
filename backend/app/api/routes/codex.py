@@ -51,6 +51,10 @@ class CreateRelationshipRequest(BaseModel):
 
 class ApproveSuggestionRequest(BaseModel):
     suggestion_id: str
+    # Optional overrides - if provided, use these instead of suggestion values
+    name: Optional[str] = None
+    type: Optional[str] = None  # CHARACTER, LOCATION, ITEM, LORE
+    description: Optional[str] = None  # Will be added to attributes
     aliases: Optional[List[str]] = None
     attributes: Optional[Dict[str, Any]] = None
 
@@ -352,7 +356,9 @@ async def list_suggestions(manuscript_id: str, status: Optional[str] = None):
                     "type": suggestion.type,
                     "context": suggestion.context,
                     "status": suggestion.status,
-                    "created_at": suggestion.created_at.isoformat()
+                    "created_at": suggestion.created_at.isoformat(),
+                    "extracted_description": suggestion.extracted_description,
+                    "extracted_attributes": suggestion.extracted_attributes
                 }
                 for suggestion in suggestions
             ]
@@ -363,10 +369,13 @@ async def list_suggestions(manuscript_id: str, status: Optional[str] = None):
 
 @router.post("/suggestions/approve")
 async def approve_suggestion(request: ApproveSuggestionRequest):
-    """Approve suggestion and create entity"""
+    """Approve suggestion and create entity with optional overrides"""
     try:
         entity = codex_service.approve_suggestion(
             suggestion_id=request.suggestion_id,
+            name_override=request.name,
+            type_override=request.type,
+            description=request.description,
             aliases=request.aliases,
             attributes=request.attributes
         )
@@ -481,11 +490,17 @@ async def _process_analysis(manuscript_id: str, text: str):
                 print(f"Skipping previously rejected entity: {entity['name']}")
                 continue
             try:
+                # Extract description and attributes if available
+                extracted_description = entity.get("description")
+                extracted_attributes = entity.get("extracted_attributes")
+
                 codex_service.create_suggestion(
                     manuscript_id=manuscript_id,
                     name=entity["name"],
                     entity_type=entity["type"],
-                    context=entity["context"]
+                    context=entity["context"],
+                    extracted_description=extracted_description,
+                    extracted_attributes=extracted_attributes
                 )
             except Exception as e:
                 # Skip duplicate suggestions

@@ -18,10 +18,10 @@ import { $createHeadingNode, $createQuoteNode, HeadingTagType } from '@lexical/r
 import { $createParagraphNode, $insertNodes } from 'lexical';
 import { INSERT_UNORDERED_LIST_COMMAND, INSERT_ORDERED_LIST_COMMAND } from '@lexical/list';
 import { $createSceneBreakNode } from './nodes/SceneBreakNode';
-import { codexApi, timelineApi } from '@/lib/api';
-import { useCodexStore } from '@/stores/codexStore';
 import { useOutlineStore } from '@/stores/outlineStore';
 import ChapterRecapModal from '@/components/Chapter/ChapterRecapModal';
+import AnalyzeModal from '@/components/Codex/AnalyzeModal';
+import { BalanceWidget } from '@/components/Common';
 
 interface EditorToolbarProps {
   manuscriptId?: string;
@@ -31,7 +31,6 @@ interface EditorToolbarProps {
 
 export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }: EditorToolbarProps = {}) {
   const [editor] = useLexicalComposerContext();
-  const { setAnalyzing, setSidebarOpen, setActiveTab } = useCodexStore();
   const { outline, getCompletionPercentage, toggleOutlineReferenceSidebar, outlineReferenceSidebarOpen } = useOutlineStore();
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
@@ -41,6 +40,19 @@ export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }:
   const [fontSize, setFontSize] = useState('16px');
   const [textAlign, setTextAlign] = useState('left');
   const [showRecapModal, setShowRecapModal] = useState(false);
+  const [showAnalyzeModal, setShowAnalyzeModal] = useState(false);
+  const [focusMode, setFocusMode] = useState(() => {
+    const saved = localStorage.getItem('maxwell-focus-mode');
+    return saved === 'true';
+  });
+  const [showFormatMenu, setShowFormatMenu] = useState(false);
+
+  // Persist focus mode preference
+  const toggleFocusMode = () => {
+    const newMode = !focusMode;
+    setFocusMode(newMode);
+    localStorage.setItem('maxwell-focus-mode', String(newMode));
+  };
 
   // Update toolbar state based on selection
   const updateToolbar = useCallback(() => {
@@ -130,61 +142,56 @@ export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }:
     setTextAlign(alignment);
   };
 
-  const handleAnalyze = async () => {
+  // Extract current editor text for analysis
+  const getCurrentEditorText = (): string => {
+    const editorState = editor.getEditorState();
+    let text = '';
+
+    editorState.read(() => {
+      const root = editorState._nodeMap.get('root');
+      if (root && '__cachedText' in root && typeof root.__cachedText === 'string') {
+        text = root.__cachedText;
+      } else {
+        // Fallback: manually build text from all text nodes
+        const allNodes = Array.from(editorState._nodeMap.values());
+        text = allNodes
+          .filter((node: any) => node.__type === 'text')
+          .map((node: any) => node.__text || '')
+          .join(' ');
+      }
+    });
+
+    return text;
+  };
+
+  const handleAnalyzeClick = () => {
     if (!manuscriptId) {
       alert('No manuscript selected');
       return;
     }
-
-    try {
-      // Extract text from editor using proper Lexical API
-      const editorState = editor.getEditorState();
-      let text = '';
-
-      editorState.read(() => {
-        const root = editorState._nodeMap.get('root');
-        if (root && '__cachedText' in root && typeof root.__cachedText === 'string') {
-          text = root.__cachedText;
-        } else {
-          // Fallback: manually build text from all text nodes
-          const allNodes = Array.from(editorState._nodeMap.values());
-          text = allNodes
-            .filter((node: any) => node.__type === 'text')
-            .map((node: any) => node.__text || '')
-            .join(' ');
-        }
-      });
-
-      if (!text.trim()) {
-        alert('No text to analyze. Start writing first!');
-        return;
-      }
-
-      setAnalyzing(true);
-
-      // Call both analyze APIs in parallel
-      await Promise.all([
-        codexApi.analyzeText({
-          manuscript_id: manuscriptId,
-          text: text.trim(),
-        }),
-        timelineApi.analyzeTimeline({
-          manuscript_id: manuscriptId,
-          text: text.trim(),
-        }),
-      ]);
-
-      // Show success and open Codex sidebar to Intel tab
-      alert('✅ Analysis complete! Check the Intel tab for entities and the Timeline tab for events.');
-      setSidebarOpen(true);
-      setActiveTab('intel');
-    } catch (err) {
-      console.error('Analyze error:', err);
-      alert('Failed to analyze: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setAnalyzing(false);
-    }
+    setShowAnalyzeModal(true);
   };
+
+  // Focus mode: show minimal toolbar with just focus toggle and essential actions
+  if (focusMode) {
+    return (
+      <div className="toolbar flex items-center justify-between p-2 bg-vellum/50">
+        <div className="flex items-center gap-2 text-xs text-faded-ink">
+          <span>Focus Mode</span>
+          <span className="text-midnight/30">|</span>
+          <span>Cmd+B bold</span>
+          <span>Cmd+I italic</span>
+        </div>
+        <ToolbarButton
+          onClick={toggleFocusMode}
+          active={focusMode}
+          title="Exit focus mode"
+        >
+          📝 Show Toolbar
+        </ToolbarButton>
+      </div>
+    );
+  }
 
   return (
     <div className="toolbar flex items-center gap-1 p-2 flex-wrap">
@@ -249,19 +256,39 @@ export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }:
         </ToolbarButton>
       </div>
 
-      {/* Font family */}
+      {/* Font family - expanded with writing-friendly fonts */}
       <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
         <select
-          className="px-2 py-1 bg-white border border-slate-ui text-midnight text-sm font-sans"
+          className="px-2 py-1 bg-white border border-slate-ui text-midnight text-sm font-sans max-w-[140px]"
           style={{ borderRadius: '2px' }}
           value={fontFamily}
           onChange={(e) => setFontFamily(e.target.value)}
         >
-          <option value="EB Garamond">EB Garamond</option>
-          <option value="Georgia">Georgia</option>
-          <option value="Inter">Inter</option>
-          <option value="Times New Roman">Times New Roman</option>
-          <option value="Arial">Arial</option>
+          <optgroup label="Serif (Traditional)">
+            <option value="EB Garamond">EB Garamond</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Palatino Linotype">Palatino</option>
+            <option value="Baskerville">Baskerville</option>
+            <option value="Cambria">Cambria</option>
+          </optgroup>
+          <optgroup label="Serif (Modern)">
+            <option value="Merriweather">Merriweather</option>
+            <option value="Lora">Lora</option>
+            <option value="Libre Baskerville">Libre Baskerville</option>
+            <option value="Crimson Text">Crimson Text</option>
+          </optgroup>
+          <optgroup label="Sans-Serif">
+            <option value="Inter">Inter</option>
+            <option value="Arial">Arial</option>
+            <option value="Helvetica">Helvetica</option>
+            <option value="Verdana">Verdana</option>
+            <option value="Open Sans">Open Sans</option>
+          </optgroup>
+          <optgroup label="Monospace">
+            <option value="Courier New">Courier New</option>
+            <option value="Consolas">Consolas</option>
+          </optgroup>
         </select>
       </div>
 
@@ -286,46 +313,61 @@ export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }:
         </select>
       </div>
 
-      {/* Text alignment */}
-      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
+      {/* Paragraph formatting dropdown (alignment + lists) */}
+      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2 relative">
         <ToolbarButton
-          onClick={() => formatTextAlign('left')}
-          active={textAlign === 'left'}
-          title="Align Left"
+          onClick={() => setShowFormatMenu(!showFormatMenu)}
+          title="Paragraph formatting"
         >
-          ≡
+          ¶ Format
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => formatTextAlign('center')}
-          active={textAlign === 'center'}
-          title="Align Center"
-        >
-          ≡
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => formatTextAlign('right')}
-          active={textAlign === 'right'}
-          title="Align Right"
-        >
-          ≡
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => formatTextAlign('justify')}
-          active={textAlign === 'justify'}
-          title="Justify"
-        >
-          ≡
-        </ToolbarButton>
-      </div>
 
-      {/* Lists */}
-      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
-        <ToolbarButton onClick={formatBulletList} title="Bullet List">
-          • List
-        </ToolbarButton>
-        <ToolbarButton onClick={formatNumberedList} title="Numbered List">
-          1. List
-        </ToolbarButton>
+        {showFormatMenu && (
+          <div
+            className="absolute top-full left-0 mt-1 bg-white border border-slate-ui shadow-lg rounded-sm z-50 py-1 min-w-[160px]"
+            onMouseLeave={() => setShowFormatMenu(false)}
+          >
+            <div className="px-3 py-1 text-xs text-faded-ink font-semibold">Alignment</div>
+            <button
+              onClick={() => { formatTextAlign('left'); setShowFormatMenu(false); }}
+              className={`w-full text-left px-4 py-1.5 text-sm hover:bg-slate-ui/20 ${textAlign === 'left' ? 'bg-bronze/10 text-bronze' : 'text-midnight'}`}
+            >
+              Align Left
+            </button>
+            <button
+              onClick={() => { formatTextAlign('center'); setShowFormatMenu(false); }}
+              className={`w-full text-left px-4 py-1.5 text-sm hover:bg-slate-ui/20 ${textAlign === 'center' ? 'bg-bronze/10 text-bronze' : 'text-midnight'}`}
+            >
+              Center
+            </button>
+            <button
+              onClick={() => { formatTextAlign('right'); setShowFormatMenu(false); }}
+              className={`w-full text-left px-4 py-1.5 text-sm hover:bg-slate-ui/20 ${textAlign === 'right' ? 'bg-bronze/10 text-bronze' : 'text-midnight'}`}
+            >
+              Align Right
+            </button>
+            <button
+              onClick={() => { formatTextAlign('justify'); setShowFormatMenu(false); }}
+              className={`w-full text-left px-4 py-1.5 text-sm hover:bg-slate-ui/20 ${textAlign === 'justify' ? 'bg-bronze/10 text-bronze' : 'text-midnight'}`}
+            >
+              Justify
+            </button>
+            <hr className="my-1 border-slate-ui" />
+            <div className="px-3 py-1 text-xs text-faded-ink font-semibold">Lists</div>
+            <button
+              onClick={() => { formatBulletList(); setShowFormatMenu(false); }}
+              className="w-full text-left px-4 py-1.5 text-sm hover:bg-slate-ui/20 text-midnight"
+            >
+              • Bullet List
+            </button>
+            <button
+              onClick={() => { formatNumberedList(); setShowFormatMenu(false); }}
+              className="w-full text-left px-4 py-1.5 text-sm hover:bg-slate-ui/20 text-midnight"
+            >
+              1. Numbered List
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Scene break button */}
@@ -339,7 +381,7 @@ export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }:
       {manuscriptId && (
         <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
           <ToolbarButton
-            onClick={handleAnalyze}
+            onClick={handleAnalyzeClick}
             title="Analyze manuscript text to detect characters, locations, items, and lore using NLP"
           >
             🔍 Analyze
@@ -361,7 +403,7 @@ export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }:
 
       {/* Outline Reference Sidebar Toggle */}
       {outline && (
-        <div className="toolbar-group flex gap-1">
+        <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
           <ToolbarButton
             onClick={toggleOutlineReferenceSidebar}
             active={outlineReferenceSidebarOpen}
@@ -372,12 +414,37 @@ export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }:
         </div>
       )}
 
+      {/* AI Balance Widget */}
+      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2 ml-auto">
+        <BalanceWidget onOpenSettings={() => window.dispatchEvent(new CustomEvent('openSettings'))} />
+      </div>
+
+      {/* Focus Mode Toggle */}
+      <div className="toolbar-group flex gap-1">
+        <ToolbarButton
+          onClick={toggleFocusMode}
+          active={focusMode}
+          title={focusMode ? "Exit focus mode (show full toolbar)" : "Enter focus mode (hide toolbar for distraction-free writing)"}
+        >
+          {focusMode ? '📝 Show Toolbar' : '🎯 Focus'}
+        </ToolbarButton>
+      </div>
+
       {/* Recap Modal */}
       {showRecapModal && chapterId && (
         <ChapterRecapModal
           chapterId={chapterId}
           chapterTitle={chapterTitle || 'Chapter'}
           onClose={() => setShowRecapModal(false)}
+        />
+      )}
+
+      {/* Analyze Modal */}
+      {showAnalyzeModal && manuscriptId && (
+        <AnalyzeModal
+          manuscriptId={manuscriptId}
+          currentChapterContent={getCurrentEditorText()}
+          onClose={() => setShowAnalyzeModal(false)}
         />
       )}
     </div>

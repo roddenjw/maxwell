@@ -1,8 +1,24 @@
 # Future Enhancements for Maxwell
 
-**Last Updated:** 2026-01-08
+**Last Updated:** 2026-01-25
 
 This document tracks feature ideas and enhancements for future development.
+
+---
+
+## Recent Completions (Moved from Future to Done)
+
+### Brainstorming Enhancements (Phase 5 - Completed Jan 21, 2026)
+The following future enhancement ideas were fully implemented in Phase 5:
+- ✅ **Character Development Worksheets** - Full/quick/interview worksheets with Brandon Sanderson methodology
+- ✅ **AI Entity Expansion** - Deepen, expand, connect existing entities
+- ✅ **Plot Twist Generator** - Included in PlotBrainstorm component
+- ✅ **Mind Mapping Tool** - MindMapCanvas with draggable nodes and connections
+- ✅ **Conflict Generation** - Internal, interpersonal, external, societal conflicts
+- ✅ **Scene Ideation** - Beat-specific scene ideas with purposes
+
+### World Management (Phase 8 - Completed Jan 18, 2026)
+- ✅ **World-building Consistency** - World/Series hierarchy with entity scoping
 
 ---
 

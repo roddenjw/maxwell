@@ -1,7 +1,7 @@
 # Maxwell Implementation Plan v2.0
 ## Integrated Roadmap: MVP → PLG Growth Engine
 
-**Last Updated:** January 7, 2026
+**Last Updated:** January 25, 2026
 **Vision:** The world's most intuitive fiction writing IDE with invisible engineering and viral growth mechanics
 
 ---
@@ -10,8 +10,9 @@
 
 This plan integrates the full development roadmap from MVP launch to PLG growth engine:
 - **Phases 1-3:** MVP, Codex, and AI Integration (COMPLETE)
-- **Phases 4-6:** Story Structure, Brainstorming, Timeline Orchestrator (IN PROGRESS)
+- **Phases 4-6:** Story Structure, Brainstorming, Timeline Orchestrator (COMPLETE)
 - **Phase 7:** PLG Features and Viral Mechanics (PLANNED)
+- **Phase 8:** Library & World Management (COMPLETE)
 
 **Key Principle:** Each phase must ship a feature that drives the next phase's growth.
 
@@ -113,7 +114,7 @@ Sudowrite refugees, cost-conscious authors, AI-curious writers
 
 ## Phase 4: Story Structure & Outline Engine
 **Timeline:** Months 10-13 (Q3 2026)
-**Status:** 🔄 70% Complete (see PROGRESS.md)
+**Status:** ✅ 100% Complete (Jan 12, 2026)
 **Goal:** Proven story structure templates with plot beat tracking
 
 ### Core Features
@@ -175,16 +176,19 @@ Sudowrite refugees, cost-conscious authors, AI-curious writers
 - ✅ Outline sidebar component
 - ✅ Create outline modal with genre selection
 - ✅ Switch structure modal
-- 🔄 Plot beat completion tracking UI
-- 🔄 Progress visualization (donut chart)
-- ⏳ Gantt-style timeline with beat markers
-- ⏳ Scene-level guidance integration
+- ✅ Plot beat completion tracking UI
+- ✅ Progress visualization (dual-metric progress bar)
+- ✅ Gantt-style timeline with beat markers (GanttTimelineView)
+- ✅ Scene-level guidance integration (SceneDetectionPlugin, BeatContextPanel)
+- ✅ AI-powered beat analysis with suggestions
+- ✅ Beat Context Panel for writing integration
+- ✅ Outline Reference Sidebar
 
 ---
 
 ## Phase 5: Brainstorming & Ideation Tools
 **Timeline:** Months 14-17 (Q4 2026)
-**Status:** 🔄 40% Complete (see PROGRESS.md)
+**Status:** ✅ 100% Complete (Jan 21, 2026)
 **Goal:** AI-powered creative ideation for characters, plots, and settings
 
 ### Core Features
@@ -239,17 +243,24 @@ Sudowrite refugees, cost-conscious authors, AI-curious writers
 - ✅ Brainstorming modal (main container)
 - ✅ Character generation form and results
 - ✅ Idea card display components
-- 🔄 Idea integration with Codex
-- 🔄 Multi-type brainstorming (plot, location, conflict)
-- ⏳ Plot twist generator
-- ⏳ Mind mapping tool
-- ⏳ Character development worksheets
+- ✅ Idea integration with Codex
+- ✅ Multi-type brainstorming (plot, location, conflict, scene)
+- ✅ Plot generation API with twists and subplots
+- ✅ Location generation API with worldbuilding
+- ✅ Conflict generation API (internal, interpersonal, external, societal)
+- ✅ Scene generation API with beat context
+- ✅ Mind mapping tool (MindMapCanvas)
+- ✅ Character development worksheets (full/quick/interview)
+- ✅ AI entity expansion (deepen, expand, connect)
+- ✅ Session history management
+- ✅ Idea refinement loop
+- ✅ Manuscript context auto-loading
 
 ---
 
 ## Phase 6: Timeline Orchestrator (Advanced)
 **Timeline:** Months 18-20 (Q1 2027)
-**Status:** 🔄 85% Complete (see PROGRESS.md)
+**Status:** ✅ 100% Complete (Jan 21, 2026)
 **Goal:** Chronological consistency validation with teaching moments
 
 ### Core Features
@@ -305,18 +316,88 @@ Sudowrite refugees, cost-conscious authors, AI-curious writers
 - ✅ Event cards and event forms
 - ✅ Issues panel with severity filtering
 - ✅ Teaching moments panel
-- 🔄 Performance optimization for large timelines
-- ⏳ Gantt chart view with plot beat integration
-- ⏳ Character journey visualizations
+- ✅ Performance optimization (query optimization, virtualization)
+- ✅ Gantt chart view with plot beat integration (GanttTimelineView)
+- ✅ Character journey visualizations (CharacterJourneySwimlane)
+- ✅ Foreshadowing Tracker (5 types, Chekhov warnings)
+- ✅ Character location tracking with journey statistics
 
 ---
 
-## Phase 7: PLG Features & Viral Mechanics
-**Timeline:** Months 21-24 (Q2 2027)
-**Status:** ⏳ Planned
-**Goal:** Product-led growth features that drive user acquisition
+## Phase 8: Library & World Management
+**Timeline:** Added during Phase 5-6 development
+**Status:** ✅ 100% Complete (Jan 18, 2026)
+**Goal:** Hierarchical organization for multi-book authors and worldbuilders
 
 ### Core Features
+
+#### 8.1 World/Series Hierarchy
+- **World Model:** Top-level container for a fictional universe
+- **Series Model:** Collection of related manuscripts within a world
+- **Manuscript Assignment:** Assign manuscripts to series for organization
+- **Auto-migration:** Preserves existing data in default "My Library" world
+
+#### 8.2 Entity Scoping
+- **Three Scope Levels:** MANUSCRIPT, SERIES, WORLD
+- **Scope Inheritance:** World entities visible across all manuscripts
+- **Copy to Manuscript:** Clone world entity for local customization
+- **Shared Codex:** Characters and locations usable across books
+
+#### 8.3 Library Navigation
+- **WorldLibrary Component:** Browse worlds, series, and manuscripts
+- **Breadcrumb Navigation:** Library → World → Series → Manuscript
+- **Toggle Views:** Switch between Manuscript Library and World Library
+- **World Settings:** Genre, themes, and metadata per world
+
+### Technical Approach
+- **Backend:** World and Series SQLAlchemy models, entity scope fields
+- **Frontend:** WorldLibrary, SeriesExplorer, SharedEntityLibrary components
+- **API:** 18 new endpoints for worlds, series, entity scoping
+- **Migration:** Auto-creates default world/series for existing users
+
+### Deliverables
+- ✅ World and Series database models
+- ✅ Entity scope field (MANUSCRIPT/SERIES/WORLD)
+- ✅ World CRUD API (4 endpoints)
+- ✅ Series CRUD API (6 endpoints)
+- ✅ Manuscript assignment to series (3 endpoints)
+- ✅ World entity management (5 endpoints)
+- ✅ WorldLibrary component (350+ lines)
+- ✅ CreateWorldModal component
+- ✅ SeriesExplorer component
+- ✅ SharedEntityLibrary component
+- ✅ Zustand worldStore (350+ lines)
+- ✅ Auto-migration for existing data
+
+---
+
+## Phase 7: PLG Features, UX Polish & Viral Mechanics
+**Timeline:** Q1-Q2 2027
+**Status:** ⏳ Planned
+**Goal:** Product-led growth features, Scrivener-like UX, and user-requested enhancements
+
+### Core Features
+
+#### 7.0 Scrivener-like UX Improvements (User Feedback Priority)
+Based on user feedback in FEEDBACK.md, these UX improvements are prioritized:
+
+**Text Editor Polish:**
+- **Cleaner Toolbar:** Group formatting options into dropdown menus, reduce visual clutter
+- **Font Options:** Add 10+ writing-friendly fonts (Georgia, Palatino, Baskerville, Merriweather, Lora)
+- **Focus Mode:** Option to hide toolbar entirely during drafting
+
+**Corkboard/Card View:**
+- **Card-based Chapter View:** Visual grid of chapter cards (like Scrivener corkboard)
+- **Chapter Summaries:** AI-generated or user-entered summaries on cards
+- **Drag-and-Drop:** Reorder chapters by dragging cards (already implemented in tree)
+
+**Inline Entity Features:**
+- **Entity Hover Descriptions:** Detect entity names in text, show tooltip with Codex info
+- **Create Entity from Selection:** Right-click highlighted text to create new entity
+
+**Time Machine Enhancements:**
+- **Auto-Generated Commit Messages:** Diff chapters between versions, AI summarizes changes
+- **Visual Diff Viewer:** Side-by-side comparison of version changes
 
 #### 7.1 Aesthetic Recap Engine (Viral Sharing)
 - **Beautiful Recap Cards:** AI-generated chapter summaries as shareable images
@@ -386,37 +467,51 @@ Sudowrite refugees, cost-conscious authors, AI-curious writers
 - ✅ BYOK AI integration
 - ✅ Fast Coach and Recap Engine
 
-### Q3 2026 (Months 7-9): Story Structure
-- 🔄 Outline engine with plot beats
-- 🔄 Manuscript creation wizard
-- ⏳ Progress tracking and visualization
+### Q3 2026 (Months 7-9): Story Structure (COMPLETE)
+- ✅ Outline engine with plot beats
+- ✅ Manuscript creation wizard
+- ✅ Progress tracking and visualization
+- ✅ Scene-level guidance integration
+- ✅ Gantt timeline view
 
-### Q4 2026 (Months 10-12): Brainstorming & Timeline
-- 🔄 Character/plot ideation tools
-- 🔄 Timeline orchestrator with validation
-- ⏳ Teaching moments system
+### Q4 2026 (Months 10-12): Brainstorming & Timeline (COMPLETE)
+- ✅ Character/plot/location/conflict/scene ideation tools
+- ✅ Timeline orchestrator with validation
+- ✅ Teaching moments system
+- ✅ Mind mapping tool
+- ✅ Foreshadowing tracker
 
-### Q1 2027 (Months 13-15): PLG Mechanics
+### Q1 2026 (Bonus): Library & World Management (COMPLETE)
+- ✅ World/Series hierarchy
+- ✅ Entity scoping across manuscripts
+- ✅ Shared Codex for series
+
+### Q1 2027 (Months 13-15): PLG Mechanics & UX Polish
 - ⏳ Aesthetic Recap Engine (viral sharing)
 - ⏳ Real-time entity extraction
 - ⏳ Guided onboarding flow
+- ⏳ Scrivener-like UX improvements (toolbar, fonts, corkboard)
+- ⏳ Entity hover descriptions in editor
 
-### Q2 2027 (Months 16-18): Collaboration
+### Q2 2027 (Months 16-18): Collaboration & Advanced Features
 - ⏳ Beta reader workflows
 - ⏳ Inline comments and feedback
 - ⏳ Multi-user manuscript sharing
+- ⏳ Plot hole interaction system
+- ⏳ Character consistency checker
 
 ---
 
 ## Success Metrics by Phase
 
-| Phase | Users | Revenue | Retention (6mo) | NPS | Key Metric |
-|-------|-------|---------|----------------|-----|------------|
-| **Phase 1** | 100 | $4,900 | 60% | 50 | Manuscripts created |
-| **Phase 2** | 500 | $25,000 | 70% | 60 | Entities extracted |
-| **Phase 3** | 2,000 | $99,000 | 75% | 65 | AI usage rate |
-| **Phase 4-6** | 5,000 | $250,000 | 80% | 70 | Completion rate |
-| **Phase 7** | 15,000 | $750,000 | 85% | 75 | Viral coefficient |
+| Phase | Users | Revenue | Retention (6mo) | NPS | Key Metric | Status |
+|-------|-------|---------|----------------|-----|------------|--------|
+| **Phase 1** | 100 | $4,900 | 60% | 50 | Manuscripts created | ✅ Complete |
+| **Phase 2** | 500 | $25,000 | 70% | 60 | Entities extracted | ✅ Complete |
+| **Phase 3** | 2,000 | $99,000 | 75% | 65 | AI usage rate | ✅ Complete |
+| **Phase 4-6** | 5,000 | $250,000 | 80% | 70 | Completion rate | ✅ Complete |
+| **Phase 8** | - | - | - | - | World/Series usage | ✅ Complete |
+| **Phase 7** | 15,000 | $750,000 | 85% | 75 | Viral coefficient | ⏳ Planned |
 
 **Target by End of 2027:**
 - 15,000+ active users
@@ -437,19 +532,23 @@ Sudowrite refugees, cost-conscious authors, AI-curious writers
 ### Phase 5 depends on:
 - ✅ Entity extraction system (Phase 2)
 - ✅ AI integration for idea generation (Phase 3)
-- 🔄 Story structure templates (Phase 4)
+- ✅ Story structure templates (Phase 4)
 
 ### Phase 6 depends on:
 - ✅ Entity tracking (Phase 2)
 - ✅ Chapter structure (Phase 1)
-- 🔄 Plot beats for timeline markers (Phase 4)
+- ✅ Plot beats for timeline markers (Phase 4)
+
+### Phase 8 depends on:
+- ✅ Entity system (Phase 2)
+- ✅ Manuscript management (Phase 1)
 
 ### Phase 7 depends on:
 - ✅ AI integration infrastructure (Phase 3)
 - ✅ Entity extraction (Phase 2)
-- 🔄 All core features stable and polished
+- ✅ All core features stable and polished (Phases 1-6, 8)
 
-**Key Insight:** Phases 1-3 are foundational; Phases 4-7 build on top.
+**Key Insight:** Phases 1-3 are foundational; Phases 4-8 build on top. Phase 7 is PLG layer.
 
 ---
 
@@ -532,13 +631,15 @@ Sudowrite refugees, cost-conscious authors, AI-curious writers
 
 ---
 
-**Last Updated:** January 7, 2026
-**Next Review:** End of Phase 6 (March 2027)
+**Last Updated:** January 25, 2026
+**Next Review:** End of Phase 7 (Q2 2027)
 **Document Owner:** Implementation Team
 
 **Related Documentation:**
 - Current progress and metrics: [PROGRESS.md](./PROGRESS.md)
 - Architecture and development standards: [CLAUDE.md](./CLAUDE.md)
-- Feature documentation: [FEATURES.md](./FEATURESS.md)
+- Feature documentation: [FEATURES.md](./FEATURES.md)
+- Future enhancements: [FUTURE_ENHANCEMENTS.md](./FUTURE_ENHANCEMENTS.md)
+- User feedback tracking: [FEEDBACK.md](./FEEDBACK.md)
 - Growth strategy: [PLG_STRATEGY.md](./PLG_STRATEGY.md)
 - Architectural decisions: [docs/ARCHITECTURE_DECISIONS.md](./docs/ARCHITECTURE_DECISIONS.md)

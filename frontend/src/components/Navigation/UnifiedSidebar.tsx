@@ -11,6 +11,7 @@ interface UnifiedSidebarProps {
   onNavigate: (view: 'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export' | 'outline') => void;
   onCloseEditor: () => void;
   onSettingsClick?: () => void;
+  onAchievementsClick?: () => void;
   activeView?: string;
 }
 
@@ -20,6 +21,7 @@ export default function UnifiedSidebar({
   onNavigate,
   onCloseEditor,
   onSettingsClick,
+  onAchievementsClick,
   activeView
 }: UnifiedSidebarProps) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -122,9 +124,28 @@ export default function UnifiedSidebar({
         })}
       </nav>
 
-      {/* Settings */}
-      {onSettingsClick && (
-        <div className="border-t-2 border-bronze/30 p-3">
+      {/* Achievements & Settings */}
+      <div className="border-t-2 border-bronze/30 p-3 space-y-2">
+        {onAchievementsClick && (
+          <button
+            onClick={onAchievementsClick}
+            className={`
+              w-full flex items-center gap-3 px-3 py-3 rounded-sm transition-all
+              text-midnight hover:bg-white/50
+              ${!isExpanded && 'justify-center'}
+            `}
+            title={!isExpanded ? 'Achievements' : undefined}
+          >
+            <span className="text-xl">🏆</span>
+            {isExpanded && (
+              <div className="flex-1 text-left">
+                <div className="font-sans font-semibold text-sm">Achievements</div>
+                <div className="text-xs opacity-70">View your progress</div>
+              </div>
+            )}
+          </button>
+        )}
+        {onSettingsClick && (
           <button
             onClick={onSettingsClick}
             className={`
@@ -142,8 +163,8 @@ export default function UnifiedSidebar({
               </div>
             )}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Footer decoration */}
       <div className="border-t-2 border-bronze/30 p-3">

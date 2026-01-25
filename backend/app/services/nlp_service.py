@@ -136,6 +136,12 @@ class NLPService:
             if description:
                 entity_dict["description"] = description
 
+            # Extract attributes for this entity from surrounding text
+            if entity_type == "CHARACTER":
+                extracted_attrs = self._extract_entity_attributes_from_context(ent.sent.text, name)
+                if extracted_attrs:
+                    entity_dict["extracted_attributes"] = extracted_attrs
+
             detected.append(entity_dict)
 
             seen_in_text.add(name.lower())
@@ -496,6 +502,58 @@ class NLPService:
                     seen_in_text.add(entity_name.lower())
 
         return [e for e in pattern_entities if e["description"]]  # Only return if we found a description
+
+    def _extract_entity_attributes_from_context(self, context: str, entity_name: str) -> Optional[Dict[str, List[str]]]:
+        """
+        Extract categorized attributes for an entity from context sentence.
+
+        Args:
+            context: Context sentence/paragraph
+            entity_name: Name of the entity
+
+        Returns:
+            Dictionary with categorized attributes or None
+        """
+        if not context or len(context) < 10:
+            return None
+
+        context_lower = context.lower()
+        attributes = {}
+
+        # Appearance keywords
+        appearance_keywords = [
+            "tall", "short", "thin", "fat", "slim", "muscular", "lean", "stocky",
+            "hair", "eyes", "face", "beard", "scar", "young", "old", "elderly",
+            "beautiful", "handsome", "ugly", "pale", "dark", "fair", "wore", "dressed",
+            "blonde", "brunette", "redhead", "gray-haired", "silver", "curly", "straight"
+        ]
+
+        # Personality keywords
+        personality_keywords = [
+            "brave", "coward", "kind", "cruel", "wise", "foolish", "gentle", "harsh",
+            "calm", "nervous", "confident", "shy", "stubborn", "flexible", "loyal",
+            "treacherous", "honest", "deceitful", "patient", "impatient", "warm", "cold",
+            "cheerful", "gloomy", "optimistic", "pessimistic", "friendly", "hostile"
+        ]
+
+        # Check for appearance words
+        found_appearance = []
+        for keyword in appearance_keywords:
+            if keyword in context_lower:
+                found_appearance.append(keyword)
+
+        # Check for personality words
+        found_personality = []
+        for keyword in personality_keywords:
+            if keyword in context_lower:
+                found_personality.append(keyword)
+
+        if found_appearance:
+            attributes["appearance"] = found_appearance[:5]  # Limit to 5
+        if found_personality:
+            attributes["personality"] = found_personality[:5]
+
+        return attributes if attributes else None
 
     def _extract_description_from_sentence(self, entity_name: str, sentence: str) -> Optional[str]:
         """

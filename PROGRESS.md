@@ -1,6 +1,6 @@
 # Maxwell Project Progress
 
-**Last Updated:** 2026-01-21
+**Last Updated:** 2026-01-25
 **Overall Completion:** 93% across all phases
 **Current Focus:** Beta Launch Preparation (Week of Jan 22-28)
 
@@ -181,6 +181,75 @@
 ---
 
 ## Recent Completions (Last 2 Weeks)
+
+### January 25, 2026 (Later)
+- ✅ **Documentation Synchronization**
+  - **FEEDBACK.md**: Marked Brainstorming #2, #3, #4 as resolved (Phase 5 & 8 completed these)
+  - **FUTURE_ENHANCEMENTS.md**: Updated with completion notes for Phase 5 brainstorming features
+  - **IMPLEMENTATION_PLAN_v2.md**: Major update
+    - Updated Phase 4 to 100% complete (was 70%)
+    - Updated Phase 5 to 100% complete (was 40%)
+    - Updated Phase 6 to 100% complete (was 85%)
+    - Added Phase 8 (Library & World Management) documentation
+    - Added Section 7.0: Scrivener-like UX Improvements from user feedback
+    - Updated critical path dependencies
+    - Updated success metrics table
+    - Updated timeline dates
+  - **Impact**: All project documentation now accurately reflects current state
+
+- ✅ **Scrivener-like UX Improvements (Phase 7 - Part 1)**
+  - **ChapterCorkboard Component (NEW)**:
+    - Card-based chapter view similar to Scrivener's corkboard
+    - Visual grid layout with chapter cards showing title, word count, progress indicator
+    - Color-coded progress bars (gray=empty, amber=<500w, bronze=<2000w, green=2000w+)
+    - Drag-and-drop reordering using @dnd-kit
+    - Inline rename, duplicate, delete via context menu
+    - Folder support with distinct styling
+    - Footer stats showing total chapters and words
+    - Files: `ChapterCorkboard.tsx` (NEW, 400+ lines)
+  - **View Toggle in DocumentNavigator**:
+    - Toggle between Tree view and Corkboard (Cards) view
+    - View preference persisted in localStorage
+    - Seamless switching with same capabilities in both views
+    - Compact toggle buttons with icons
+    - Files: `DocumentNavigator.tsx` (+100 lines), `Document/index.ts` (NEW)
+  - **EditorToolbar Improvements**:
+    - Added 15+ writing-friendly fonts organized by category:
+      - Serif Traditional: EB Garamond, Georgia, Times New Roman, Palatino, Baskerville, Cambria
+      - Serif Modern: Merriweather, Lora, Libre Baskerville, Crimson Text
+      - Sans-Serif: Inter, Arial, Helvetica, Verdana, Open Sans
+      - Monospace: Courier New, Consolas
+    - Grouped paragraph formatting (alignment + lists) into dropdown menu
+    - Added Focus Mode toggle for distraction-free writing
+    - Focus mode shows minimal toolbar with only keyboard shortcut hints
+    - Focus mode preference persisted in localStorage
+    - Files: `EditorToolbar.tsx` (+80 lines)
+  - **Impact**: Addresses Text Editor #1, #2 and Binder #1 from FEEDBACK.md
+
+### January 25, 2026 (Earlier)
+- ✅ **Codex & Timeline Analysis Improvements**
+  - **Manuscript-Wide Analysis (AnalyzeModal)**:
+    - New AnalyzeModal component with scope selection ("Current Chapter" vs "Entire Manuscript")
+    - EditorToolbar "Analyze" button now opens modal instead of running direct analysis
+    - Manuscript-wide analysis: fetches all chapters via chapter tree API, combines content, runs NLP
+    - Progress indicator shows "Analyzing chapter X of Y" with progress bar for manuscript-wide mode
+    - Runs both Codex entity detection AND Timeline event detection in parallel
+    - Files: `AnalyzeModal.tsx` (NEW, 200+ lines), `EditorToolbar.tsx` (modified)
+  - **Editable Suggestions Before Commit (SuggestionCard)**:
+    - Split approve into "Quick Approve" (original behavior) and "Edit & Approve" (new)
+    - Edit mode shows: editable name input, type dropdown (CHARACTER/LOCATION/ITEM/LORE), description textarea
+    - Backend: Updated approve-suggestion endpoint to accept name, type, description overrides
+    - Backend: `codex_service.approve_suggestion()` accepts name_override, type_override, description params
+    - Files: `SuggestionCard.tsx` (rewritten), `SuggestionQueue.tsx`, `codex.py`, `codex_service.py`
+  - **Richer Entity Extraction**:
+    - EntitySuggestion model now has `extracted_description` and `extracted_attributes` columns
+    - Database migration for new fields
+    - NLP service extracts descriptions from patterns ("X is a...") and attributes (appearance, personality)
+    - Suggestions API returns extracted info to frontend
+    - SuggestionCard displays extracted description and attribute tags
+    - "Use extracted description" button in edit mode pre-fills description field
+    - Files: `entity.py`, `nlp_service.py`, `codex.py`, `codex.ts` (types)
+  - **FEEDBACK.md Updates**: Marked Codex #1, #2 and Timeline #3 as resolved
 
 ### January 21, 2026
 - ✅ **Phase 6 Complete: Timeline Orchestrator Full Feature Set (Phase 6 - 100%)**

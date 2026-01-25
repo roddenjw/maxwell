@@ -40,6 +40,7 @@ import type {
   WorldOutlineCreate,
   LinkBeatToManuscriptRequest,
   SeriesStructureWithManuscripts,
+  BeatFeedback,
 } from '@/types/outline';
 
 import type {
@@ -1055,6 +1056,7 @@ export const outlineApi = {
 export interface ChapterRecap {
   recap_id: string;
   recap_type: 'chapter' | 'arc';
+  word_count?: number;
   content: {
     summary: string;
     key_events: string[];
@@ -1675,6 +1677,43 @@ export const aiApi = {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || 'Failed to get beat suggestions');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Run AI analysis on outline with user feedback for refinement
+   * @param outlineId - Outline ID to analyze
+   * @param apiKey - User's OpenRouter API key
+   * @param analysisTypes - Optional array of analysis types to run
+   * @param feedback - User feedback on previous suggestions for refinement
+   * @returns Analysis results with cost information
+   */
+  async analyzeOutlineWithFeedback(
+    outlineId: string,
+    apiKey: string,
+    analysisTypes?: string[],
+    feedback?: { [beatName: string]: BeatFeedback }
+  ): Promise<{
+    success: boolean;
+    data: AIAnalysisResult;
+    cost?: { total_usd: number; formatted: string };
+    usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/ai-analyze-with-feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        analysis_types: analysisTypes,
+        feedback: feedback,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'AI analysis with feedback failed');
     }
 
     return response.json();
@@ -2623,6 +2662,90 @@ export const foreshadowingApi = {
 };
 
 
+// ========================
+// Share API - Shareable recap cards
+// ========================
+
+export interface CreateShareRequest {
+  manuscript_id: string;
+  chapter_id?: string;
+  recap_type: 'chapter' | 'writing_stats';
+  title: string;
+  description?: string;
+  template: string;
+  image_data_base64?: string;
+  recap_content?: Record<string, any>;
+}
+
+export interface ShareResponse {
+  share_id: string;
+  share_url: string;
+}
+
+export interface ShareStats {
+  share_id: string;
+  view_count: number;
+  share_count: number;
+  created_at: string;
+}
+
+export const shareApi = {
+  /**
+   * Create a shareable recap card
+   */
+  async createShare(data: CreateShareRequest): Promise<ShareResponse> {
+    const response = await fetch(`${API_BASE_URL}/share/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create share');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get share statistics
+   */
+  async getStats(shareId: string): Promise<ShareStats> {
+    const response = await fetch(`${API_BASE_URL}/share/stats/${shareId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get share stats');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Track a share action (when user clicks share)
+   */
+  async trackShare(shareId: string, platform: string): Promise<void> {
+    await fetch(`${API_BASE_URL}/share/track/${shareId}?platform=${encodeURIComponent(platform)}`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Get the share URL for a given share ID
+   */
+  getShareUrl(shareId: string): string {
+    return `${window.location.origin}/share/${shareId}`;
+  },
+
+  /**
+   * Get the image URL for a share
+   */
+  getImageUrl(shareId: string): string {
+    return `${API_BASE_URL}/share/image/${shareId}.png`;
+  },
+};
+
 /**
  * Health check
  */
@@ -2648,5 +2771,6 @@ export default {
   seriesOutline: seriesOutlineApi,
   foreshadowing: foreshadowingApi,
   import: importApi,
+  share: shareApi,
   healthCheck,
 };

@@ -1,13 +1,14 @@
 /**
  * DocumentNavigator - Hierarchical chapter/folder navigation (Scrivener-like)
  * Displays chapters and folders in a tree structure with drag-and-drop reordering
+ * Supports both tree view and corkboard (card) view
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useChapterStore } from '@/stores/chapterStore';
 import { chaptersApi, type ChapterTree } from '@/lib/api';
 import { toast } from '@/stores/toastStore';
-import { ChapterTreeSkeleton } from '@/components/common/SkeletonLoader';
+import { ChapterTreeSkeleton } from '@/components/Common/SkeletonLoader';
 import { retry, getErrorMessage } from '@/lib/retry';
 import {
   DndContext,
@@ -27,10 +28,14 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import ChapterCorkboard from './ChapterCorkboard';
+
+export type ViewMode = 'tree' | 'corkboard';
 
 interface DocumentNavigatorProps {
   manuscriptId: string;
   onChapterSelect?: (chapterId: string) => void;
+  defaultView?: ViewMode;
 }
 
 interface SortableTreeNodeProps {
@@ -255,7 +260,7 @@ function SortableTreeNode({
   );
 }
 
-export default function DocumentNavigator({ manuscriptId, onChapterSelect }: DocumentNavigatorProps) {
+export default function DocumentNavigator({ manuscriptId, onChapterSelect, defaultView = 'tree' }: DocumentNavigatorProps) {
   const {
     chapterTree,
     setChapterTree,
@@ -271,6 +276,18 @@ export default function DocumentNavigator({ manuscriptId, onChapterSelect }: Doc
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [creatingChapter, setCreatingChapter] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // View mode: tree or corkboard
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem('maxwell-document-view-mode');
+    return (saved as ViewMode) || defaultView;
+  });
+
+  // Persist view mode preference
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem('maxwell-document-view-mode', mode);
+  };
 
   // Drag-and-drop sensors
   const sensors = useSensors(
@@ -584,11 +601,56 @@ export default function DocumentNavigator({ manuscriptId, onChapterSelect }: Doc
   // Show skeleton loader while initially loading
   const showSkeleton = loading && chapterTree.length === 0;
 
+  // If corkboard view is selected, render ChapterCorkboard instead
+  if (viewMode === 'corkboard') {
+    return (
+      <div className="h-full flex flex-col bg-white border-r border-slate-ui">
+        {/* Header with view toggle */}
+        <div className="p-4 border-b border-slate-ui">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-garamond font-semibold text-midnight">Corkboard</h2>
+            <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
+          </div>
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleCreateChapter}
+              disabled={creatingChapter}
+              className="flex-1 px-3 py-2 text-xs font-sans bg-bronze text-white hover:bg-bronze/90 disabled:opacity-50"
+              style={{ borderRadius: '2px' }}
+            >
+              {creatingChapter ? '...' : '+ Chapter'}
+            </button>
+            <button
+              onClick={handleCreateFolder}
+              disabled={creatingFolder}
+              className="flex-1 px-3 py-2 text-xs font-sans bg-white border border-slate-ui text-midnight hover:bg-slate-ui/20 disabled:opacity-50"
+              style={{ borderRadius: '2px' }}
+            >
+              {creatingFolder ? '...' : '+ Folder'}
+            </button>
+          </div>
+        </div>
+        {/* Render corkboard content */}
+        <div className="flex-1 overflow-hidden">
+          <ChapterCorkboard
+            manuscriptId={manuscriptId}
+            onChapterSelect={onChapterSelect}
+            hideHeader
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col bg-white border-r border-slate-ui">
-      {/* Header */}
+      {/* Header with view toggle */}
       <div className="p-4 border-b border-slate-ui">
-        <h2 className="font-garamond font-semibold text-midnight mb-3">Manuscript</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-garamond font-semibold text-midnight">Manuscript</h2>
+          <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
+        </div>
 
         {/* Action buttons */}
         <div className="flex gap-2">
@@ -681,6 +743,58 @@ export default function DocumentNavigator({ manuscriptId, onChapterSelect }: Doc
           </DndContext>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * View Toggle Component
+ * Switches between tree and corkboard views
+ */
+interface ViewToggleProps {
+  viewMode: ViewMode;
+  onChange: (mode: ViewMode) => void;
+}
+
+function ViewToggle({ viewMode, onChange }: ViewToggleProps) {
+  return (
+    <div className="flex bg-slate-ui/30 rounded-sm p-0.5">
+      <button
+        onClick={() => onChange('tree')}
+        title="Tree View"
+        className={`
+          px-2 py-1 text-xs font-sans transition-colors rounded-sm
+          ${viewMode === 'tree'
+            ? 'bg-white text-midnight shadow-sm'
+            : 'text-faded-ink hover:text-midnight'
+          }
+        `}
+      >
+        <span className="flex items-center gap-1">
+          <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M1 3h14v2H1V3zm2 4h12v2H3V7zm2 4h10v2H5v-2z" />
+          </svg>
+          <span className="hidden sm:inline">Tree</span>
+        </span>
+      </button>
+      <button
+        onClick={() => onChange('corkboard')}
+        title="Corkboard View"
+        className={`
+          px-2 py-1 text-xs font-sans transition-colors rounded-sm
+          ${viewMode === 'corkboard'
+            ? 'bg-white text-midnight shadow-sm'
+            : 'text-faded-ink hover:text-midnight'
+          }
+        `}
+      >
+        <span className="flex items-center gap-1">
+          <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M1 1h6v6H1V1zm8 0h6v6H9V1zM1 9h6v6H1V9zm8 0h6v6H9V9z" />
+          </svg>
+          <span className="hidden sm:inline">Cards</span>
+        </span>
+      </button>
     </div>
   );
 }

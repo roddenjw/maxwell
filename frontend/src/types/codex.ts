@@ -278,6 +278,14 @@ export interface EntitySuggestion {
   context: string;
   status: SuggestionStatus;
   created_at: string;
+  // Extracted information from NLP (Phase 3)
+  extracted_description?: string;
+  extracted_attributes?: {
+    appearance?: string[];
+    personality?: string[];
+    actions?: string[];
+    background?: string[];
+  };
 }
 
 // API Request Types
@@ -310,6 +318,10 @@ export interface CreateRelationshipRequest {
 
 export interface ApproveSuggestionRequest {
   suggestion_id: string;
+  // Optional overrides - if provided, use these instead of suggestion values
+  name?: string;
+  type?: EntityType;
+  description?: string;
   aliases?: string[];
   attributes?: Record<string, any>;
 }

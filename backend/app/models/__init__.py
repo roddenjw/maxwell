@@ -12,6 +12,8 @@ from app.models.outline import Outline, PlotBeat, OUTLINE_SCOPE_MANUSCRIPT, OUTL
 from app.models.brainstorm import BrainstormSession, BrainstormIdea
 from app.models.entity_state import EntityTimelineState
 from app.models.foreshadowing import ForeshadowingPair, ForeshadowingType
+from app.models.achievement import Achievement, AchievementProgress, AchievementType, ACHIEVEMENT_METADATA
+from app.models.shareable_recap import ShareableRecap
 
 __all__ = [
     # World/Series hierarchy
@@ -51,4 +53,11 @@ __all__ = [
     # Foreshadowing
     "ForeshadowingPair",
     "ForeshadowingType",
+    # Achievement
+    "Achievement",
+    "AchievementProgress",
+    "AchievementType",
+    "ACHIEVEMENT_METADATA",
+    # Shareable Recap
+    "ShareableRecap",
 ]

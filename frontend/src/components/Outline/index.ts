@@ -12,3 +12,4 @@ export { default as TimelineView } from './TimelineView';
 export { default as ProgressDashboard } from './ProgressDashboard';
 export { default as BeatSuggestionCard } from './BeatSuggestionCard';
 export { default as SeriesOutlineView } from './SeriesOutlineView';
+export { default as OutlineMainView } from './OutlineMainView';

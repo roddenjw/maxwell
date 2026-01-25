@@ -7,10 +7,11 @@ import TimelineSidebar from './components/Timeline/TimelineSidebar'
 import DocumentNavigator from './components/Document/DocumentNavigator'
 import FastCoachSidebar from './components/FastCoach/FastCoachSidebar'
 import UnifiedSidebar from './components/Navigation/UnifiedSidebar'
-import ToastContainer from './components/common/ToastContainer'
-import KeyboardShortcutsModal from './components/common/KeyboardShortcutsModal'
-import ViewLoadingSpinner from './components/common/ViewLoadingSpinner'
+import ToastContainer from './components/Common/ToastContainer'
+import KeyboardShortcutsModal from './components/Common/KeyboardShortcutsModal'
+import ViewLoadingSpinner from './components/Common/ViewLoadingSpinner'
 import OutlineSidebar from './components/Outline/OutlineSidebar'
+import { OutlineMainView, CreateOutlineModal } from './components/Outline'
 import { BrainstormingModal } from './components/Brainstorming'
 import { useManuscriptStore } from './stores/manuscriptStore'
 import { useOnboardingStore } from './stores/onboardingStore'
@@ -19,6 +20,7 @@ import { useTimelineStore } from './stores/timelineStore'
 import { useChapterStore } from './stores/chapterStore'
 import { useFastCoachStore } from './stores/fastCoachStore'
 import { useOutlineStore } from './stores/outlineStore'
+import { useAchievementStore } from './stores/achievementStore'
 import { chaptersApi } from './lib/api'
 import { useKeyboardShortcuts, type KeyboardShortcut } from './hooks/useKeyboardShortcuts'
 import { toast } from './stores/toastStore'
@@ -38,6 +40,7 @@ import {
   LazyFeatureTour,
   LazySettingsModal,
 } from './views'
+import { AchievementDashboard } from './components/Achievements'
 
 function App() {
   const { currentManuscriptId, setCurrentManuscript, getCurrentManuscript } = useManuscriptStore()
@@ -47,6 +50,7 @@ function App() {
   const { setCurrentChapter, currentChapterId } = useChapterStore()
   const { isSidebarOpen: isCoachOpen, toggleSidebar: toggleCoach } = useFastCoachStore()
   const { isSidebarOpen: isOutlineSidebarOpen, setSidebarOpen: setOutlineSidebarOpen, clearOutline } = useOutlineStore()
+  const { loadAchievements, showDashboard: showAchievements, setShowDashboard: setShowAchievements, earnAchievement } = useAchievementStore()
   const [activeView, setActiveView] = useState<'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export' | 'outline'>('chapters')
   const [editorKey, setEditorKey] = useState(0) // Force editor re-mount on restore
   const [currentChapterContent, setCurrentChapterContent] = useState<string>('')
@@ -65,6 +69,7 @@ function App() {
   const [showWelcome, setShowWelcome] = useState(false)
   const [showTour, setShowTour] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
+  const [showCreateOutlineModal, setShowCreateOutlineModal] = useState(false)
   const [libraryView, setLibraryView] = useState<'manuscripts' | 'worlds'>('manuscripts')
 
   // Track unsaved changes and warn before closing
@@ -76,6 +81,11 @@ function App() {
       setShowWelcome(true)
     }
   }, [])
+
+  // Load achievements on mount
+  useEffect(() => {
+    loadAchievements()
+  }, [loadAchievements])
 
   const handleWelcomeComplete = async (sampleManuscriptId?: string, manuscriptData?: {title: string; wordCount: number}) => {
     markWelcomeComplete()
@@ -166,6 +176,7 @@ function App() {
 
     if (!currentManuscriptId) {
       markFirstManuscriptCreated()
+      earnAchievement('FIRST_MANUSCRIPT', manuscriptId)
     }
 
     // Track manuscript opened
@@ -547,6 +558,7 @@ function App() {
           onNavigate={handleNavigate}
           onCloseEditor={handleCloseEditor}
           onSettingsClick={() => setShowSettings(true)}
+          onAchievementsClick={() => setShowAchievements(true)}
           activeView={activeView}
         />
 
@@ -709,26 +721,27 @@ function App() {
             {/* Outline View */}
             {activeView === 'outline' && (
               <div className="flex-1 flex bg-vellum">
-                <div className="flex-1 flex items-center justify-center p-8">
-                  <div className="text-center max-w-2xl">
-                    <div className="text-6xl mb-6">📋</div>
-                    <h2 className="font-serif text-3xl font-bold text-midnight mb-4">
-                      Story Structure Outline
-                    </h2>
-                    <p className="font-sans text-faded-ink text-lg mb-6">
-                      Your plot beats are shown in the sidebar. Review each beat, add notes, and create chapters as you progress through your story.
-                    </p>
-                    <p className="font-sans text-faded-ink text-sm">
-                      Click on any beat to expand it and see details about what should happen in that section of your story.
-                    </p>
-                  </div>
-                </div>
+                <OutlineMainView
+                  manuscriptId={currentManuscript.id}
+                  onOpenSidebar={() => setOutlineSidebarOpen(true)}
+                  onCreateOutline={() => setShowCreateOutlineModal(true)}
+                />
                 <OutlineSidebar
                   manuscriptId={currentManuscript.id}
                   isOpen={isOutlineSidebarOpen}
                   onClose={() => setOutlineSidebarOpen(false)}
                   onCreateChapter={handleCreateChapterFromBeat}
                   onOpenChapter={handleChapterSelect}
+                />
+                {/* Create Outline Modal */}
+                <CreateOutlineModal
+                  manuscriptId={currentManuscript.id}
+                  isOpen={showCreateOutlineModal}
+                  onClose={() => setShowCreateOutlineModal(false)}
+                  onSuccess={() => {
+                    setShowCreateOutlineModal(false);
+                    setOutlineSidebarOpen(true);
+                  }}
                 />
               </div>
             )}
@@ -755,6 +768,12 @@ function App() {
 
         {/* Toast Notifications */}
         <ToastContainer />
+
+        {/* Achievement Dashboard */}
+        <AchievementDashboard
+          isOpen={showAchievements}
+          onClose={() => setShowAchievements(false)}
+        />
 
         {/* Onboarding Modals */}
         {showWelcome && (
@@ -813,6 +832,12 @@ function App() {
       </button>
 
       <ToastContainer />
+
+      {/* Achievement Dashboard */}
+      <AchievementDashboard
+        isOpen={showAchievements}
+        onClose={() => setShowAchievements(false)}
+      />
 
       {/* Settings Modal */}
       {showSettings && (

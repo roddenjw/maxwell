@@ -114,7 +114,8 @@ class AIOutlineService:
         self,
         outline: Outline,
         beats: List[PlotBeat],
-        db: Session
+        db: Session,
+        feedback: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Generate AI-powered descriptions for plot beats with manuscript context
@@ -123,6 +124,8 @@ class AIOutlineService:
             outline: Outline object with premise and structure info
             beats: List of PlotBeat objects
             db: Database session
+            feedback: Optional user feedback on previous suggestions
+                     Format: {beatName: {liked: [], disliked: [], notes: ""}}
 
         Returns:
             Dict with beat descriptions and usage info
@@ -153,6 +156,23 @@ If a beat hasn't been written yet, analyze the chapters provided and suggest wha
                     "order": beat.order_index
                 })
 
+            # Build feedback context if provided
+            feedback_context = ""
+            if feedback:
+                feedback_sections = []
+                for beat_name, fb in feedback.items():
+                    if fb.get("liked") or fb.get("disliked") or fb.get("notes"):
+                        fb_text = f"\n**Feedback for {beat_name}:**"
+                        if fb.get("liked"):
+                            fb_text += f"\n  - LIKED suggestions about: {', '.join(fb['liked'])}"
+                        if fb.get("disliked"):
+                            fb_text += f"\n  - DISLIKED suggestions about: {', '.join(fb['disliked'])}"
+                        if fb.get("notes"):
+                            fb_text += f"\n  - Additional notes: {fb['notes']}"
+                        feedback_sections.append(fb_text)
+                if feedback_sections:
+                    feedback_context = "\n\n**USER FEEDBACK ON PREVIOUS SUGGESTIONS:**" + "".join(feedback_sections) + "\n\nIMPORTANT: Use this feedback to refine your suggestions. Generate NEW suggestions that align with what the user liked and avoid what they disliked.\n"
+
             user_prompt = f"""You are analyzing an ACTUAL MANUSCRIPT (see chapters below), not creating a template.
 
 **Manuscript Chapters:**
@@ -165,7 +185,7 @@ If a beat hasn't been written yet, analyze the chapters provided and suggest wha
 - Premise: {outline.premise or "Infer from the chapters above"}
 - Genre: {outline.genre or "General fiction"}
 - Target Length: {outline.target_word_count:,} words
-
+{feedback_context}
 INSTRUCTIONS:
 1. Read the manuscript chapters carefully
 2. For each beat, describe what ACTUALLY happens in THIS STORY (not generic advice)
@@ -663,7 +683,8 @@ Respond in JSON format:
         self,
         outline_id: str,
         db: Session,
-        analysis_types: Optional[List[str]] = None
+        analysis_types: Optional[List[str]] = None,
+        feedback: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Run complete AI analysis on outline (all or selected types)
@@ -673,6 +694,8 @@ Respond in JSON format:
             db: Database session
             analysis_types: List of analysis types to run (default: all)
                           Options: ["beat_descriptions", "content_suggestions", "plot_holes", "pacing"]
+            feedback: Optional user feedback on previous suggestions for refinement
+                     Format: {beatName: {liked: [], disliked: [], notes: ""}}
 
         Returns:
             Dict with all analysis results and total usage/cost
@@ -703,7 +726,7 @@ Respond in JSON format:
 
             # Run selected analyses
             if "beat_descriptions" in analysis_types:
-                desc_result = await self.generate_beat_descriptions(outline, beats, db)
+                desc_result = await self.generate_beat_descriptions(outline, beats, db, feedback)
                 if desc_result["success"]:
                     results["data"]["beat_descriptions"] = desc_result["beat_descriptions"]
                     usage = desc_result.get("usage", {})

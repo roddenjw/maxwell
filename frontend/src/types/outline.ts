@@ -173,6 +173,19 @@ export interface AIAnalysisRequest {
   analysis_types?: ('beat_descriptions' | 'plot_holes' | 'pacing')[];
 }
 
+// Feedback for AI suggestion refinement
+export interface BeatFeedback {
+  liked: string[];  // Descriptions of liked aspects
+  disliked: string[];  // Descriptions of disliked aspects
+  notes: string;  // Free-form refinement notes
+}
+
+export interface AIAnalysisWithFeedbackRequest {
+  api_key: string;
+  analysis_types?: ('beat_descriptions' | 'plot_holes' | 'pacing')[];
+  feedback?: { [beatName: string]: BeatFeedback };
+}
+
 // === Series/World Outline Types ===
 
 export interface SeriesStructureBeat {

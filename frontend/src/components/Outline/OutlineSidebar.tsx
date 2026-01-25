@@ -282,13 +282,21 @@ export default function OutlineSidebar({
             <p className="font-sans text-faded-ink text-sm mb-6">
               Add a story structure outline to guide your writing with proven plot beats and checkpoints.
             </p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-6 py-3 bg-bronze hover:bg-bronze-dark text-white font-sans font-medium uppercase tracking-button transition-colors shadow-book"
-              style={{ borderRadius: '2px' }}
-            >
-              Create Outline
-            </button>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-6 py-3 bg-bronze hover:bg-bronze-dark text-white font-sans font-medium uppercase tracking-button transition-colors shadow-book"
+                style={{ borderRadius: '2px' }}
+              >
+                Create Outline
+              </button>
+              <button
+                onClick={onClose}
+                className="px-6 py-2 text-faded-ink hover:text-midnight font-sans text-sm transition-colors"
+              >
+                Maybe Later
+              </button>
+            </div>
           </div>
         </div>
       )}

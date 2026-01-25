@@ -371,7 +371,9 @@ class CodexService:
         manuscript_id: str,
         name: str,
         entity_type: str,
-        context: str
+        context: str,
+        extracted_description: Optional[str] = None,
+        extracted_attributes: Optional[Dict[str, Any]] = None
     ) -> EntitySuggestion:
         """
         Create entity suggestion from NLP extraction
@@ -381,6 +383,8 @@ class CodexService:
             name: Suggested entity name
             entity_type: Suggested type
             context: Text where entity was found
+            extracted_description: Description extracted from text patterns
+            extracted_attributes: Categorized attributes (appearance, personality, etc.)
 
         Returns:
             Created suggestion
@@ -405,6 +409,8 @@ class CodexService:
                 name=name,
                 type=entity_type,
                 context=context,
+                extracted_description=extracted_description,
+                extracted_attributes=extracted_attributes,
                 status="PENDING"
             )
             db.add(suggestion)
@@ -454,14 +460,20 @@ class CodexService:
     def approve_suggestion(
         self,
         suggestion_id: str,
+        name_override: Optional[str] = None,
+        type_override: Optional[str] = None,
+        description: Optional[str] = None,
         aliases: Optional[List[str]] = None,
         attributes: Optional[Dict[str, Any]] = None
     ) -> Entity:
         """
-        Approve suggestion and create entity
+        Approve suggestion and create entity with optional overrides
 
         Args:
             suggestion_id: Suggestion ID
+            name_override: Override the suggested name
+            type_override: Override the suggested type
+            description: Description to add to entity attributes
             aliases: Optional aliases
             attributes: Optional attributes
 
@@ -483,13 +495,22 @@ class CodexService:
             if suggestion.status != "PENDING":
                 raise ValueError(f"Suggestion already {suggestion.status}")
 
+            # Use overrides if provided, otherwise use suggestion values
+            final_name = name_override if name_override else suggestion.name
+            final_type = type_override if type_override else suggestion.type
+
+            # Build final attributes
+            final_attributes = attributes or {}
+            if description:
+                final_attributes["description"] = description
+
             # Create entity
             entity = Entity(
                 manuscript_id=suggestion.manuscript_id,
-                type=suggestion.type,
-                name=suggestion.name,
+                type=final_type,
+                name=final_name,
                 aliases=aliases or [],
-                attributes=attributes or {}
+                attributes=final_attributes
             )
             db.add(entity)
 

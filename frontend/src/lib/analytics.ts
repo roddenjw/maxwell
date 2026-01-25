@@ -107,6 +107,20 @@ export const analytics = {
     });
   },
 
+  recapShared: (recapType: 'chapter' | 'writing_stats', platform: string) => {
+    posthog.capture('recap_shared', {
+      recap_type: recapType,
+      platform,
+    });
+  },
+
+  recapCardGenerated: (recapType: 'chapter' | 'writing_stats', template: string) => {
+    posthog.capture('recap_card_generated', {
+      recap_type: recapType,
+      template,
+    });
+  },
+
   timeMachineOpened: (manuscriptId: string) => {
     posthog.capture('time_machine_opened', {
       manuscript_id: manuscriptId,

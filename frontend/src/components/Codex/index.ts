@@ -10,3 +10,4 @@ export { default as EntityTemplateWizard } from './EntityTemplateWizard';
 export { default as SuggestionQueue } from './SuggestionQueue';
 export { default as SuggestionCard } from './SuggestionCard';
 export { default as RelationshipGraph } from './RelationshipGraph';
+export { default as AnalyzeModal } from './AnalyzeModal';

@@ -25,6 +25,7 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
     'pacing',
   ]);
   const [severityFilter, setSeverityFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+  const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null);
 
   const {
     aiSuggestions,
@@ -33,9 +34,16 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
     setApiKey,
     getApiKey,
     runAIAnalysis,
+    runAIAnalysisWithFeedback,
     updateBeat,
     clearAISuggestions,
     markPlotHoleResolved,
+    beatFeedback,
+    addBeatFeedbackLike,
+    addBeatFeedbackDislike,
+    setBeatFeedbackNotes,
+    clearBeatFeedback,
+    hasFeedback,
   } = useOutlineStore();
 
   // Check for existing API key on mount and switch to beat ideas tab if found
@@ -380,8 +388,42 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
               </div>
             ) : (
               <>
+                {/* Feedback Summary Banner */}
+                {hasFeedback() && (
+                  <div className="p-3 bg-purple-50 border-2 border-purple-300" style={{ borderRadius: '2px' }}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">💬</span>
+                        <span className="text-sm font-sans font-semibold text-purple-800">
+                          Feedback collected - ready to refine suggestions
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => clearBeatFeedback()}
+                          className="px-3 py-1 text-xs font-sans font-medium text-purple-600 hover:text-purple-800"
+                        >
+                          Clear
+                        </button>
+                        <button
+                          onClick={() => runAIAnalysisWithFeedback(outline.id, selectedAnalyses)}
+                          disabled={isAnalyzing}
+                          className="px-4 py-1.5 text-xs font-sans font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50"
+                          style={{ borderRadius: '2px' }}
+                        >
+                          {isAnalyzing ? 'Regenerating...' : 'Regenerate with Feedback'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {outline.plot_beats.sort((a, b) => a.order_index - b.order_index).map((beat) => {
                   const aiDescription = aiSuggestions?.beat_descriptions?.[beat.beat_name];
+                  const feedback = beatFeedback.get(beat.beat_name);
+                  const isLiked = feedback?.liked?.includes(aiDescription || '') || false;
+                  const isDisliked = feedback?.disliked?.includes(aiDescription || '') || false;
+                  const isFeedbackExpanded = expandedFeedback === beat.beat_name;
 
                   return (
                     <div key={beat.id} className="border-2 border-slate-ui p-4" style={{ borderRadius: '2px' }}>
@@ -403,15 +445,70 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
                             <span className="text-xs font-sans font-semibold text-bronze uppercase">
                               AI Suggestion
                             </span>
-                            <button
-                              onClick={() => handleApplyBeatDescription(beat.beat_name, aiDescription)}
-                              className="px-2 py-1 text-xs font-sans font-medium bg-bronze hover:bg-bronze-dark text-white transition-colors"
-                              style={{ borderRadius: '2px' }}
-                            >
-                              Use This
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {/* Feedback buttons */}
+                              <button
+                                onClick={() => addBeatFeedbackLike(beat.beat_name, aiDescription)}
+                                className={`p-1.5 rounded transition-colors ${
+                                  isLiked
+                                    ? 'bg-green-100 text-green-600'
+                                    : 'text-gray-400 hover:bg-green-50 hover:text-green-500'
+                                }`}
+                                title="Like this suggestion"
+                              >
+                                <svg className="w-4 h-4" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => addBeatFeedbackDislike(beat.beat_name, aiDescription)}
+                                className={`p-1.5 rounded transition-colors ${
+                                  isDisliked
+                                    ? 'bg-red-100 text-red-600'
+                                    : 'text-gray-400 hover:bg-red-50 hover:text-red-500'
+                                }`}
+                                title="Dislike this suggestion"
+                              >
+                                <svg className="w-4 h-4" fill={isDisliked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018c.163 0 .326.02.485.06L17 4m-7 10v2a2 2 0 002 2h.095c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => setExpandedFeedback(isFeedbackExpanded ? null : beat.beat_name)}
+                                className="p-1.5 text-gray-400 hover:bg-gray-100 rounded transition-colors"
+                                title="Add notes"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleApplyBeatDescription(beat.beat_name, aiDescription)}
+                                className="px-2 py-1 text-xs font-sans font-medium bg-bronze hover:bg-bronze-dark text-white transition-colors"
+                                style={{ borderRadius: '2px' }}
+                              >
+                                Use This
+                              </button>
+                            </div>
                           </div>
                           <p className="text-sm font-sans text-midnight leading-relaxed">{aiDescription}</p>
+
+                          {/* Expanded feedback notes */}
+                          {isFeedbackExpanded && (
+                            <div className="mt-3 pt-3 border-t border-bronze/30">
+                              <label className="block text-xs font-sans font-semibold text-faded-ink mb-1">
+                                What would you like different? (optional)
+                              </label>
+                              <textarea
+                                value={feedback?.notes || ''}
+                                onChange={(e) => setBeatFeedbackNotes(beat.beat_name, e.target.value)}
+                                placeholder="e.g., 'Make it more action-focused' or 'Include the mentor character'"
+                                className="w-full px-2 py-1.5 text-sm border border-slate-ui focus:border-bronze focus:outline-none font-sans"
+                                style={{ borderRadius: '2px' }}
+                                rows={2}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
 

@@ -152,6 +152,12 @@ class EntitySuggestion(Base):
     type = Column(String, nullable=False)
     context = Column(Text)  # The text where it was found
 
+    # Extracted information from NLP analysis
+    # Description extracted from patterns like "X is a..." or "X was a..."
+    extracted_description = Column(Text, nullable=True)
+    # Categorized attributes: appearance, personality, actions, background
+    extracted_attributes = Column(JSON, nullable=True)
+
     # Status: PENDING, APPROVED, REJECTED
     status = Column(String, default="PENDING")
 

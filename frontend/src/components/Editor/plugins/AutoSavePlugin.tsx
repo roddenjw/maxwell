@@ -9,7 +9,8 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { $getRoot, EditorState } from 'lexical';
 import { useManuscriptStore } from '@/stores/manuscriptStore';
 import { useOutlineStore } from '@/stores/outlineStore';
-import { versioningApi, chaptersApi, manuscriptApi } from '@/lib/api';
+import { useAchievementStore } from '@/stores/achievementStore';
+import { versioningApi, chaptersApi, manuscriptApi, analyticsApi } from '@/lib/api';
 
 interface AutoSavePluginProps {
   manuscriptId: string;
@@ -29,6 +30,7 @@ export default function AutoSavePlugin({
   const [editor] = useLexicalComposerContext();
   const { updateManuscript } = useManuscriptStore();
   const { getBeatByChapterId, loadProgress } = useOutlineStore();
+  const { checkWordMilestone, checkStreak } = useAchievementStore();
   const saveTimeoutRef = useRef<number | null>(null);
   const lastSnapshotTimeRef = useRef<number>(Date.now());
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
@@ -106,6 +108,19 @@ export default function AutoSavePlugin({
         });
         console.log(`Auto-saved chapter ${chapterId}: ${wordCount} words`);
 
+        // Track writing activity for achievements
+        checkStreak();
+
+        // Fetch total word count for the manuscript and check milestones
+        try {
+          const analytics = await analyticsApi.getAnalytics(manuscriptId, 1);
+          if (analytics.overview?.total_words) {
+            checkWordMilestone(analytics.overview.total_words);
+          }
+        } catch (err) {
+          console.error('Failed to fetch manuscript stats for achievements:', err);
+        }
+
         // Trigger beat progress refresh if chapter is linked to a beat
         const beat = getBeatByChapterId?.(chapterId);
         if (beat) {
@@ -128,6 +143,10 @@ export default function AutoSavePlugin({
           lexical_state: serializedState,
         });
         console.log(`Auto-saved manuscript ${manuscriptId}: ${wordCount} words`);
+
+        // Track writing achievements
+        checkStreak();
+        checkWordMilestone(wordCount);
       } catch (error) {
         console.error('Failed to sync manuscript word count to backend:', error);
       }

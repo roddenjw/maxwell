@@ -1,10 +1,12 @@
 /**
  * SettingsModal - User settings including OpenRouter API key
  * Implements BYOK (Bring Your Own Key) for AI features
+ * Includes entity extraction settings for real-time NLP
  */
 
 import { useState, useEffect } from 'react';
 import { toast } from '@/stores/toastStore';
+import type { ExtractionSettings } from '@/hooks/useRealtimeNLP';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -19,14 +21,22 @@ const AI_MODELS = [
   { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B', cost: 'Low', quality: 'Very Good' },
 ];
 
+const DEFAULT_EXTRACTION_SETTINGS: ExtractionSettings = {
+  enabled: true,
+  debounce_delay: 2,
+  confidence_threshold: 'medium',
+  entity_types: ['CHARACTER', 'LOCATION', 'ITEM', 'LORE'],
+};
+
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [openRouterKey, setOpenRouterKey] = useState('');
   const [selectedModel, setSelectedModel] = useState('anthropic/claude-3.5-sonnet');
   const [showKey, setShowKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [usage, setUsage] = useState<{tokens: number; cost: number} | null>(null);
+  const [extractionSettings, setExtractionSettings] = useState<ExtractionSettings>(DEFAULT_EXTRACTION_SETTINGS);
 
-  // Load saved API key and model on mount
+  // Load saved settings on mount
   useEffect(() => {
     if (isOpen) {
       const savedKey = localStorage.getItem('openrouter_api_key');
@@ -48,8 +58,28 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           console.error('Failed to parse usage stats:', e);
         }
       }
+
+      // Load extraction settings
+      const savedExtraction = localStorage.getItem('maxwell_extraction_settings');
+      if (savedExtraction) {
+        try {
+          setExtractionSettings({ ...DEFAULT_EXTRACTION_SETTINGS, ...JSON.parse(savedExtraction) });
+        } catch (e) {
+          console.error('Failed to parse extraction settings:', e);
+        }
+      }
     }
   }, [isOpen]);
+
+  // Toggle entity type in extraction settings
+  const toggleEntityType = (type: 'CHARACTER' | 'LOCATION' | 'ITEM' | 'LORE') => {
+    setExtractionSettings(prev => {
+      const types = prev.entity_types.includes(type)
+        ? prev.entity_types.filter(t => t !== type)
+        : [...prev.entity_types, type];
+      return { ...prev, entity_types: types };
+    });
+  };
 
   const handleSave = () => {
     setIsSaving(true);
@@ -58,15 +88,18 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       if (openRouterKey.trim()) {
         // Save API key to localStorage
         localStorage.setItem('openrouter_api_key', openRouterKey.trim());
-        toast.success('✅ API key saved! AI features enabled.');
+        toast.success('Settings saved! AI features enabled.');
       } else {
         // Remove key
         localStorage.removeItem('openrouter_api_key');
-        toast.info('API key removed. AI features disabled.');
+        toast.info('Settings saved. AI features disabled (no API key).');
       }
 
       // Save selected model
       localStorage.setItem('openrouter_model', selectedModel);
+
+      // Save extraction settings
+      localStorage.setItem('maxwell_extraction_settings', JSON.stringify(extractionSettings));
 
       // Close modal after brief delay
       setTimeout(() => {
@@ -269,6 +302,123 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 {selectedModel === 'openai/gpt-3.5-turbo' && '💰 Very affordable. Great for drafting. ~$0.0005 per suggestion.'}
                 {selectedModel === 'meta-llama/llama-3.1-70b-instruct' && '🦙 Open-source, good quality, low cost. ~$0.003 per suggestion.'}
               </p>
+            </div>
+          </div>
+
+          {/* Entity Extraction Settings */}
+          <div>
+            <h3 className="text-lg font-garamond font-semibold text-midnight mb-2">
+              🔍 Entity Extraction
+            </h3>
+            <p className="text-sm font-sans text-faded-ink mb-4">
+              Configure how Maxwell detects characters, locations, and other entities as you write.
+            </p>
+
+            {/* Enable/Disable Toggle */}
+            <div className="space-y-4">
+              <label className="flex items-center justify-between p-3 bg-white border border-slate-ui rounded-sm cursor-pointer hover:bg-vellum transition-colors">
+                <div>
+                  <span className="text-sm font-sans font-semibold text-midnight">
+                    Enable Real-time Extraction
+                  </span>
+                  <p className="text-xs font-sans text-faded-ink mt-0.5">
+                    Automatically detect entities while you write
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={extractionSettings.enabled}
+                  onChange={(e) => setExtractionSettings(prev => ({ ...prev, enabled: e.target.checked }))}
+                  className="w-5 h-5 text-bronze border-slate-ui rounded focus:ring-bronze cursor-pointer"
+                />
+              </label>
+
+              {/* Debounce Delay */}
+              <div className="p-3 bg-white border border-slate-ui rounded-sm">
+                <span className="text-sm font-sans font-semibold text-midnight block mb-2">
+                  Detection Delay
+                </span>
+                <p className="text-xs font-sans text-faded-ink mb-3">
+                  How long to wait after you stop typing before analyzing text
+                </p>
+                <div className="flex gap-2">
+                  {[2, 5, 10].map((delay) => (
+                    <button
+                      key={delay}
+                      onClick={() => setExtractionSettings(prev => ({ ...prev, debounce_delay: delay }))}
+                      className={`px-4 py-2 border rounded-sm text-sm font-sans transition-colors ${
+                        extractionSettings.debounce_delay === delay
+                          ? 'bg-bronze text-white border-bronze'
+                          : 'border-slate-ui hover:bg-vellum'
+                      }`}
+                    >
+                      {delay}s
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Confidence Threshold */}
+              <div className="p-3 bg-white border border-slate-ui rounded-sm">
+                <span className="text-sm font-sans font-semibold text-midnight block mb-2">
+                  Detection Sensitivity
+                </span>
+                <p className="text-xs font-sans text-faded-ink mb-3">
+                  Higher sensitivity means more entities detected, but also more false positives
+                </p>
+                <div className="flex gap-2">
+                  {(['low', 'medium', 'high'] as const).map((threshold) => (
+                    <button
+                      key={threshold}
+                      onClick={() => setExtractionSettings(prev => ({ ...prev, confidence_threshold: threshold }))}
+                      className={`px-4 py-2 border rounded-sm text-sm font-sans capitalize transition-colors ${
+                        extractionSettings.confidence_threshold === threshold
+                          ? 'bg-bronze text-white border-bronze'
+                          : 'border-slate-ui hover:bg-vellum'
+                      }`}
+                    >
+                      {threshold}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Entity Types */}
+              <div className="p-3 bg-white border border-slate-ui rounded-sm">
+                <span className="text-sm font-sans font-semibold text-midnight block mb-2">
+                  Entity Types to Detect
+                </span>
+                <p className="text-xs font-sans text-faded-ink mb-3">
+                  Choose which types of entities to look for in your writing
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { type: 'CHARACTER' as const, label: 'Characters', icon: '👤' },
+                    { type: 'LOCATION' as const, label: 'Locations', icon: '📍' },
+                    { type: 'ITEM' as const, label: 'Items', icon: '⚔️' },
+                    { type: 'LORE' as const, label: 'Lore', icon: '📜' },
+                  ].map(({ type, label, icon }) => (
+                    <label
+                      key={type}
+                      className={`flex items-center gap-2 p-2 border rounded-sm cursor-pointer transition-colors ${
+                        extractionSettings.entity_types.includes(type)
+                          ? 'bg-bronze/10 border-bronze'
+                          : 'border-slate-ui hover:bg-vellum'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={extractionSettings.entity_types.includes(type)}
+                        onChange={() => toggleEntityType(type)}
+                        className="w-4 h-4 text-bronze border-slate-ui rounded focus:ring-bronze cursor-pointer"
+                      />
+                      <span className="text-sm font-sans">
+                        {icon} {label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

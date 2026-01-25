@@ -584,6 +584,20 @@ class AIAnalysisRequest(BaseModel):
     analysis_types: Optional[List[str]] = None  # ["beat_descriptions", "plot_holes", "pacing"]
 
 
+class BeatFeedback(BaseModel):
+    """User feedback on a specific beat's AI suggestions"""
+    liked: List[str] = []  # Descriptions of liked aspects
+    disliked: List[str] = []  # Descriptions of disliked aspects
+    notes: str = ""  # Free-form refinement notes
+
+
+class AIAnalysisWithFeedbackRequest(BaseModel):
+    """Request for AI analysis with user feedback for refinement"""
+    api_key: str
+    analysis_types: Optional[List[str]] = None
+    feedback: Optional[Dict[str, BeatFeedback]] = None  # beatName -> feedback
+
+
 @router.post("/{outline_id}/ai-analyze")
 async def analyze_outline_with_ai(
     outline_id: str,
@@ -655,6 +669,90 @@ async def analyze_outline_with_ai(
         raise
     except Exception as e:
         logger.error(f"AI analysis error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI analysis failed: {str(e)}"
+        )
+
+
+@router.post("/{outline_id}/ai-analyze-with-feedback")
+async def analyze_outline_with_feedback(
+    outline_id: str,
+    request: AIAnalysisWithFeedbackRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Run AI analysis on outline with user feedback for refinement.
+
+    This endpoint allows users to provide feedback on previous AI suggestions
+    (what they liked, disliked, and additional notes) to guide the regeneration
+    of beat suggestions.
+
+    The feedback is included in the AI prompt to produce more tailored suggestions.
+    """
+    try:
+        # Validate outline exists
+        outline = db.query(Outline).filter(Outline.id == outline_id).first()
+        if not outline:
+            raise HTTPException(status_code=404, detail="Outline not found")
+
+        # Validate API key format
+        if not request.api_key or len(request.api_key) < 10:
+            raise HTTPException(status_code=400, detail="Invalid API key")
+
+        # Validate we have enough context for meaningful analysis
+        has_premise = bool(outline.premise and len(outline.premise) > 20)
+        has_chapters = db.query(Chapter).filter(
+            Chapter.manuscript_id == outline.manuscript_id,
+            Chapter.is_folder == 0
+        ).count() > 0
+
+        if not has_premise and not has_chapters:
+            raise HTTPException(
+                status_code=400,
+                detail="Not enough context for AI analysis. Please either: (1) Add a premise/logline in outline settings, or (2) Write at least 1-2 chapters of your manuscript."
+            )
+
+        # Initialize AI service with user's key
+        ai_service = AIOutlineService(request.api_key)
+
+        # Convert feedback to dict format for AI service
+        feedback_dict = None
+        if request.feedback:
+            feedback_dict = {
+                beat_name: {
+                    "liked": fb.liked,
+                    "disliked": fb.disliked,
+                    "notes": fb.notes
+                }
+                for beat_name, fb in request.feedback.items()
+            }
+
+        # Run analysis with feedback
+        result = await ai_service.run_full_analysis(
+            outline_id=outline_id,
+            db=db,
+            analysis_types=request.analysis_types,
+            feedback=feedback_dict
+        )
+
+        if not result["success"]:
+            raise HTTPException(
+                status_code=500,
+                detail=f"AI analysis failed: {result.get('error', 'Unknown error')}"
+            )
+
+        return {
+            "success": True,
+            "data": result["data"],
+            "usage": result.get("usage", {}),
+            "cost": result.get("cost", {})
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI analysis with feedback error: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"AI analysis failed: {str(e)}"

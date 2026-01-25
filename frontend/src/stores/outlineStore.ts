@@ -14,6 +14,7 @@ import type {
   SceneCreate,
   SeriesStructureSummary,
   SeriesStructureWithManuscripts,
+  BeatFeedback,
 } from '@/types/outline';
 import { outlineApi, seriesOutlineApi } from '@/lib/api';
 import { toast } from './toastStore';
@@ -35,6 +36,9 @@ interface OutlineStore {
   beatSuggestions: Map<string, BeatSuggestionsResult>;  // beatId -> suggestions
   isAnalyzing: boolean;
   apiKey: string | null;
+
+  // Feedback state for AI refinement
+  beatFeedback: Map<string, BeatFeedback>;  // beatName -> feedback
 
   // Actions
   setOutline: (outline: Outline | null) => void;
@@ -61,9 +65,18 @@ interface OutlineStore {
   setApiKey: (apiKey: string) => void;
   getApiKey: () => string | null;
   runAIAnalysis: (outlineId: string, analysisTypes?: string[]) => Promise<void>;
+  runAIAnalysisWithFeedback: (outlineId: string, analysisTypes?: string[]) => Promise<void>;
   getBeatAISuggestions: (beatId: string) => Promise<void>;
   clearAISuggestions: () => void;
   markPlotHoleResolved: (index: number) => void;
+
+  // Feedback Actions
+  setBeatFeedback: (beatName: string, feedback: BeatFeedback) => void;
+  addBeatFeedbackLike: (beatName: string, description: string) => void;
+  addBeatFeedbackDislike: (beatName: string, description: string) => void;
+  setBeatFeedbackNotes: (beatName: string, notes: string) => void;
+  clearBeatFeedback: (beatName?: string) => void;
+  hasFeedback: () => boolean;
 
   // Computed
   getCompletedBeatsCount: () => number;
@@ -108,6 +121,7 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
   beatSuggestions: new Map(),
   isAnalyzing: false,
   apiKey: typeof window !== 'undefined' ? localStorage.getItem('openrouter_api_key') : null,
+  beatFeedback: new Map(),
 
   // Synchronous Actions
   setOutline: (outline) => set({ outline, error: null }),
@@ -402,6 +416,109 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     }
 
     set({ aiSuggestions: updated });
+  },
+
+  // Feedback Actions
+  setBeatFeedback: (beatName: string, feedback: BeatFeedback) => {
+    const newMap = new Map(get().beatFeedback);
+    newMap.set(beatName, feedback);
+    set({ beatFeedback: newMap });
+  },
+
+  addBeatFeedbackLike: (beatName: string, description: string) => {
+    const current = get().beatFeedback.get(beatName) || { liked: [], disliked: [], notes: '' };
+    const liked = current.liked.includes(description)
+      ? current.liked.filter(d => d !== description)  // Toggle off
+      : [...current.liked, description];
+    const newMap = new Map(get().beatFeedback);
+    newMap.set(beatName, { ...current, liked });
+    set({ beatFeedback: newMap });
+  },
+
+  addBeatFeedbackDislike: (beatName: string, description: string) => {
+    const current = get().beatFeedback.get(beatName) || { liked: [], disliked: [], notes: '' };
+    const disliked = current.disliked.includes(description)
+      ? current.disliked.filter(d => d !== description)  // Toggle off
+      : [...current.disliked, description];
+    const newMap = new Map(get().beatFeedback);
+    newMap.set(beatName, { ...current, disliked });
+    set({ beatFeedback: newMap });
+  },
+
+  setBeatFeedbackNotes: (beatName: string, notes: string) => {
+    const current = get().beatFeedback.get(beatName) || { liked: [], disliked: [], notes: '' };
+    const newMap = new Map(get().beatFeedback);
+    newMap.set(beatName, { ...current, notes });
+    set({ beatFeedback: newMap });
+  },
+
+  clearBeatFeedback: (beatName?: string) => {
+    if (beatName) {
+      const newMap = new Map(get().beatFeedback);
+      newMap.delete(beatName);
+      set({ beatFeedback: newMap });
+    } else {
+      set({ beatFeedback: new Map() });
+    }
+  },
+
+  hasFeedback: () => {
+    const feedback = get().beatFeedback;
+    for (const [, value] of feedback) {
+      if (value.liked.length > 0 || value.disliked.length > 0 || value.notes.trim()) {
+        return true;
+      }
+    }
+    return false;
+  },
+
+  runAIAnalysisWithFeedback: async (outlineId: string, analysisTypes?: string[]) => {
+    const apiKey = get().getApiKey();
+    if (!apiKey) {
+      toast.error('Please set your OpenRouter API key in Settings');
+      return;
+    }
+
+    const feedback = get().beatFeedback;
+    const hasFeedback = get().hasFeedback();
+
+    set({ isAnalyzing: true, error: null });
+
+    try {
+      const { aiApi } = await import('@/lib/api');
+
+      // Convert Map to object for API
+      const feedbackObj: { [beatName: string]: BeatFeedback } = {};
+      if (hasFeedback) {
+        for (const [beatName, fb] of feedback) {
+          if (fb.liked.length > 0 || fb.disliked.length > 0 || fb.notes.trim()) {
+            feedbackObj[beatName] = fb;
+          }
+        }
+      }
+
+      const result = await aiApi.analyzeOutlineWithFeedback(outlineId, apiKey, analysisTypes, feedbackObj);
+
+      set({
+        aiSuggestions: result.data,
+        isAnalyzing: false,
+        beatFeedback: new Map(),  // Clear feedback after successful regeneration
+      });
+
+      toast.success(`AI analysis complete with feedback! Cost: ${result.cost?.formatted || '$0.00'}`);
+    } catch (error: any) {
+      console.error('AI analysis with feedback failed:', error);
+      set({ isAnalyzing: false, error: error.message });
+
+      if (error.message?.includes('insufficient_credits') || error.message?.includes('insufficient credits')) {
+        toast.error('Your OpenRouter API key has insufficient credits. Please add credits at https://openrouter.ai/credits');
+      } else if (error.message?.includes('invalid_api_key') || error.message?.includes('invalid')) {
+        toast.error('Your OpenRouter API key is invalid. Please check your API key in Settings.');
+      } else {
+        toast.error('AI analysis failed: ' + (error.message || 'Unknown error'));
+      }
+      throw error;
+    }
   },
 
   // Computed Values
