@@ -348,6 +348,30 @@ export const analytics = {
     });
   },
 
+  // ===== Import Events =====
+
+  importStarted: (format: string) => {
+    posthog.capture('import_started', {
+      format,
+    });
+  },
+
+  importCompleted: (manuscriptId: string, format: string, wordCount: number, chapterCount: number) => {
+    posthog.capture('import_completed', {
+      manuscript_id: manuscriptId,
+      format,
+      word_count: wordCount,
+      chapter_count: chapterCount,
+    });
+  },
+
+  importFailed: (format: string, error: string) => {
+    posthog.capture('import_failed', {
+      format,
+      error: error.substring(0, 200), // Truncate for privacy
+    });
+  },
+
   // ===== Error Tracking =====
 
   errorOccurred: (errorType: string, context: string, message?: string) => {

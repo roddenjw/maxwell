@@ -2355,6 +2355,88 @@ export const seriesOutlineApi = {
   },
 };
 
+// ==================== Import API ====================
+
+/**
+ * Import API - Manuscript import from various document formats
+ */
+export const importApi = {
+  /**
+   * Get list of supported import formats
+   */
+  async getSupportedFormats(): Promise<SupportedFormat[]> {
+    const response = await fetch(`${API_BASE_URL}/import/formats`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get supported formats');
+    }
+
+    const result = await response.json();
+    return result.formats;
+  },
+
+  /**
+   * Parse an uploaded document and detect chapters
+   * Step 1 of the two-step import flow
+   */
+  async parseFile(
+    file: File,
+    detectionMode: DetectionMode = 'auto'
+  ): Promise<ImportPreview> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(
+      `${API_BASE_URL}/import/parse?detection_mode=${detectionMode}`,
+      {
+        method: 'POST',
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to parse document');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Create a manuscript from a previously parsed import
+   * Step 2 of the two-step import flow
+   */
+  async createFromImport(data: ImportCreateRequest): Promise<ImportCreateResponse> {
+    const response = await fetch(`${API_BASE_URL}/import/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create manuscript from import');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get cached parse preview by ID
+   */
+  async getParsePreview(parseId: string): Promise<ImportPreview> {
+    const response = await fetch(`${API_BASE_URL}/import/preview/${parseId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Parse result not found or expired');
+    }
+
+    return response.json();
+  },
+};
+
 // ==================== Foreshadowing API ====================
 
 import type {
@@ -2363,6 +2445,14 @@ import type {
   ForeshadowingStats,
   PayoffSuggestion,
 } from '@/types/foreshadowing';
+
+import type {
+  SupportedFormat,
+  ImportPreview,
+  ImportCreateRequest,
+  ImportCreateResponse,
+  DetectionMode,
+} from '@/types/import';
 
 export const foreshadowingApi = {
   /**
@@ -2557,5 +2647,6 @@ export default {
   entityState: entityStateApi,
   seriesOutline: seriesOutlineApi,
   foreshadowing: foreshadowingApi,
+  import: importApi,
   healthCheck,
 };

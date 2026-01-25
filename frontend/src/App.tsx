@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import ManuscriptEditor from './components/Editor/ManuscriptEditor'
 import ManuscriptLibrary from './components/ManuscriptLibrary'
 import { WorldLibrary } from './components/WorldLibrary'
-import { TimeMachine } from './components/TimeMachine'
 import { CodexSidebar } from './components/Codex'
 import TimelineSidebar from './components/Timeline/TimelineSidebar'
 import DocumentNavigator from './components/Document/DocumentNavigator'
@@ -10,12 +9,7 @@ import FastCoachSidebar from './components/FastCoach/FastCoachSidebar'
 import UnifiedSidebar from './components/Navigation/UnifiedSidebar'
 import ToastContainer from './components/common/ToastContainer'
 import KeyboardShortcutsModal from './components/common/KeyboardShortcutsModal'
-import AnalyticsDashboard from './components/Analytics/AnalyticsDashboard'
-import ExportModal from './components/Export/ExportModal'
-import WelcomeModal from './components/Onboarding/WelcomeModal'
-import FeatureTour from './components/Onboarding/FeatureTour'
-import SettingsModal from './components/Settings/SettingsModal'
-import ManuscriptWizard from './components/Outline/ManuscriptWizard'
+import ViewLoadingSpinner from './components/common/ViewLoadingSpinner'
 import OutlineSidebar from './components/Outline/OutlineSidebar'
 import { BrainstormingModal } from './components/Brainstorming'
 import { useManuscriptStore } from './stores/manuscriptStore'
@@ -30,8 +24,20 @@ import { useKeyboardShortcuts, type KeyboardShortcut } from './hooks/useKeyboard
 import { toast } from './stores/toastStore'
 import { getErrorMessage } from './lib/retry'
 import { useUnsavedChanges } from './hooks/useUnsavedChanges'
-import RecapModal from './components/RecapModal'
+import { convertPlainTextToLexical } from './lib/lexicalConversion'
 import analytics from './lib/analytics'
+
+// Lazy-loaded components for better bundle splitting
+import {
+  LazyAnalyticsDashboard,
+  LazyTimeMachine,
+  LazyExportModal,
+  LazyRecapModal,
+  LazyManuscriptWizard,
+  LazyWelcomeModal,
+  LazyFeatureTour,
+  LazySettingsModal,
+} from './views'
 
 function App() {
   const { currentManuscriptId, setCurrentManuscript, getCurrentManuscript } = useManuscriptStore()
@@ -327,46 +333,6 @@ function App() {
       console.error('Failed to restore snapshot:', error)
       toast.error('Failed to restore snapshot: ' + getErrorMessage(error))
     }
-  }
-
-  // Convert plain text to Lexical editor state format
-  const convertPlainTextToLexical = (plainText: string): string => {
-    // Split text into paragraphs
-    const paragraphs = plainText.split('\n').filter(line => line.trim() !== '')
-
-    // Create Lexical nodes for each paragraph
-    const children = paragraphs.map(text => ({
-      children: [
-        {
-          detail: 0,
-          format: 0,
-          mode: 'normal',
-          style: '',
-          text: text,
-          type: 'text',
-          version: 1
-        }
-      ],
-      direction: 'ltr',
-      format: '',
-      indent: 0,
-      type: 'paragraph',
-      version: 1
-    }))
-
-    // Create root Lexical state
-    const lexicalState = {
-      root: {
-        children: children,
-        direction: 'ltr',
-        format: '',
-        indent: 0,
-        type: 'root',
-        version: 1
-      }
-    }
-
-    return JSON.stringify(lexicalState)
   }
 
   const handleCreateChapterFromBeat = async (beat: any) => {
@@ -697,39 +663,47 @@ function App() {
 
             {/* Time Machine View (Modal) */}
             {activeView === 'timemachine' && (
-              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                <div className="bg-vellum rounded-lg shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden">
-                  <TimeMachine
-                    manuscriptId={currentManuscript.id}
-                    currentContent={currentChapterContent}
-                    onRestore={handleRestoreSnapshot}
-                    onClose={() => setActiveView('chapters')}
-                  />
+              <Suspense fallback={<ViewLoadingSpinner />}>
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                  <div className="bg-vellum rounded-lg shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden">
+                    <LazyTimeMachine
+                      manuscriptId={currentManuscript.id}
+                      currentContent={currentChapterContent}
+                      onRestore={handleRestoreSnapshot}
+                      onClose={() => setActiveView('chapters')}
+                    />
+                  </div>
                 </div>
-              </div>
+              </Suspense>
             )}
 
             {/* Analytics View */}
             {activeView === 'analytics' && (
-              <div className="flex-1 overflow-auto">
-                <AnalyticsDashboard manuscriptId={currentManuscript.id} />
-              </div>
+              <Suspense fallback={<ViewLoadingSpinner />}>
+                <div className="flex-1 overflow-auto">
+                  <LazyAnalyticsDashboard manuscriptId={currentManuscript.id} />
+                </div>
+              </Suspense>
             )}
 
             {/* Export View (Modal) */}
             {activeView === 'export' && (
-              <ExportModal
-                manuscriptId={currentManuscript.id}
-                onClose={() => setActiveView('chapters')}
-              />
+              <Suspense fallback={<ViewLoadingSpinner />}>
+                <LazyExportModal
+                  manuscriptId={currentManuscript.id}
+                  onClose={() => setActiveView('chapters')}
+                />
+              </Suspense>
             )}
 
             {/* Recap View (Modal) */}
             {activeView === 'recap' && (
-              <RecapModal
-                manuscriptId={currentManuscript.id}
-                onClose={() => setActiveView('chapters')}
-              />
+              <Suspense fallback={<ViewLoadingSpinner />}>
+                <LazyRecapModal
+                  manuscriptId={currentManuscript.id}
+                  onClose={() => setActiveView('chapters')}
+                />
+              </Suspense>
             )}
 
             {/* Outline View */}
@@ -771,10 +745,12 @@ function App() {
 
         {/* Settings Modal */}
         {showSettings && (
-          <SettingsModal
-            isOpen={showSettings}
-            onClose={() => setShowSettings(false)}
-          />
+          <Suspense fallback={<ViewLoadingSpinner />}>
+            <LazySettingsModal
+              isOpen={showSettings}
+              onClose={() => setShowSettings(false)}
+            />
+          </Suspense>
         )}
 
         {/* Toast Notifications */}
@@ -782,10 +758,14 @@ function App() {
 
         {/* Onboarding Modals */}
         {showWelcome && (
-          <WelcomeModal onComplete={handleWelcomeComplete} onSkip={handleWelcomeSkip} />
+          <Suspense fallback={<ViewLoadingSpinner />}>
+            <LazyWelcomeModal onComplete={handleWelcomeComplete} onSkip={handleWelcomeSkip} />
+          </Suspense>
         )}
         {showTour && (
-          <FeatureTour onComplete={handleTourComplete} onSkip={handleTourSkip} />
+          <Suspense fallback={<ViewLoadingSpinner />}>
+            <LazyFeatureTour onComplete={handleTourComplete} onSkip={handleTourSkip} />
+          </Suspense>
         )}
 
         {/* Brainstorming Modal */}
@@ -836,26 +816,34 @@ function App() {
 
       {/* Settings Modal */}
       {showSettings && (
-        <SettingsModal
-          isOpen={showSettings}
-          onClose={() => setShowSettings(false)}
-        />
+        <Suspense fallback={<ViewLoadingSpinner />}>
+          <LazySettingsModal
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+          />
+        </Suspense>
       )}
 
       {/* Manuscript Creation Wizard */}
       {showWizard && (
-        <ManuscriptWizard
-          onComplete={handleWizardComplete}
-          onCancel={() => setShowWizard(false)}
-        />
+        <Suspense fallback={<ViewLoadingSpinner />}>
+          <LazyManuscriptWizard
+            onComplete={handleWizardComplete}
+            onCancel={() => setShowWizard(false)}
+          />
+        </Suspense>
       )}
 
       {/* Onboarding Modals */}
       {showWelcome && (
-        <WelcomeModal onComplete={handleWelcomeComplete} onSkip={handleWelcomeSkip} />
+        <Suspense fallback={<ViewLoadingSpinner />}>
+          <LazyWelcomeModal onComplete={handleWelcomeComplete} onSkip={handleWelcomeSkip} />
+        </Suspense>
       )}
       {showTour && (
-        <FeatureTour onComplete={handleTourComplete} onSkip={handleTourSkip} />
+        <Suspense fallback={<ViewLoadingSpinner />}>
+          <LazyFeatureTour onComplete={handleTourComplete} onSkip={handleTourSkip} />
+        </Suspense>
       )}
 
       {/* Brainstorming Modal */}

@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { useManuscriptStore } from '../stores/manuscriptStore';
 import { toast } from '../stores/toastStore';
 import analytics from '../lib/analytics';
+import { ImportModal } from './Import';
 
 interface ManuscriptLibraryProps {
   onOpenManuscript: (manuscriptId: string) => void;
@@ -17,6 +18,15 @@ interface ManuscriptLibraryProps {
 export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, onCreateWithWizard }: ManuscriptLibraryProps) {
   const { manuscripts, fetchManuscripts, createManuscript, deleteManuscript, isLoading, error } = useManuscriptStore();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+
+  const handleImportComplete = async (manuscriptId: string) => {
+    setShowImportModal(false);
+    // Refresh manuscripts to include the newly imported one
+    await fetchManuscripts();
+    // Open the imported manuscript
+    onOpenManuscript(manuscriptId);
+  };
 
   // Fetch manuscripts from backend on mount
   useEffect(() => {
@@ -81,13 +91,22 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
                 : `${manuscripts.length} ${manuscripts.length === 1 ? 'manuscript' : 'manuscripts'}`}
             </p>
           </div>
-          <button
-            onClick={() => setShowCreateDialog(true)}
-            className="px-6 py-3 bg-bronze hover:bg-bronze-dark text-white font-sans font-medium uppercase tracking-button transition-colors shadow-book"
-            style={{ borderRadius: '2px' }}
-          >
-            + New Manuscript
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="px-6 py-3 border border-bronze text-bronze hover:bg-bronze hover:text-white font-sans font-medium uppercase tracking-button transition-colors"
+              style={{ borderRadius: '2px' }}
+            >
+              Import
+            </button>
+            <button
+              onClick={() => setShowCreateDialog(true)}
+              className="px-6 py-3 bg-bronze hover:bg-bronze-dark text-white font-sans font-medium uppercase tracking-button transition-colors shadow-book"
+              style={{ borderRadius: '2px' }}
+            >
+              + New Manuscript
+            </button>
+          </div>
         </div>
 
         {/* Manuscript Grid */}
@@ -186,7 +205,7 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
               Choose how you'd like to start your manuscript
             </p>
 
-            <div className="grid md:grid-cols-2 gap-4 mb-6">
+            <div className="grid md:grid-cols-3 gap-4 mb-6">
               {/* Quick Create */}
               <button
                 onClick={async () => {
@@ -205,12 +224,12 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
                 }}
                 className="p-6 border-2 border-slate-ui hover:border-bronze hover:shadow-lg transition-all text-left rounded-sm"
               >
-                <div className="text-4xl mb-3">⚡</div>
+                <div className="text-4xl mb-3">&#x26A1;</div>
                 <h4 className="font-sans font-bold text-midnight text-lg mb-2">
                   Quick Create
                 </h4>
                 <p className="text-sm text-faded-ink">
-                  Start with a blank manuscript. Perfect for experienced writers who already have a plan.
+                  Start with a blank manuscript. Perfect for experienced writers.
                 </p>
               </button>
 
@@ -224,7 +243,7 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
                   className="p-6 border-2 border-bronze bg-bronze/5 hover:border-bronze-dark hover:shadow-lg transition-all text-left rounded-sm"
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div className="text-4xl">🎯</div>
+                    <div className="text-4xl">&#x1F3AF;</div>
                     <div className="text-xs bg-bronze text-white px-2 py-1 rounded-sm font-semibold">
                       RECOMMENDED
                     </div>
@@ -233,10 +252,27 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
                     Guided Setup
                   </h4>
                   <p className="text-sm text-faded-ink">
-                    Create with story structure templates (Mythic Quest, Screenplay Structure, etc.). Get plot beats and guidance.
+                    Create with story structure templates. Get plot beats and guidance.
                   </p>
                 </button>
               )}
+
+              {/* Import Existing */}
+              <button
+                onClick={() => {
+                  setShowCreateDialog(false);
+                  setShowImportModal(true);
+                }}
+                className="p-6 border-2 border-slate-ui hover:border-bronze hover:shadow-lg transition-all text-left rounded-sm"
+              >
+                <div className="text-4xl mb-3">&#x1F4E5;</div>
+                <h4 className="font-sans font-bold text-midnight text-lg mb-2">
+                  Import Existing
+                </h4>
+                <p className="text-sm text-faded-ink">
+                  Import from Word, PDF, Markdown, or other formats.
+                </p>
+              </button>
             </div>
 
             <button
@@ -250,6 +286,14 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
             </button>
           </div>
         </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <ImportModal
+          onClose={() => setShowImportModal(false)}
+          onImportComplete={handleImportComplete}
+        />
       )}
     </div>
   );

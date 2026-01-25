@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.models.manuscript import Manuscript, Chapter
+from app.services.lexical_utils import lexical_to_rich_paragraphs, RichParagraph
 
 
 class ExportService:
@@ -94,9 +95,43 @@ class ExportService:
             heading_run = heading.runs[0]
             heading_run.font.size = Pt(18)
 
-            # Add chapter content
-            if chapter.content:
-                # Split into paragraphs
+            # Add chapter content with formatting preserved
+            rich_paragraphs = []
+            if chapter.lexical_state and chapter.lexical_state.strip():
+                # Parse Lexical state to extract formatting
+                rich_paragraphs = lexical_to_rich_paragraphs(chapter.lexical_state)
+
+            if rich_paragraphs:
+                # Write formatted paragraphs
+                for rich_para in rich_paragraphs:
+                    if rich_para.is_empty():
+                        continue
+
+                    # Handle headings vs regular paragraphs
+                    if rich_para.heading_level > 0:
+                        para = doc.add_heading('', level=min(rich_para.heading_level, 6))
+                    else:
+                        para = doc.add_paragraph()
+                        # Standard manuscript formatting for body text
+                        para_format = para.paragraph_format
+                        para_format.line_spacing = 2.0  # Double-spaced
+                        para_format.first_line_indent = Inches(0.5)  # Indent first line
+
+                    # Add runs with formatting
+                    for text_run in rich_para.runs:
+                        if not text_run.text:
+                            continue
+                        run = para.add_run(text_run.text)
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(12)
+                        run.bold = text_run.bold
+                        run.italic = text_run.italic
+                        run.underline = text_run.underline
+                        if text_run.strikethrough:
+                            run.font.strike = True
+
+            elif chapter.content:
+                # Fallback: Split plain text into paragraphs
                 paragraphs = chapter.content.split('\n')
 
                 for para_text in paragraphs:
@@ -234,20 +269,57 @@ class ExportService:
                 )
             ).order_by(Chapter.order_index).all()
 
+        def escape_for_reportlab(text: str) -> str:
+            """Escape special characters for ReportLab XML."""
+            return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+        def format_run_for_pdf(run) -> str:
+            """Convert a TextRun to ReportLab markup."""
+            text = escape_for_reportlab(run.text)
+            if run.bold:
+                text = f'<b>{text}</b>'
+            if run.italic:
+                text = f'<i>{text}</i>'
+            if run.underline:
+                text = f'<u>{text}</u>'
+            if run.strikethrough:
+                text = f'<strike>{text}</strike>'
+            return text
+
         # Add chapters
         for i, chapter in enumerate(chapters):
             # Add chapter title
             elements.append(Paragraph(chapter.title, chapter_style))
             elements.append(Spacer(1, 0.2*inch))
 
-            # Add chapter content
-            if chapter.content:
+            # Add chapter content with formatting preserved
+            rich_paragraphs = []
+            if chapter.lexical_state and chapter.lexical_state.strip():
+                rich_paragraphs = lexical_to_rich_paragraphs(chapter.lexical_state)
+
+            if rich_paragraphs:
+                for rich_para in rich_paragraphs:
+                    if rich_para.is_empty():
+                        continue
+
+                    # Build paragraph text with formatting tags
+                    para_text = ''.join(format_run_for_pdf(run) for run in rich_para.runs if run.text)
+
+                    if para_text.strip():
+                        # Use heading style for headings
+                        if rich_para.heading_level > 0:
+                            elements.append(Paragraph(para_text, chapter_style))
+                        else:
+                            elements.append(Paragraph(para_text, body_style))
+                        elements.append(Spacer(1, 0.1*inch))
+
+            elif chapter.content:
+                # Fallback: Split plain text into paragraphs
                 paragraphs = chapter.content.split('\n')
 
                 for para_text in paragraphs:
                     if para_text.strip():
-                        # Escape special characters for ReportLab
-                        safe_text = para_text.strip().replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                        safe_text = escape_for_reportlab(para_text.strip())
                         elements.append(Paragraph(safe_text, body_style))
                         elements.append(Spacer(1, 0.1*inch))
 

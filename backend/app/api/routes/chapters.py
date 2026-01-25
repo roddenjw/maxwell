@@ -3,7 +3,6 @@ Chapter CRUD API Routes
 Handles hierarchical chapter/folder structure (Scrivener-like navigation)
 """
 
-import json
 import uuid
 from datetime import datetime
 from typing import List, Optional
@@ -17,59 +16,10 @@ from app.models.manuscript import Chapter
 from app.models.outline import PlotBeat
 from app.services.manuscript_aggregation_service import manuscript_aggregation_service
 from app.services.scene_detection_service import scene_detection_service
+from app.services.lexical_utils import extract_text_from_lexical
 
 
 router = APIRouter(prefix="/api/chapters", tags=["chapters"])
-
-
-def extract_text_from_lexical(lexical_state_str: str) -> str:
-    """
-    Extract plain text from Lexical editor state JSON
-    Recursively walks the node tree and concatenates text content
-    """
-    try:
-        if not lexical_state_str or lexical_state_str.strip() == "":
-            return ""
-
-        state = json.loads(lexical_state_str)
-
-        def walk_nodes(node):
-            """Recursively extract text from Lexical nodes"""
-            text_parts = []
-
-            # Handle root node
-            if isinstance(node, dict):
-                # Direct text content
-                if node.get("type") == "text" and "text" in node:
-                    text_parts.append(node["text"])
-
-                # Paragraph nodes add newlines
-                if node.get("type") == "paragraph" and node != state.get("root"):
-                    # Will add newline after processing children
-                    pass
-
-                # Process children
-                if "children" in node:
-                    for child in node["children"]:
-                        text_parts.append(walk_nodes(child))
-
-                    # Add newline after paragraph
-                    if node.get("type") == "paragraph":
-                        text_parts.append("\n")
-
-            return "".join(text_parts)
-
-        # Start from root
-        root = state.get("root", {})
-        text = walk_nodes(root)
-
-        # Clean up extra newlines
-        text = text.strip()
-
-        return text
-    except Exception as e:
-        print(f"⚠️  Failed to extract text from lexical state: {e}")
-        return ""
 
 
 # Pydantic schemas for request/response
