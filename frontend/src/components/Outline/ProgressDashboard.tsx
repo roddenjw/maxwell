@@ -217,64 +217,6 @@ export default function ProgressDashboard({ outline }: ProgressDashboardProps) {
         </div>
       </div>
 
-      {/* Pacing Heatmap */}
-      <div>
-        <h4 className="font-sans font-semibold text-midnight text-sm mb-3">
-          Story Pacing Heatmap
-        </h4>
-        <div className="flex gap-1">
-          {beats
-            .sort((a, b) => a.order_index - b.order_index)
-            .map((beat) => {
-              const intensity = beat.actual_word_count / beat.target_word_count;
-              const getColor = () => {
-                if (intensity === 0) return 'bg-slate-ui/30';
-                if (intensity < 0.25) return 'bg-bronze/20';
-                if (intensity < 0.5) return 'bg-bronze/40';
-                if (intensity < 0.75) return 'bg-bronze/60';
-                if (intensity < 1.0) return 'bg-bronze/80';
-                return 'bg-green-500';
-              };
-
-              return (
-                <div
-                  key={beat.id}
-                  className={`flex-1 h-12 ${getColor()} border border-white hover:border-bronze transition-all cursor-pointer group relative`}
-                  style={{ borderRadius: '2px', minWidth: '8px' }}
-                  title={`${beat.beat_label}\n${Math.round(intensity * 100)}% complete\n${beat.actual_word_count} / ${beat.target_word_count} words`}
-                >
-                  {/* Tooltip on hover */}
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10 whitespace-nowrap">
-                    <div className="bg-midnight text-white text-xs px-2 py-1 shadow-lg" style={{ borderRadius: '2px' }}>
-                      <div className="font-semibold">{beat.beat_label}</div>
-                      <div>{Math.round(intensity * 100)}% complete</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-        </div>
-        <div className="flex items-center justify-between mt-2 text-xs font-sans text-faded-ink">
-          <span>Beginning</span>
-          <span>Middle</span>
-          <span>End</span>
-        </div>
-        <div className="mt-3 flex items-center gap-4 text-xs font-sans text-faded-ink">
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 bg-slate-ui/30" style={{ borderRadius: '2px' }} />
-            <span>Not Started</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 bg-bronze/40" style={{ borderRadius: '2px' }} />
-            <span>In Progress</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 bg-green-500" style={{ borderRadius: '2px' }} />
-            <span>Complete</span>
-          </div>
-        </div>
-      </div>
-
       {/* Quick Insights */}
       <div>
         <h4 className="font-sans font-semibold text-midnight text-sm mb-3">

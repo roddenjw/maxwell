@@ -1,9 +1,8 @@
 /**
  * TimelineView Component
- * Horizontal timeline visualization of plot beats
+ * Vertical card-based timeline visualization of plot beats
  */
 
-import { useState } from 'react';
 import type { PlotBeat } from '@/types/outline';
 
 interface TimelineViewProps {
@@ -13,189 +12,253 @@ interface TimelineViewProps {
 }
 
 export default function TimelineView({ beats, onBeatClick, expandedBeatId }: TimelineViewProps) {
-  const [hoveredBeatId, setHoveredBeatId] = useState<string | null>(null);
-
   // Sort beats by order_index
   const sortedBeats = [...beats].sort((a, b) => a.order_index - b.order_index);
 
   // Calculate beat status
   const getBeatStatus = (beat: PlotBeat): 'completed' | 'in-progress' | 'pending' => {
     if (beat.is_completed) return 'completed';
-    if (beat.user_notes || beat.chapter_id) return 'in-progress';
+    if (beat.user_notes || beat.chapter_id || beat.actual_word_count > 0) return 'in-progress';
     return 'pending';
   };
 
-  // Get color based on status
-  const getStatusColor = (status: string): string => {
+  // Get status styling
+  const getStatusStyle = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-500 border-green-600';
+        return {
+          dot: 'bg-green-500 border-green-600',
+          card: 'border-green-500/50 bg-green-50/50',
+          text: 'text-green-700',
+          label: 'Completed',
+        };
       case 'in-progress':
-        return 'bg-bronze border-bronze-dark';
-      case 'pending':
-        return 'bg-slate-ui border-faded-ink';
+        return {
+          dot: 'bg-bronze border-bronze-dark',
+          card: 'border-bronze/50 bg-bronze/5',
+          text: 'text-bronze',
+          label: 'In Progress',
+        };
       default:
-        return 'bg-slate-ui border-faded-ink';
+        return {
+          dot: 'bg-slate-ui border-faded-ink',
+          card: 'border-slate-ui bg-white',
+          text: 'text-faded-ink',
+          label: 'Not Started',
+        };
     }
   };
 
-  // Calculate position on timeline (percentage)
-  const getPosition = (beat: PlotBeat): number => {
-    return beat.target_position_percent * 100;
+  // Get act label based on position
+  const getActLabel = (position: number): string => {
+    if (position <= 0.25) return 'Act 1';
+    if (position <= 0.75) return 'Act 2';
+    return 'Act 3';
+  };
+
+  // Calculate word count progress
+  const getWordProgress = (beat: PlotBeat): number => {
+    if (beat.target_word_count === 0) return 0;
+    return Math.min(100, (beat.actual_word_count / beat.target_word_count) * 100);
   };
 
   return (
-    <div className="p-6 overflow-x-auto">
-      <div className="min-w-[800px] relative">
-        {/* Story Progress Markers */}
-        <div className="mb-4 flex justify-between text-xs font-sans text-faded-ink px-4">
-          <span>Beginning</span>
-          <span className="text-center">25%<br />End Act 1</span>
-          <span className="text-center">50%<br />Midpoint</span>
-          <span className="text-center">75%<br />End Act 2</span>
-          <span>End</span>
+    <div className="p-6 overflow-y-auto">
+      {/* Header */}
+      <div className="mb-6">
+        <h3 className="font-serif text-xl font-bold text-midnight mb-1">Story Timeline</h3>
+        <p className="text-sm font-sans text-faded-ink">
+          Click any beat to view and edit details in List view
+        </p>
+      </div>
+
+      {/* Legend */}
+      <div className="mb-6 flex flex-wrap items-center gap-4 text-xs font-sans">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-slate-ui border-2 border-faded-ink" />
+          <span className="text-faded-ink">Not Started</span>
         </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-bronze border-2 border-bronze-dark" />
+          <span className="text-faded-ink">In Progress</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-green-600" />
+          <span className="text-faded-ink">Completed</span>
+        </div>
+      </div>
 
-        {/* Timeline Bar */}
-        <div className="relative h-32 mb-8">
-          {/* Background line */}
-          <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-ui transform -translate-y-1/2" />
+      {/* Vertical Timeline */}
+      <div className="relative">
+        {/* Vertical connecting line */}
+        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-ui/50" />
 
-          {/* Act Markers (vertical lines) */}
-          {[0, 25, 50, 75, 100].map((percent) => (
-            <div
-              key={percent}
-              className="absolute top-0 bottom-0 w-px bg-slate-ui/50"
-              style={{ left: `${percent}%` }}
-            />
-          ))}
-
-          {/* Plot Beats */}
-          {sortedBeats.map((beat) => {
+        {/* Beat Cards */}
+        <div className="space-y-4">
+          {sortedBeats.map((beat, index) => {
             const status = getBeatStatus(beat);
-            const position = getPosition(beat);
-            const isHovered = hoveredBeatId === beat.id;
-            const isExpanded = expandedBeatId === beat.id;
+            const style = getStatusStyle(status);
+            const position = beat.target_position_percent;
+            const wordProgress = getWordProgress(beat);
+            const isSelected = expandedBeatId === beat.id;
+            const isScene = beat.item_type === 'SCENE';
+
+            // Show act divider
+            const prevBeat = index > 0 ? sortedBeats[index - 1] : null;
+            const currentAct = getActLabel(position);
+            const prevAct = prevBeat ? getActLabel(prevBeat.target_position_percent) : null;
+            const showActDivider = currentAct !== prevAct;
 
             return (
-              <div
-                key={beat.id}
-                className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 cursor-pointer group"
-                style={{ left: `${position}%` }}
-                onClick={() => onBeatClick(beat.id)}
-                onMouseEnter={() => setHoveredBeatId(beat.id)}
-                onMouseLeave={() => setHoveredBeatId(null)}
-              >
-                {/* Beat Circle */}
-                <div
-                  className={`
-                    w-8 h-8 rounded-full border-2 transition-all duration-200
-                    ${getStatusColor(status)}
-                    ${isExpanded ? 'ring-4 ring-bronze/30 scale-125' : ''}
-                    ${isHovered ? 'scale-110' : ''}
-                    group-hover:shadow-lg
-                    flex items-center justify-center
-                  `}
-                >
-                  {beat.is_completed && (
-                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  )}
-                </div>
-
-                {/* Beat Label (below circle) */}
-                <div className="absolute top-12 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-                  <div className={`
-                    text-xs font-sans font-medium transition-all duration-200
-                    ${isExpanded ? 'text-bronze font-bold' : 'text-midnight'}
-                    ${isHovered ? 'text-bronze' : ''}
-                  `}>
-                    {beat.beat_label}
-                  </div>
-                  <div className="text-xs text-faded-ink text-center mt-1">
-                    {Math.round(position)}%
-                  </div>
-                </div>
-
-                {/* Hover Tooltip - Smart positioning to avoid cutoff */}
-                {isHovered && (
-                  <div className={`absolute bottom-12 z-10 w-64 pointer-events-none ${
-                    position < 20 ? 'left-0' : position > 80 ? 'right-0' : 'left-1/2 -translate-x-1/2'
-                  }`}>
-                    <div className="bg-midnight text-white p-3 shadow-xl transition-opacity duration-200" style={{ borderRadius: '2px' }}>
-                      <div className="font-sans font-bold text-sm mb-1">{beat.beat_label}</div>
-                      <div className="text-xs text-white/80 mb-2 max-h-12 overflow-y-auto">
-                        {beat.beat_description}
-                      </div>
-                      <div className="flex items-center justify-between text-xs flex-wrap gap-1">
-                        <span className="text-white/60">
-                          Target: {beat.target_word_count.toLocaleString()}w
-                        </span>
-                        <div className="flex gap-2">
-                          {beat.user_notes && <span className="text-bronze">📝 Has notes</span>}
-                          {beat.chapter_id && <span className="text-bronze">📄 Linked</span>}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Arrow pointing down */}
-                    <div className={`w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-midnight ${
-                      position < 20 ? 'ml-8' : position > 80 ? 'mr-8' : 'mx-auto'
-                    }`} />
+              <div key={beat.id}>
+                {/* Act Divider */}
+                {showActDivider && (
+                  <div className="flex items-center gap-3 mb-4 ml-8">
+                    <div className="h-px flex-1 bg-bronze/30" />
+                    <span className="text-xs font-sans font-bold text-bronze uppercase tracking-wider px-2">
+                      {currentAct}
+                    </span>
+                    <div className="h-px flex-1 bg-bronze/30" />
                   </div>
                 )}
 
-                {/* Badges */}
-                <div className="absolute -top-2 -right-2 flex gap-0.5">
-                  {beat.user_notes && (
-                    <div className="w-4 h-4 bg-bronze text-white text-xs flex items-center justify-center" style={{ borderRadius: '2px' }} title="Has notes">
-                      📝
+                {/* Beat Card Row */}
+                <div
+                  className={`flex items-start gap-4 cursor-pointer group ${
+                    isScene ? 'ml-4' : ''
+                  }`}
+                  onClick={() => onBeatClick(beat.id)}
+                >
+                  {/* Timeline Dot */}
+                  <div className="relative flex-shrink-0 z-10">
+                    <div
+                      className={`
+                        w-8 h-8 rounded-full border-2 flex items-center justify-center
+                        transition-all duration-200
+                        ${style.dot}
+                        ${isSelected ? 'ring-4 ring-bronze/30 scale-110' : ''}
+                        group-hover:scale-110 group-hover:shadow-md
+                      `}
+                    >
+                      {beat.is_completed && (
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
                     </div>
-                  )}
-                  {beat.chapter_id && (
-                    <div className="w-4 h-4 bg-blue-500 text-white text-xs flex items-center justify-center" style={{ borderRadius: '2px' }} title="Linked to chapter">
-                      📄
+                  </div>
+
+                  {/* Beat Card */}
+                  <div
+                    className={`
+                      flex-1 p-3 border-2 transition-all duration-200
+                      ${style.card}
+                      ${isSelected ? 'border-bronze shadow-md' : ''}
+                      ${isScene ? 'border-purple-300/60' : ''}
+                      group-hover:border-bronze/70 group-hover:shadow-sm
+                    `}
+                    style={{ borderRadius: '2px' }}
+                  >
+                    {/* Card Header */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0 flex-1">
+                        {/* Beat Type Label */}
+                        <div className="flex items-center gap-2 mb-1">
+                          {isScene ? (
+                            <span className="text-xs font-sans font-bold text-purple-600 uppercase tracking-wider">
+                              Scene
+                            </span>
+                          ) : (
+                            <span className="text-xs font-sans font-bold text-bronze uppercase tracking-wider">
+                              {beat.beat_name}
+                            </span>
+                          )}
+                          <span className="text-xs font-sans text-faded-ink">
+                            {Math.round(position * 100)}%
+                          </span>
+                        </div>
+
+                        {/* Beat Title */}
+                        <h4 className={`font-serif font-bold text-base truncate ${
+                          isScene ? 'text-purple-700' : 'text-midnight'
+                        }`}>
+                          {beat.beat_label}
+                        </h4>
+                      </div>
+
+                      {/* Status Badge */}
+                      <span
+                        className={`flex-shrink-0 px-2 py-0.5 text-xs font-sans font-semibold uppercase tracking-wider ${
+                          status === 'completed'
+                            ? 'bg-green-500 text-white'
+                            : status === 'in-progress'
+                            ? 'bg-bronze text-white'
+                            : 'bg-slate-ui/50 text-faded-ink'
+                        }`}
+                        style={{ borderRadius: '2px' }}
+                      >
+                        {style.label}
+                      </span>
                     </div>
-                  )}
+
+                    {/* Description Preview */}
+                    {beat.beat_description && (
+                      <p className="text-sm font-sans text-faded-ink line-clamp-2 mb-2">
+                        {beat.beat_description}
+                      </p>
+                    )}
+
+                    {/* Progress Bar */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-slate-ui/30 overflow-hidden" style={{ borderRadius: '2px' }}>
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            wordProgress >= 100 ? 'bg-green-500' : 'bg-bronze'
+                          }`}
+                          style={{ width: `${wordProgress}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-sans text-faded-ink flex-shrink-0">
+                        {beat.actual_word_count.toLocaleString()} / {beat.target_word_count.toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* Indicators */}
+                    {(beat.user_notes || beat.chapter_id) && (
+                      <div className="flex items-center gap-3 mt-2 text-xs font-sans text-faded-ink">
+                        {beat.user_notes && (
+                          <span className="flex items-center gap-1">
+                            <span>📝</span>
+                            <span>Has notes</span>
+                          </span>
+                        )}
+                        {beat.chapter_id && (
+                          <span className="flex items-center gap-1 text-bronze">
+                            <span>📄</span>
+                            <span>Linked to chapter</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
-
-        {/* Legend */}
-        <div className="mt-8 flex items-center justify-center gap-6 text-xs font-sans">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-slate-ui border-2 border-faded-ink" />
-            <span className="text-faded-ink">Not Started</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-bronze border-2 border-bronze-dark" />
-            <span className="text-faded-ink">In Progress</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-green-500 border-2 border-green-600 flex items-center justify-center">
-              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <span className="text-faded-ink">Completed</span>
-          </div>
-        </div>
-
-        {/* Instructions */}
-        <div className="mt-6 text-center text-xs font-sans text-faded-ink">
-          Click on a beat to view details • Hover to see preview
-        </div>
       </div>
+
+      {/* Empty State */}
+      {sortedBeats.length === 0 && (
+        <div className="text-center py-12 text-faded-ink">
+          <p className="font-sans">No beats in this outline yet.</p>
+          <p className="text-sm mt-1">Switch to List view to add beats.</p>
+        </div>
+      )}
     </div>
   );
 }

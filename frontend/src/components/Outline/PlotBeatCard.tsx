@@ -280,14 +280,16 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
             </div>
 
             {/* Beat Title and Status */}
-            <div className="flex items-start gap-2 mb-2">
-              <h4 className={`flex-1 font-serif font-bold text-lg ${
-                beat.is_completed
-                  ? isScene ? 'text-purple-600' : 'text-bronze'
-                  : 'text-midnight'
-              }`}>
-                {beat.beat_label}
-              </h4>
+            <div className="flex items-start gap-2 mb-2 min-w-0">
+              <div className="flex-1 min-w-0">
+                <h4 className={`font-serif font-bold text-lg truncate ${
+                  beat.is_completed
+                    ? isScene ? 'text-purple-600' : 'text-bronze'
+                    : 'text-midnight'
+                }`}>
+                  {beat.beat_label}
+                </h4>
+              </div>
 
               {/* AI Badge (if suggestions available) */}
               {hasAISuggestions && suggestions && (
