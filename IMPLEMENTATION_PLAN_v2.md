@@ -502,6 +502,61 @@ Based on user feedback in FEEDBACK.md, these UX improvements are prioritized:
 
 ---
 
+## Phase 9: LangChain Agent Framework
+**Timeline:** January 2026
+**Status:** ✅ Complete
+**Goal:** Multi-agent AI writing assistant with teaching-first feedback
+
+### Architecture
+- **Hierarchical Context System:** 4-level context (Author → World → Series → Manuscript)
+- **Agent Base Framework:** `BaseMaxwellAgent` class with tool management and cost tracking
+- **LLM Service Abstraction:** Unified interface for OpenAI, Anthropic, OpenRouter, and Local LLM
+- **Author Learning System:** Tracks suggestion acceptance/rejection to personalize feedback
+
+### Specialized Agents (6 total)
+1. **ContinuityAgent:** Character facts, timeline consistency, world rules
+2. **StyleAgent:** Prose quality, show vs tell, pacing, word choice
+3. **StructureAgent:** Beat alignment, story progression, scene goals
+4. **VoiceAgent:** Dialogue authenticity, character voice consistency
+5. **ConsistencyAgent:** Dedicated consistency checking (real-time + full scan modes)
+6. **ResearchAgent:** Worldbuilding generation and topic research
+
+### Smart Coach
+- **SmartCoachAgent:** Conversational writing coach with session-based memory
+- **Tool-Augmented Responses:** Queries Codex, Timeline, Outline, Manuscript
+- **Cost Tracking:** Per-session and per-message cost display
+- **Frontend Panel:** SmartCoachPanel component with chat UI
+
+### Agent Tools (17 tools)
+- Codex tools: query_entities, query_character_profile, query_relationships, search_entities
+- Timeline tools: query_timeline, query_character_locations
+- Outline tools: query_outline, query_plot_beats
+- Manuscript tools: query_chapters, query_chapter_content, search_manuscript
+- World tools: query_world_settings, query_world_rules
+- Series tools: query_series_context, query_cross_book_entities
+- Author tools: query_author_profile, query_feedback_history
+
+### API Endpoints (15 endpoints)
+- Writing Assistant: `/analyze`, `/quick-check`, `/feedback`, `/insights`, `/history`, `/analysis`, `/types`
+- Smart Coach: `/coach/session`, `/coach/chat`, `/coach/sessions`, `/coach/session/{id}`, `/coach/archive`, `/coach/title`
+- Consistency: `/consistency/check`, `/consistency/full-scan`
+- Research: `/research/worldbuilding`, `/research/topic`, `/research/categories`
+
+### Database Models
+- `AgentAnalysis` - Stores agent results
+- `CoachSession` / `CoachMessage` - Conversational coaching
+- `AuthorLearning` - Author preference tracking
+- `SuggestionFeedback` - Learning from user responses
+
+### Files Created
+- `backend/app/agents/` - 20+ new files
+- `backend/app/services/llm_service.py`, `local_llm_service.py`, `author_learning_service.py`
+- `frontend/src/stores/agentStore.ts`
+- `frontend/src/components/Coach/SmartCoachPanel.tsx`
+- `frontend/src/lib/api.ts` - agentApi additions
+
+---
+
 ## Success Metrics by Phase
 
 | Phase | Users | Revenue | Retention (6mo) | NPS | Key Metric | Status |
@@ -511,6 +566,7 @@ Based on user feedback in FEEDBACK.md, these UX improvements are prioritized:
 | **Phase 3** | 2,000 | $99,000 | 75% | 65 | AI usage rate | ✅ Complete |
 | **Phase 4-6** | 5,000 | $250,000 | 80% | 70 | Completion rate | ✅ Complete |
 | **Phase 8** | - | - | - | - | World/Series usage | ✅ Complete |
+| **Phase 9** | - | - | - | - | Agent framework | ✅ Complete |
 | **Phase 7** | 15,000 | $750,000 | 85% | 75 | Viral coefficient | ⏳ Planned |
 
 **Target by End of 2027:**

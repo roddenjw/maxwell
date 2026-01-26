@@ -256,6 +256,118 @@ Manuscript (1)
 
 ---
 
+## LangChain Agent Framework
+
+### Agent Architecture Overview
+
+Maxwell uses a LangChain-based agent system for advanced writing assistance. The framework provides:
+
+1. **Multi-Agent Writing Assistant** - Four specialized agents analyzing text in parallel
+2. **Smart Coach** - Conversational coaching with memory and tool access
+3. **Author Learning System** - Tracks preferences and improves over time
+
+### Agent Hierarchy
+
+```
+backend/app/agents/
+├── base/
+│   ├── agent_base.py           # BaseMaxwellAgent class
+│   ├── agent_config.py         # Configuration management
+│   └── context_loader.py       # Hierarchical context loading
+├── tools/                       # LangChain Tools (14 total)
+│   ├── codex_tools.py          # Entity queries
+│   ├── timeline_tools.py       # Timeline queries
+│   ├── outline_tools.py        # Beat/structure queries
+│   ├── manuscript_tools.py     # Chapter content queries
+│   ├── world_tools.py          # World settings, rules
+│   ├── series_tools.py         # Cross-book context
+│   └── author_tools.py         # Author profile, learning
+├── specialized/                 # Specialized Agents
+│   ├── continuity_agent.py     # Character facts, timeline
+│   ├── style_agent.py          # Prose quality
+│   ├── structure_agent.py      # Story beats
+│   └── voice_agent.py          # Dialogue consistency
+├── orchestrator/
+│   └── writing_assistant.py    # Multi-agent coordinator
+└── coach/
+    └── smart_coach_agent.py    # Conversational coach
+```
+
+### Context Hierarchy
+
+Agents operate with a four-level context hierarchy:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  AUTHOR CONTEXT (Persistent across all work)                    │
+│  - Writing style preferences, strengths, weaknesses             │
+│  - Overused words/patterns, favorite techniques                 │
+│  - Learning history (coaching patterns that worked)             │
+├─────────────────────────────────────────────────────────────────┤
+│  WORLD CONTEXT (Shared across universe)                         │
+│  - World settings (genre, magic system, tech level)             │
+│  - World-scoped entities, established rules                     │
+├─────────────────────────────────────────────────────────────────┤
+│  SERIES CONTEXT (Shared within series)                          │
+│  - Plot threads and arcs across books                           │
+│  - Character development, series timeline                       │
+├─────────────────────────────────────────────────────────────────┤
+│  MANUSCRIPT CONTEXT (Current work)                              │
+│  - Chapters, scenes, current position                           │
+│  - Manuscript-scoped entities, outline, local timeline          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### LLM Service Abstraction
+
+```python
+# Unified interface for multiple providers
+llm_service.generate(
+    config=LLMConfig(
+        provider=LLMProvider.ANTHROPIC,
+        model="claude-3-haiku-20240307",
+        api_key=user_api_key,  # BYOK pattern
+    ),
+    messages=[...],
+)
+```
+
+Supported providers:
+- **OpenAI**: GPT-4o, GPT-4o-mini, GPT-3.5-turbo
+- **Anthropic**: Claude 3 Opus/Sonnet/Haiku
+- **OpenRouter**: Access to 100+ models
+- **Local**: llama-cpp-python for offline use
+
+### Author Learning Flow
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│ Agent generates │───►│ User responds   │───►│ System learns   │
+│ suggestion      │    │ Accept/Reject/  │    │ Updates profile │
+│                 │    │ Modify          │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                      │
+                                                      ▼
+                              ┌─────────────────────────────────┐
+                              │ Future suggestions personalized │
+                              │ - Style preferences applied     │
+                              │ - Rejected patterns avoided     │
+                              │ - Improvement tracking shown    │
+                              └─────────────────────────────────┘
+```
+
+### Agent Database Models
+
+```
+agent_analyses         # Analysis results with recommendations
+coach_sessions         # Coaching conversation sessions
+coach_messages         # Individual messages in sessions
+author_learning        # Learned preferences and patterns
+suggestion_feedback    # User response to suggestions
+```
+
+---
+
 ## Design System
 
 **Colors (Tailwind):**

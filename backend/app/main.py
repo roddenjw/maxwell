@@ -23,7 +23,7 @@ from app.services import (
     GRAPH_AVAILABLE
 )
 from app.services.nlp_service import nlp_service
-from app.api.routes import versioning, manuscripts, codex, timeline, chapters, stats, realtime, fast_coach, recap, export, onboarding, outlines, brainstorming, worlds, entity_states, foreshadowing, import_routes, share
+from app.api.routes import versioning, manuscripts, codex, timeline, chapters, stats, realtime, fast_coach, recap, export, onboarding, outlines, brainstorming, worlds, entity_states, foreshadowing, import_routes, share, agents
 
 
 @asynccontextmanager
@@ -96,6 +96,7 @@ app.include_router(entity_states.router)
 app.include_router(foreshadowing.router)
 app.include_router(import_routes.router)
 app.include_router(share.router)
+app.include_router(agents.router)
 
 
 @app.get("/")
@@ -127,7 +128,7 @@ async def api_status():
             "versioning": True,  # ✅ Git service ready
             "codex": True,  # ✅ Entity CRUD ready
             "timeline": True,  # ✅ Timeline orchestrator ready
-            "ai_generation": False,  # LangChain pending
+            "ai_generation": True,  # LangChain agents ready
             "analysis": nlp_service.is_available()  # ✅ spaCy NLP
         },
         "services": {

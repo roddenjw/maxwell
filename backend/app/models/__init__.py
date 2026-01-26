@@ -14,6 +14,7 @@ from app.models.entity_state import EntityTimelineState
 from app.models.foreshadowing import ForeshadowingPair, ForeshadowingType
 from app.models.achievement import Achievement, AchievementProgress, AchievementType, ACHIEVEMENT_METADATA
 from app.models.shareable_recap import ShareableRecap
+from app.models.agent import AgentAnalysis, CoachSession, CoachMessage, AuthorLearning, SuggestionFeedback
 
 __all__ = [
     # World/Series hierarchy
@@ -60,4 +61,10 @@ __all__ = [
     "ACHIEVEMENT_METADATA",
     # Shareable Recap
     "ShareableRecap",
+    # Agent
+    "AgentAnalysis",
+    "CoachSession",
+    "CoachMessage",
+    "AuthorLearning",
+    "SuggestionFeedback",
 ]

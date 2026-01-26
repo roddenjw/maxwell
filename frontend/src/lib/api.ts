@@ -2746,6 +2746,409 @@ export const shareApi = {
   },
 };
 
+// ========================
+// Agent API - Smart Coach & Writing Assistant
+// ========================
+
+export interface AnalyzeTextAgentRequest {
+  api_key: string;
+  text: string;
+  user_id: string;
+  manuscript_id: string;
+  chapter_id?: string;
+  model_provider?: string;
+  model_name?: string;
+  agents?: string[];
+  include_insights?: boolean;
+}
+
+export interface QuickCheckAgentRequest {
+  api_key: string;
+  text: string;
+  user_id: string;
+  manuscript_id: string;
+  agent_type: string;
+  model_provider?: string;
+  model_name?: string;
+}
+
+export interface SuggestionFeedbackRequest {
+  user_id: string;
+  agent_type: string;
+  suggestion_type: string;
+  suggestion_text: string;
+  action: 'accepted' | 'rejected' | 'modified' | 'ignored';
+  original_text?: string;
+  modified_text?: string;
+  manuscript_id?: string;
+  analysis_id?: string;
+  user_explanation?: string;
+}
+
+export interface StartCoachSessionRequest {
+  api_key: string;
+  user_id: string;
+  manuscript_id?: string;
+  title?: string;
+  initial_context?: Record<string, any>;
+  model_provider?: string;
+  model_name?: string;
+}
+
+export interface CoachChatRequest {
+  api_key: string;
+  user_id: string;
+  session_id: string;
+  message: string;
+  context?: Record<string, any>;
+  model_provider?: string;
+  model_name?: string;
+}
+
+export const agentApi = {
+  // ========================
+  // Writing Assistant
+  // ========================
+
+  /**
+   * Run multi-agent analysis on text
+   */
+  async analyzeText(data: AnalyzeTextAgentRequest): Promise<{
+    success: boolean;
+    data: any;
+    cost: { total: number; formatted: string };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/agents/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Analysis failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Run single-agent quick check
+   */
+  async quickCheck(data: QuickCheckAgentRequest): Promise<{
+    success: boolean;
+    data: any;
+    cost: { total: number; formatted: string };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/agents/quick-check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Quick check failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Record feedback on a suggestion
+   */
+  async recordFeedback(data: SuggestionFeedbackRequest): Promise<{
+    success: boolean;
+    data: { id: string; action: string; message: string };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/agents/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to record feedback');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get author insights and learning data
+   */
+  async getAuthorInsights(userId: string): Promise<{ success: boolean; data: any }> {
+    const response = await fetch(`${API_BASE_URL}/agents/insights/${userId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get insights');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get analysis history
+   */
+  async getAnalysisHistory(
+    userId: string,
+    manuscriptId?: string,
+    limit = 20
+  ): Promise<{ success: boolean; data: any[] }> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+    params.append('limit', String(limit));
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/history/${userId}?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get history');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get a specific analysis
+   */
+  async getAnalysis(analysisId: string): Promise<{ success: boolean; data: any }> {
+    const response = await fetch(`${API_BASE_URL}/agents/analysis/${analysisId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Analysis not found');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Rate an analysis
+   */
+  async rateAnalysis(
+    analysisId: string,
+    rating: number,
+    feedback?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const params = new URLSearchParams();
+    params.append('rating', String(rating));
+    if (feedback) params.append('feedback', feedback);
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/analysis/${analysisId}/rate?${params.toString()}`,
+      { method: 'PUT' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to rate analysis');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get available agent types
+   */
+  async getAgentTypes(): Promise<{
+    success: boolean;
+    data: Array<{ type: string; name: string; description: string }>;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/agents/types`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get agent types');
+    }
+
+    return response.json();
+  },
+
+  // ========================
+  // Smart Coach
+  // ========================
+
+  /**
+   * Start a new coaching session
+   */
+  async startCoachSession(data: StartCoachSessionRequest): Promise<{
+    success: boolean;
+    data: {
+      id: string;
+      title: string;
+      manuscript_id?: string;
+      status: string;
+      created_at: string;
+    };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/agents/coach/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to start session');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Send a message to the coach
+   */
+  async coachChat(data: CoachChatRequest): Promise<{
+    success: boolean;
+    data: {
+      content: string;
+      tools_used: string[];
+      tool_results: Record<string, any>;
+      cost: number;
+      tokens: number;
+      session_id: string;
+    };
+    cost: { total: number; formatted: string };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/agents/coach/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Chat failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * List coaching sessions for a user
+   */
+  async listCoachSessions(
+    userId: string,
+    manuscriptId?: string,
+    includeArchived = false,
+    limit = 20
+  ): Promise<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      title: string;
+      manuscript_id?: string;
+      message_count: number;
+      total_cost: number;
+      status: string;
+      created_at: string;
+      updated_at?: string;
+      last_message_at?: string;
+    }>;
+  }> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+    params.append('include_archived', String(includeArchived));
+    params.append('limit', String(limit));
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/coach/sessions/${userId}?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to list sessions');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get a coaching session with messages
+   */
+  async getCoachSession(sessionId: string): Promise<{
+    success: boolean;
+    data: {
+      session: {
+        id: string;
+        title: string;
+        manuscript_id?: string;
+        message_count: number;
+        total_cost: number;
+        total_tokens: number;
+        status: string;
+        initial_context?: Record<string, any>;
+        created_at: string;
+        updated_at?: string;
+      };
+      messages: Array<{
+        id: string;
+        role: string;
+        content: string;
+        tools_used?: string[];
+        cost?: number;
+        tokens?: number;
+        created_at: string;
+      }>;
+    };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/agents/coach/session/${sessionId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Session not found');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Archive a coaching session
+   */
+  async archiveCoachSession(
+    sessionId: string,
+    userId: string
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(
+      `${API_BASE_URL}/agents/coach/session/${sessionId}/archive?user_id=${encodeURIComponent(userId)}`,
+      { method: 'PUT' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to archive session');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Update session title
+   */
+  async updateCoachSessionTitle(
+    sessionId: string,
+    userId: string,
+    title: string
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(
+      `${API_BASE_URL}/agents/coach/session/${sessionId}/title?user_id=${encodeURIComponent(userId)}&title=${encodeURIComponent(title)}`,
+      { method: 'PUT' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update title');
+    }
+
+    return response.json();
+  },
+};
+
 /**
  * Health check
  */
@@ -2772,5 +3175,6 @@ export default {
   foreshadowing: foreshadowingApi,
   import: importApi,
   share: shareApi,
+  agent: agentApi,
   healthCheck,
 };
