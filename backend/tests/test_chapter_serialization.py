@@ -188,7 +188,7 @@ class TestChapterDataIntegrity:
         final_data = final_response.json()["data"]
 
         assert final_data["content"] == "Updated content iteration 4 with some text"
-        assert final_data["word_count"] == 6
+        assert final_data["word_count"] == 7  # "Updated content iteration 4 with some text" = 7 words
         assert final_data["lexical_state"] is not None
         assert len(final_data["lexical_state"]) > 0
 

@@ -92,11 +92,21 @@ def calculate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> fl
     """Calculate estimated cost for API call"""
     # Normalize model name
     model_key = model.lower()
-    for key in PRICING:
-        if key in model_key:
-            input_price, output_price = PRICING[key]
-            cost = (prompt_tokens * input_price + completion_tokens * output_price) / 1_000_000
-            return round(cost, 6)
+
+    # First try exact match
+    if model_key in PRICING:
+        input_price, output_price = PRICING[model_key]
+        cost = (prompt_tokens * input_price + completion_tokens * output_price) / 1_000_000
+        return round(cost, 6)
+
+    # Then try substring match, preferring longer matches
+    matching_keys = [(key, len(key)) for key in PRICING if key in model_key]
+    if matching_keys:
+        # Use the longest matching key (more specific match)
+        best_key = max(matching_keys, key=lambda x: x[1])[0]
+        input_price, output_price = PRICING[best_key]
+        cost = (prompt_tokens * input_price + completion_tokens * output_price) / 1_000_000
+        return round(cost, 6)
 
     # Default fallback pricing (conservative estimate)
     return round((prompt_tokens * 1.0 + completion_tokens * 3.0) / 1_000_000, 6)

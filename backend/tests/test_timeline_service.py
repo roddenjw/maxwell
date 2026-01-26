@@ -91,11 +91,14 @@ def test_update_travel_speeds(test_manuscript_id):
     original_profile = timeline_service.get_or_create_travel_profile(test_manuscript_id)
 
     # Act
-    updated_profile = timeline_service.update_travel_speeds(
+    timeline_service.update_travel_speeds(
         test_manuscript_id,
         {"dragon": 100, "magic_portal": 999999},
         default_speed=10
     )
+
+    # Re-query to verify persistence
+    updated_profile = timeline_service.get_or_create_travel_profile(test_manuscript_id)
 
     # Assert
     assert updated_profile.default_speed == 10
@@ -200,7 +203,7 @@ def test_timeline_orchestrator_validation_detects_impossible_travel(
     # Check that issue has required fields
     issue = issues[0]
     assert issue.inconsistency_type is not None
-    assert issue.severity in ["CRITICAL", "WARNING", "INFO"]
+    assert issue.severity in ["HIGH", "MEDIUM", "LOW"]
     assert issue.description is not None
 
 

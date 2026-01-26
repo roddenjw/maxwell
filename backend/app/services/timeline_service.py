@@ -710,10 +710,21 @@ class TimelineService:
         """Update travel speed profile for a manuscript"""
         db = SessionLocal()
         try:
-            profile = self.get_or_create_travel_profile(manuscript_id)
+            # Query profile in this session to ensure proper tracking
+            profile = db.query(TravelSpeedProfile).filter(
+                TravelSpeedProfile.manuscript_id == manuscript_id
+            ).first()
+
+            if not profile:
+                # Create profile if it doesn't exist
+                profile = self.get_or_create_travel_profile(manuscript_id)
+                # Re-query to get it in this session
+                profile = db.query(TravelSpeedProfile).filter(
+                    TravelSpeedProfile.manuscript_id == manuscript_id
+                ).first()
 
             # Update speeds (merge with existing)
-            current_speeds = profile.speeds if isinstance(profile.speeds, dict) else {}
+            current_speeds = dict(profile.speeds) if isinstance(profile.speeds, dict) else {}
             current_speeds.update(speeds)
             profile.speeds = current_speeds
 
@@ -721,7 +732,6 @@ class TimelineService:
                 profile.default_speed = default_speed
             profile.updated_at = datetime.utcnow()
 
-            db.add(profile)
             db.commit()
             db.refresh(profile)
 

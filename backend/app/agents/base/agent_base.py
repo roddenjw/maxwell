@@ -24,7 +24,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.agents.base.agent_config import AgentConfig, AgentType, ModelProvider
 from app.agents.base.context_loader import ContextLoader, AgentContext
-from app.services.llm_service import llm_service, LLMConfig, LLMResponse
+from app.services.llm_service import llm_service, LLMConfig, LLMResponse, LLMProvider
 
 
 @dataclass

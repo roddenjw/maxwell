@@ -95,12 +95,16 @@ class WritingAssistantOrchestrator:
         self.api_key = api_key
         self.model_config = model_config
 
-        self.enabled_agents = enabled_agents or [
-            AgentType.CONTINUITY,
-            AgentType.STYLE,
-            AgentType.STRUCTURE,
-            AgentType.VOICE,
-        ]
+        # Use explicit None check to allow empty list
+        if enabled_agents is None:
+            self.enabled_agents = [
+                AgentType.CONTINUITY,
+                AgentType.STYLE,
+                AgentType.STRUCTURE,
+                AgentType.VOICE,
+            ]
+        else:
+            self.enabled_agents = enabled_agents
 
     def _create_agents(self) -> Dict[AgentType, Any]:
         """Create configured agent instances"""
