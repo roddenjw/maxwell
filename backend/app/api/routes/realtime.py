@@ -175,7 +175,8 @@ async def websocket_nlp_endpoint(
                 async for result in realtime_nlp_service.process_text_stream(
                     manuscript_id,
                     existing_names,
-                    text_queue
+                    text_queue,
+                    client_settings['confidence_threshold']
                 ):
                     # Filter by configured entity types
                     filtered_entities = [

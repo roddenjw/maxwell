@@ -8,6 +8,7 @@ from collections import defaultdict
 import re
 import os
 import json
+import time
 
 try:
     import spacy
@@ -1368,8 +1369,14 @@ class NLPService:
                     scenes.append(scene_data)
                     order_index += 1
 
+                # Rate limiting: wait 1 second between API calls to avoid hitting rate limits
+                # This is especially important for large manuscripts with many chunks
+                time.sleep(1.0)
+
             except Exception as e:
                 print(f"⚠️  Failed to process chunk {chunk_idx}: {e}")
+                # On error, wait a bit longer before retrying next chunk
+                time.sleep(2.0)
                 continue
 
         print(f"✅ Extracted {len(scenes)} scenes using LLM")

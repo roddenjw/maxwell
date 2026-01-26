@@ -236,8 +236,12 @@ export default function EventList({ manuscriptId }: EventListProps) {
 
       setAnalysisProgress('Extracting events...');
 
-      // Wait a moment for background processing
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Wait for background processing - proportional to content size
+      // The backend needs time to process each chunk with rate limiting (1s between API calls)
+      // Minimum 10 seconds, plus 5 seconds per chapter analyzed
+      const waitTime = Math.max(10000, processedCount * 5000);
+      console.log(`Waiting ${waitTime}ms for background extraction to complete...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
 
       // Reload events
       setAnalysisProgress('Loading timeline...');

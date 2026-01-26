@@ -78,6 +78,8 @@ export function useRealtimeNLP({
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const [isConnected, setIsConnected] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const processingTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const [settings, setSettingsState] = useState<ExtractionSettings>(() => ({
     ...loadSettings(),
     ...initialSettings
@@ -104,8 +106,21 @@ export function useRealtimeNLP({
   const sendTextDelta = useCallback((textDelta: string) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && settings.enabled) {
       wsRef.current.send(JSON.stringify({ text_delta: textDelta }));
+
+      // Set processing state (will be cleared when response arrives or times out)
+      setIsProcessing(true);
+
+      // Clear any existing timeout
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+      }
+
+      // Auto-clear processing after debounce delay + buffer (server debounce is 2s)
+      processingTimeoutRef.current = setTimeout(() => {
+        setIsProcessing(false);
+      }, (settings.debounce_delay * 1000) + 1000);
     }
-  }, [settings.enabled]);
+  }, [settings.enabled, settings.debounce_delay]);
 
   // Send keep-alive ping
   const sendPing = useCallback(() => {
@@ -157,6 +172,12 @@ export function useRealtimeNLP({
           if (message.type === 'entities' && message.new_entities && message.new_entities.length > 0) {
             console.log(`Received ${message.new_entities.length} entity suggestions`);
 
+            // Clear processing state
+            setIsProcessing(false);
+            if (processingTimeoutRef.current) {
+              clearTimeout(processingTimeoutRef.current);
+            }
+
             // Filter to only new suggestions (not already in codex)
             const newEntities = message.new_entities.filter(e => !e.already_in_codex);
 
@@ -191,7 +212,7 @@ export function useRealtimeNLP({
               toast.info(
                 `New ${entity.type.toLowerCase()} detected: "${entity.name}"`,
                 {
-                  duration: 8000,
+                  duration: 5000,
                   action: {
                     label: 'View in Queue',
                     onClick: () => {
@@ -207,7 +228,7 @@ export function useRealtimeNLP({
               toast.info(
                 `${newEntities.length} new entities detected (${types.join(', ')})`,
                 {
-                  duration: 8000,
+                  duration: 5000,
                   action: {
                     label: 'View in Queue',
                     onClick: () => {
@@ -278,6 +299,7 @@ export function useRealtimeNLP({
   return {
     sendTextDelta,
     isConnected,
+    isProcessing,
     settings,
     updateSettings,
     disconnect,

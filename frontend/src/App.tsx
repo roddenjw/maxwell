@@ -10,8 +10,7 @@ import UnifiedSidebar from './components/Navigation/UnifiedSidebar'
 import ToastContainer from './components/Common/ToastContainer'
 import KeyboardShortcutsModal from './components/Common/KeyboardShortcutsModal'
 import ViewLoadingSpinner from './components/Common/ViewLoadingSpinner'
-import OutlineSidebar from './components/Outline/OutlineSidebar'
-import { OutlineMainView, CreateOutlineModal } from './components/Outline'
+import { OutlineMainView } from './components/Outline'
 import { BrainstormingModal } from './components/Brainstorming'
 import { useManuscriptStore } from './stores/manuscriptStore'
 import { useOnboardingStore } from './stores/onboardingStore'
@@ -49,7 +48,7 @@ function App() {
   const { isTimelineOpen, setTimelineOpen } = useTimelineStore()
   const { setCurrentChapter, currentChapterId } = useChapterStore()
   const { isSidebarOpen: isCoachOpen, toggleSidebar: toggleCoach } = useFastCoachStore()
-  const { isSidebarOpen: isOutlineSidebarOpen, setSidebarOpen: setOutlineSidebarOpen, clearOutline } = useOutlineStore()
+  const { clearOutline } = useOutlineStore()
   const { loadAchievements, showDashboard: showAchievements, setShowDashboard: setShowAchievements, earnAchievement } = useAchievementStore()
   const [activeView, setActiveView] = useState<'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export' | 'outline'>('chapters')
   const [editorKey, setEditorKey] = useState(0) // Force editor re-mount on restore
@@ -69,7 +68,6 @@ function App() {
   const [showWelcome, setShowWelcome] = useState(false)
   const [showTour, setShowTour] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
-  const [showCreateOutlineModal, setShowCreateOutlineModal] = useState(false)
   const [libraryView, setLibraryView] = useState<'manuscripts' | 'worlds'>('manuscripts')
 
   // Track unsaved changes and warn before closing
@@ -158,9 +156,8 @@ function App() {
       // Open the manuscript
       await handleOpenManuscript(manuscriptId)
 
-      // Show outline view with all plot beats
+      // Show outline view with all plot beats (self-contained, no sidebar needed)
       setActiveView('outline')
-      setOutlineSidebarOpen(true)
 
       // Track creation with outline
       analytics.manuscriptCreated(manuscriptId, manuscriptData.title)
@@ -271,7 +268,7 @@ function App() {
     } else if (view === 'coach') {
       if (!isCoachOpen) toggleCoach()
     } else if (view === 'outline') {
-      if (!isOutlineSidebarOpen) setOutlineSidebarOpen(true)
+      // Outline is self-contained, no sidebar needed
     }
   }
 
@@ -378,13 +375,8 @@ function App() {
     // Switch to outline view
     setActiveView('outline')
 
-    // Open outline sidebar if not already open
-    if (!isOutlineSidebarOpen) {
-      setOutlineSidebarOpen(true)
-    }
-
     // Expand the specific beat using the store
-    // Note: OutlineSidebar will handle scrolling via handleBeatNavigation
+    // OutlineMainView will handle scrolling via the expandedBeatId effect
     const { setExpandedBeat } = useOutlineStore.getState()
     setExpandedBeat(beatId)
   }
@@ -718,30 +710,13 @@ function App() {
               </Suspense>
             )}
 
-            {/* Outline View */}
+            {/* Outline View - Self-contained, no sidebar needed */}
             {activeView === 'outline' && (
               <div className="flex-1 flex bg-vellum">
                 <OutlineMainView
                   manuscriptId={currentManuscript.id}
-                  onOpenSidebar={() => setOutlineSidebarOpen(true)}
-                  onCreateOutline={() => setShowCreateOutlineModal(true)}
-                />
-                <OutlineSidebar
-                  manuscriptId={currentManuscript.id}
-                  isOpen={isOutlineSidebarOpen}
-                  onClose={() => setOutlineSidebarOpen(false)}
                   onCreateChapter={handleCreateChapterFromBeat}
                   onOpenChapter={handleChapterSelect}
-                />
-                {/* Create Outline Modal */}
-                <CreateOutlineModal
-                  manuscriptId={currentManuscript.id}
-                  isOpen={showCreateOutlineModal}
-                  onClose={() => setShowCreateOutlineModal(false)}
-                  onSuccess={() => {
-                    setShowCreateOutlineModal(false);
-                    setOutlineSidebarOpen(true);
-                  }}
                 />
               </div>
             )}

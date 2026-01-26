@@ -343,6 +343,12 @@ export default function ChapterCorkboard({
 
     try {
       await chaptersApi.deleteChapter(chapterId);
+
+      // Clear current chapter if it was the deleted one
+      if (currentChapterId === chapterId) {
+        setCurrentChapter(null);
+      }
+
       await loadChapterTree();
       toast.success('Deleted');
     } catch (err) {

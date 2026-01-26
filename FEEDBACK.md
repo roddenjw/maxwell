@@ -32,6 +32,7 @@ Outline
    - **Fix:** Created OutlineMainView.tsx component that displays full outline info in center area including: structure type, progress bar, premise/logline/synopsis, and all beats organized by act. Sidebar remains as an optional quick-access panel. Error handling improved with proper null checks.
 9. ✅ **RESOLVED (2026-01-25)** - There's an annoying Create Outline popup that appears in a manuscript with out one and it cant be dismissed until you make one. Users should be able to close it out.
    - **Fix:** Added "Maybe Later" button to the no-outline state in OutlineSidebar.tsx. Users can now dismiss the panel without creating an outline. The header close button (X) also works.
+10. Scene suggestions and beat suggestions should take into account the current manuscript rather than generic scene suggestions. If I have a manuscript or idea or premise I want those taken into account. Before I got generic ones that didn't fit the story or the genre even.
 
 Timeline View:
 
@@ -39,8 +40,7 @@ Timeline View:
    - **Fix:** Added smart tooltip positioning in TimelineView.tsx. Tooltips at edges (<20% or >80%) now align to left/right instead of center to prevent cutoff. Also made beat description scrollable with max-h-12 overflow-y-auto.
 2. In the Swimlanes feature it mentions that I need characters. My manuscript has characters but theyre not being tied to events. How does the swimlane feature intend to work? How are characters linked to Events?
 3. ✅ **RESOLVED (2026-01-25)** - Timeline doesn't actually seem to detect across the whole manuscript when you use the detection feature or Analyze featue. It seems to be stuck on the crrent chapter.
-   - **Fix:** Created new AnalyzeModal component with scope selection. Users can now choose "Current Chapter" or "Entire Manuscript" when clicking the Analyze button. Manuscript-wide analysis fetches all chapters, combines their content, and runs both Codex (entity detection) and Timeline (event detection) analysis on the full text. 
-
+   - **Fix:** Created new AnalyzeModal component with scope selection. Users can now choose "Current Chapter" or "Entire Manuscript" when clicking the Analyze button. Manuscript-wide analysis fetches all chapters, combines their content, and runs both Codex (entity detection) and Timeline (event detection) analysis on the full text.
 
 Time Machine
 
@@ -78,6 +78,7 @@ Entity Creation
 1. Allow users to hover over a word or words and turn them into an entity or entity description right within the text editor.
 
 Codex
+
 1. ✅ **RESOLVED (2026-01-25)** - We should allow for the entire file to be scanned at once for entities. Potentially upon import but also within the text.
    - **Fix:** Created AnalyzeModal component with scope selection ("Current Chapter" vs "Entire Manuscript"). Clicking Analyze button opens modal where users choose scope. Manuscript-wide analysis fetches all chapters, shows progress indicator ("Loading chapter X of Y"), combines text, and runs NLP entity detection on the full manuscript. Now supports extracting entities from entire manuscripts.
 2. ✅ **RESOLVED (2026-01-25)** - It would be great to be able to Edit suggested entities to correct them. Many are almost picked up but its still finding things like 'Mother of X Character' rather than the actual characters name. You can look at the file called Path of Fools v1, Dramatis Personae chapter for reference this is where I noticed these.

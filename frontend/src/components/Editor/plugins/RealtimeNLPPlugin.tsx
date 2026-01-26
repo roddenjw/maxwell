@@ -1,6 +1,6 @@
 /**
  * RealtimeNLPPlugin
- * Detects text changes and sends deltas to WebSocket for real-time entity detection
+ * Detects text changes and sends context window to WebSocket for real-time entity detection
  */
 
 import { useEffect, useRef } from 'react';
@@ -12,9 +12,13 @@ interface RealtimeNLPPluginProps {
   manuscriptId: string;
 }
 
+// Size of context window to send for NLP analysis
+const CONTEXT_WINDOW_SIZE = 2000;
+
 export default function RealtimeNLPPlugin({ manuscriptId }: RealtimeNLPPluginProps) {
   const [editor] = useLexicalComposerContext();
   const previousTextRef = useRef<string>('');
+  const lastSentContextRef = useRef<string>('');
 
   // Set up WebSocket connection
   const { sendTextDelta } = useRealtimeNLP({
@@ -30,16 +34,26 @@ export default function RealtimeNLPPlugin({ manuscriptId }: RealtimeNLPPluginPro
         const root = $getRoot();
         const currentText = root.getTextContent();
 
-        // Calculate delta (new text since last update)
+        // Only process if text has changed
         const previousText = previousTextRef.current;
+        if (currentText === previousText) {
+          return;
+        }
 
-        // Simple delta detection: if text grew, send the new portion
+        // Check if text grew (user is typing/adding content)
         if (currentText.length > previousText.length) {
-          const textDelta = currentText.substring(previousText.length);
+          // Get context window (last N chars for spaCy context)
+          const contextWindow = currentText.slice(-CONTEXT_WINDOW_SIZE);
 
-          // Only send if delta is meaningful (not just whitespace)
-          if (textDelta.trim().length > 0) {
-            sendTextDelta(textDelta);
+          // Only send if context has meaningfully changed
+          // (avoids redundant sends when just cursor moves or minor edits)
+          if (contextWindow !== lastSentContextRef.current) {
+            // Check if there's meaningful new content (not just whitespace)
+            const newContent = currentText.substring(previousText.length);
+            if (newContent.trim().length > 0) {
+              sendTextDelta(contextWindow);
+              lastSentContextRef.current = contextWindow;
+            }
           }
         }
 

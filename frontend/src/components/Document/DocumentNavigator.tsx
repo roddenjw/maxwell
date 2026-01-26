@@ -476,6 +476,12 @@ export default function DocumentNavigator({ manuscriptId, onChapterSelect, defau
 
     try {
       await chaptersApi.deleteChapter(chapterId);
+
+      // Clear current chapter if it was the deleted one
+      if (currentChapterId === chapterId) {
+        setCurrentChapter(null);
+      }
+
       await loadChapterTree();
       toast.success('Deleted successfully');
     } catch (err) {

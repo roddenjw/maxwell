@@ -15,6 +15,13 @@ from app.models.entity import Entity
 class RealtimeNLPService:
     """Background entity extraction with debouncing"""
 
+    # Map confidence threshold strings to numeric values
+    CONFIDENCE_THRESHOLDS = {
+        'low': 0.5,
+        'medium': 0.7,
+        'high': 0.8,  # Meets >80% requirement
+    }
+
     def __init__(self):
         self.debounce_delay = 2.0  # seconds - wait for user to stop typing
         self.max_text_size = 5000  # Max chars to analyze at once
@@ -61,7 +68,8 @@ class RealtimeNLPService:
         self,
         text: str,
         manuscript_id: str,
-        existing_entities: List[str]
+        existing_entities: List[str],
+        confidence_threshold: str = 'medium'
     ) -> Dict:
         """
         Analyze recent text additions for new entities
@@ -70,6 +78,7 @@ class RealtimeNLPService:
             text: The text chunk to analyze
             manuscript_id: ID of the manuscript
             existing_entities: List of entity names already in Codex
+            confidence_threshold: 'low', 'medium', or 'high' - filters detected entities
 
         Returns:
             Dict with new_entities detected
@@ -94,6 +103,9 @@ class RealtimeNLPService:
                 detected_entities = []
                 existing_set = set(e.lower() for e in existing_entities)
 
+                # Get numeric threshold value
+                threshold_value = self.CONFIDENCE_THRESHOLDS.get(confidence_threshold, 0.7)
+
                 # Extract named entities
                 for ent in doc.ents:
                     entity_name = ent.text.strip()
@@ -109,15 +121,23 @@ class RealtimeNLPService:
 
                     # Only include relevant entity types
                     if entity_type:
+                        # Calculate confidence score based on entity characteristics
+                        confidence_score = self._calculate_confidence(ent, entity_type)
+
+                        # Skip if below threshold
+                        if confidence_score < threshold_value:
+                            continue
+
                         detected_entities.append({
                             "name": entity_name,
                             "type": entity_type,
                             "context": ent.sent.text if ent.sent else text[:200],
-                            "confidence": "spacy_ner"
+                            "confidence": "spacy_ner",
+                            "confidence_score": confidence_score
                         })
 
                 # Also look for capitalized multi-word phrases (potential names/places)
-                capitalized_phrases = self._extract_capitalized_phrases(doc, existing_set)
+                capitalized_phrases = self._extract_capitalized_phrases(doc, existing_set, threshold_value)
                 detected_entities.extend(capitalized_phrases)
 
                 # Remove duplicates (keep first occurrence, prioritize spaCy detections)
@@ -153,10 +173,52 @@ class RealtimeNLPService:
         }
         return mapping.get(spacy_label)
 
+    def _calculate_confidence(self, ent, entity_type: str) -> float:
+        """
+        Calculate confidence score for a detected entity.
+
+        Factors:
+        - Entity label reliability (PERSON is more reliable than ORG)
+        - Entity name characteristics (length, proper capitalization)
+        - Context quality (is it in a complete sentence?)
+
+        Returns:
+            Float between 0.0 and 1.0
+        """
+        base_scores = {
+            'PERSON': 0.85,   # spaCy is good at detecting names
+            'GPE': 0.80,      # Places are fairly reliable
+            'LOC': 0.75,
+            'FAC': 0.70,
+            'ORG': 0.65,      # Organizations can be noisy
+            'EVENT': 0.60,
+            'WORK_OF_ART': 0.65,
+            'PRODUCT': 0.60,
+        }
+
+        score = base_scores.get(ent.label_, 0.5)
+
+        # Boost for multi-word names (more likely to be real entities)
+        if len(ent.text.split()) >= 2:
+            score += 0.05
+
+        # Boost for proper capitalization pattern
+        words = ent.text.split()
+        if all(w[0].isupper() for w in words if w):
+            score += 0.05
+
+        # Slight penalty for very short names (1-2 chars)
+        if len(ent.text) <= 2:
+            score -= 0.15
+
+        # Cap at 1.0
+        return min(1.0, max(0.0, score))
+
     def _extract_capitalized_phrases(
         self,
         doc,
-        existing_entities: Set[str]
+        existing_entities: Set[str],
+        threshold_value: float = 0.7
     ) -> List[Dict]:
         """Extract capitalized phrases and proper nouns (potential character names, items, locations)"""
         entities = []
@@ -194,13 +256,14 @@ class RealtimeNLPService:
                     i = j
                     continue
 
-                # Determine entity type
+                # Determine entity type and base confidence
                 # Single capitalized proper noun = likely CHARACTER
                 # Multi-word phrase = likely ITEM or LOCATION
                 if len(phrase_tokens) == 1:
                     # Check if it looks like a name (capitalized, PROPN tag)
                     if token.pos_ == 'PROPN':
                         entity_type = 'CHARACTER'
+                        confidence_score = 0.65  # Lower confidence for single-word heuristic
                     else:
                         i = j
                         continue
@@ -210,16 +273,25 @@ class RealtimeNLPService:
                     first_word = phrase_tokens[0].text.lower()
                     if first_word in ['sir', 'lord', 'lady', 'king', 'queen', 'prince', 'princess', 'duke', 'duchess']:
                         entity_type = 'CHARACTER'
+                        confidence_score = 0.75  # Higher confidence for titled names
                     else:
                         entity_type = 'ITEM'
+                        confidence_score = 0.55  # Lower confidence for generic 2-word phrases
                 else:
                     entity_type = 'LOCATION'
+                    confidence_score = 0.60  # Multi-word phrases as locations
+
+                # Skip if below threshold
+                if confidence_score < threshold_value:
+                    i = j
+                    continue
 
                 entities.append({
                     "name": phrase,
                     "type": entity_type,
                     "context": phrase_tokens[0].sent.text if phrase_tokens[0].sent else "",
-                    "confidence": "capitalization"
+                    "confidence": "capitalization",
+                    "confidence_score": confidence_score
                 })
 
                 i = j
@@ -232,7 +304,8 @@ class RealtimeNLPService:
         self,
         manuscript_id: str,
         existing_entities: List[str],
-        text_queue: asyncio.Queue
+        text_queue: asyncio.Queue,
+        confidence_threshold: str = 'medium'
     ):
         """
         Process incoming text deltas with debouncing and backpressure
@@ -241,6 +314,7 @@ class RealtimeNLPService:
             manuscript_id: ID of the manuscript
             existing_entities: List of existing entity names
             text_queue: Queue receiving text deltas from client
+            confidence_threshold: 'low', 'medium', or 'high' - filters detected entities
         """
         buffer = ""
         last_activity = time.time()
@@ -276,7 +350,8 @@ class RealtimeNLPService:
                     result = await self.analyze_text_chunk(
                         buffer,
                         manuscript_id,
-                        existing_entities
+                        existing_entities,
+                        confidence_threshold
                     )
 
                     # Clear buffer after analysis
