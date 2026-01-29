@@ -131,6 +131,7 @@ export interface Snapshot {
   commit_hash: string;
   label: string;
   description: string;
+  auto_summary: string;  // Auto-generated changeset summary (like commit messages)
   trigger_type: 'MANUAL' | 'AUTO' | 'CHAPTER_COMPLETE' | 'PRE_GENERATION' | 'SESSION_END';
   word_count: number;
   created_at: string;

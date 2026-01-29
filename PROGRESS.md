@@ -1,6 +1,6 @@
 # Maxwell Project Progress
 
-**Last Updated:** 2026-01-25
+**Last Updated:** 2026-01-29
 **Overall Completion:** 93% across all phases
 **Current Focus:** Beta Launch Preparation (Week of Jan 22-28)
 
@@ -182,7 +182,29 @@
 
 ## Recent Completions (Last 2 Weeks)
 
-### January 29, 2026
+### January 29, 2026 (Afternoon)
+- **Time Machine Version Notes / Auto-Generated Summaries (FEEDBACK Time Machine #1)**
+  - Added `auto_summary` column to Snapshot model (new migration)
+  - `generate_basic_summary()` method in version_service.py computes changes between snapshots
+  - Summary shows: word count delta (+/-), chapters added/removed/modified, chapter names
+  - Summaries auto-generated when creating snapshots (compares with previous snapshot)
+  - Frontend displays summaries in SnapshotCard, HistorySlider, and snapshot details view
+  - Optional AI-enhanced narrative summaries via `generate_changeset_summary()` (uses OpenRouter)
+  - Files: `backend/app/models/versioning.py`, `backend/app/services/version_service.py`,
+           `backend/migrations/versions/c0c667aea4c0_add_auto_summary_to_snapshots.py`,
+           `frontend/src/components/TimeMachine/SnapshotCard.tsx`,
+           `frontend/src/components/TimeMachine/HistorySlider.tsx`,
+           `frontend/src/components/TimeMachine/TimeMachine.tsx`,
+           `frontend/src/lib/api.ts`
+
+- **Timeline Swimlanes Character-Event Linking (FEEDBACK Timeline #2)**
+  - Added manual character-event linking UI in TimelineSwimlanes.tsx
+  - Visual indicator (person icon) shows when character is linked to event
+  - "Link" button allows quick character-to-event linking directly from swimlanes view
+  - Events appear under character lanes when linked
+  - Files: `frontend/src/components/Timeline/TimelineSwimlanes.tsx`
+
+### January 29, 2026 (Earlier)
 - **Context-Aware AI Suggestions (FEEDBACK Outline #10)**
   - AI beat suggestions now include full manuscript context (chapter content)
   - AI suggestions include Codex entities (characters, locations, items)

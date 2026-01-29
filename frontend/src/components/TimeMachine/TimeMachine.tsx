@@ -229,6 +229,14 @@ export default function TimeMachine({
                       {selectedSnapshot.word_count.toLocaleString()} words
                     </p>
                   </div>
+                  {selectedSnapshot.auto_summary && (
+                    <div>
+                      <label className="text-xs font-sans text-faded-ink uppercase">Changes</label>
+                      <p className="text-sm font-sans text-midnight/80 italic whitespace-pre-line">
+                        {selectedSnapshot.auto_summary}
+                      </p>
+                    </div>
+                  )}
                   {selectedSnapshot.description && (
                     <div>
                       <label className="text-xs font-sans text-faded-ink uppercase">Description</label>

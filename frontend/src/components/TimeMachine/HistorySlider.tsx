@@ -70,7 +70,12 @@ export default function HistorySlider({ snapshots, onSelect }: HistorySliderProp
                         minute: '2-digit',
                       })}
                     </p>
-                    {snapshot.description && (
+                    {snapshot.auto_summary && (
+                      <p className="text-sm font-sans text-midnight/80 italic mt-2 whitespace-pre-line">
+                        {snapshot.auto_summary}
+                      </p>
+                    )}
+                    {snapshot.description && !snapshot.auto_summary && (
                       <p className="text-sm font-sans text-midnight mt-2">
                         {snapshot.description}
                       </p>

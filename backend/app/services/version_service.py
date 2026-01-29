@@ -244,17 +244,35 @@ class VersionService:
         # Store snapshot metadata in database
         db = SessionLocal()
         try:
+            # Create the new snapshot
             snapshot = Snapshot(
                 manuscript_id=manuscript_id,
                 commit_hash=str(commit_id),
                 label=label,
                 description=description,
                 trigger_type=trigger_type,
-                word_count=word_count
+                word_count=word_count or total_word_count,
+                auto_summary=""
             )
             db.add(snapshot)
             db.commit()
             db.refresh(snapshot)
+
+            # Generate auto-summary by comparing with previous snapshot
+            previous_snapshot = db.query(Snapshot).filter(
+                Snapshot.manuscript_id == manuscript_id,
+                Snapshot.id != snapshot.id
+            ).order_by(Snapshot.created_at.desc()).first()
+
+            if previous_snapshot:
+                auto_summary = self.generate_basic_summary(
+                    manuscript_id, previous_snapshot, snapshot
+                )
+                if auto_summary:
+                    snapshot.auto_summary = auto_summary
+                    db.commit()
+                    db.refresh(snapshot)
+
             return snapshot
         finally:
             db.close()
@@ -299,6 +317,7 @@ class VersionService:
                         "commit_hash": snapshot.commit_hash,
                         "label": snapshot.label,
                         "description": snapshot.description,
+                        "auto_summary": snapshot.auto_summary or "",
                         "trigger_type": snapshot.trigger_type,
                         "word_count": snapshot.word_count,
                         "created_at": snapshot.created_at.isoformat(),
@@ -312,6 +331,7 @@ class VersionService:
                         "commit_hash": snapshot.commit_hash,
                         "label": snapshot.label,
                         "description": snapshot.description,
+                        "auto_summary": snapshot.auto_summary or "",
                         "trigger_type": snapshot.trigger_type,
                         "word_count": snapshot.word_count,
                         "created_at": snapshot.created_at.isoformat(),
@@ -567,6 +587,320 @@ class VersionService:
 
         finally:
             db.close()
+
+    def generate_basic_summary(
+        self,
+        manuscript_id: str,
+        old_snapshot: Snapshot,
+        new_snapshot: Snapshot
+    ) -> str:
+        """
+        Generate a basic (non-AI) summary of changes between snapshots.
+        This is synchronous and suitable for use in create_snapshot().
+
+        Args:
+            manuscript_id: ID of the manuscript
+            old_snapshot: The older snapshot
+            new_snapshot: The newer snapshot
+
+        Returns:
+            Human-readable summary string
+        """
+        try:
+            changes = self._get_chapter_changes(manuscript_id, old_snapshot, new_snapshot)
+
+            # Build summary parts
+            summary_parts = []
+
+            # Word count delta
+            word_delta = changes['word_delta']
+            if word_delta > 0:
+                summary_parts.append(f"+{word_delta:,} words")
+            elif word_delta < 0:
+                summary_parts.append(f"{word_delta:,} words")
+            else:
+                summary_parts.append("No word count change")
+
+            # Chapter counts
+            chapter_details = []
+            if changes['added']:
+                count = len(changes['added'])
+                chapter_details.append(f"{count} new chapter{'s' if count > 1 else ''}")
+            if changes['removed']:
+                count = len(changes['removed'])
+                chapter_details.append(f"{count} removed")
+            if changes['modified']:
+                count = len(changes['modified'])
+                chapter_details.append(f"{count} edited")
+
+            if chapter_details:
+                summary_parts.append(" | ".join(chapter_details))
+
+            basic_line = " | ".join(summary_parts[:2]) if len(summary_parts) > 1 else summary_parts[0]
+
+            # Add chapter details
+            details = []
+            for ch in changes['added'][:2]:  # Limit to 2 new chapters
+                details.append(f"New: \"{ch['title']}\"")
+            for ch in changes['removed'][:2]:
+                details.append(f"Removed: \"{ch['title']}\"")
+            for ch in changes['modified'][:2]:  # Limit to 2 most-changed
+                delta = ch['word_delta']
+                delta_str = f"+{delta}" if delta > 0 else str(delta)
+                details.append(f"\"{ch['title']}\" ({delta_str})")
+
+            # Count extras
+            total_mentioned = min(2, len(changes['added'])) + min(2, len(changes['removed'])) + min(2, len(changes['modified']))
+            total_changes = len(changes['added']) + len(changes['removed']) + len(changes['modified'])
+            if total_changes > total_mentioned:
+                details.append(f"+{total_changes - total_mentioned} more")
+
+            if details:
+                return f"{basic_line}\n{'; '.join(details)}"
+            return basic_line
+
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to generate basic summary: {e}")
+            return ""
+
+    def _get_chapter_changes(
+        self,
+        manuscript_id: str,
+        old_snapshot: Snapshot,
+        new_snapshot: Snapshot
+    ) -> Dict[str, Any]:
+        """
+        Analyze chapter-level changes between two snapshots.
+
+        Returns:
+            Dict with added, removed, modified chapters and word count delta
+        """
+        repo = self.init_repository(manuscript_id)
+        repo_path = self.get_repo_path(manuscript_id)
+
+        old_commit = repo.get(old_snapshot.commit_hash)
+        new_commit = repo.get(new_snapshot.commit_hash)
+
+        # Get chapter trees from metadata
+        def get_chapter_tree(commit):
+            """Extract chapter tree from commit's metadata.json"""
+            try:
+                tree = commit.tree
+                metadata_entry = tree['metadata.json']
+                metadata_blob = repo.get(metadata_entry.id)
+                metadata = json.loads(metadata_blob.data.decode('utf-8'))
+                return {c['id']: c for c in metadata.get('chapter_tree', [])}
+            except (KeyError, json.JSONDecodeError):
+                return {}
+
+        old_chapters = get_chapter_tree(old_commit)
+        new_chapters = get_chapter_tree(new_commit)
+
+        # Calculate changes
+        old_ids = set(old_chapters.keys())
+        new_ids = set(new_chapters.keys())
+
+        added_ids = new_ids - old_ids
+        removed_ids = old_ids - new_ids
+        common_ids = old_ids & new_ids
+
+        # Find modified chapters (by comparing word counts or content)
+        modified_chapters = []
+        for cid in common_ids:
+            old_ch = old_chapters[cid]
+            new_ch = new_chapters[cid]
+            if old_ch.get('word_count', 0) != new_ch.get('word_count', 0):
+                word_delta = new_ch.get('word_count', 0) - old_ch.get('word_count', 0)
+                modified_chapters.append({
+                    'id': cid,
+                    'title': new_ch.get('title', 'Untitled'),
+                    'word_delta': word_delta
+                })
+
+        # Build result
+        added = [
+            {'id': cid, 'title': new_chapters[cid].get('title', 'Untitled'), 'is_folder': new_chapters[cid].get('is_folder', False)}
+            for cid in added_ids if not new_chapters[cid].get('is_folder', False)
+        ]
+        removed = [
+            {'id': cid, 'title': old_chapters[cid].get('title', 'Untitled')}
+            for cid in removed_ids if not old_chapters[cid].get('is_folder', False)
+        ]
+
+        # Calculate total word delta
+        word_delta = (new_snapshot.word_count or 0) - (old_snapshot.word_count or 0)
+
+        return {
+            'added': added,
+            'removed': removed,
+            'modified': modified_chapters,
+            'word_delta': word_delta,
+            'old_word_count': old_snapshot.word_count or 0,
+            'new_word_count': new_snapshot.word_count or 0
+        }
+
+    async def generate_changeset_summary(
+        self,
+        manuscript_id: str,
+        old_snapshot_id: str,
+        new_snapshot_id: str,
+        use_ai: bool = True,
+        api_key: Optional[str] = None
+    ) -> str:
+        """
+        Generate human-readable summary of changes between snapshots.
+
+        Args:
+            manuscript_id: ID of the manuscript
+            old_snapshot_id: ID of the older snapshot
+            new_snapshot_id: ID of the newer snapshot
+            use_ai: Whether to use AI for narrative enhancement (requires api_key)
+            api_key: OpenRouter API key for AI enhancement
+
+        Returns:
+            Human-readable summary string
+        """
+        db = SessionLocal()
+        try:
+            old_snapshot = db.query(Snapshot).filter(
+                Snapshot.id == old_snapshot_id
+            ).first()
+            new_snapshot = db.query(Snapshot).filter(
+                Snapshot.id == new_snapshot_id
+            ).first()
+
+            if not old_snapshot or not new_snapshot:
+                return ""
+
+            # Get chapter-level changes
+            changes = self._get_chapter_changes(manuscript_id, old_snapshot, new_snapshot)
+
+            # Build basic summary
+            summary_parts = []
+
+            # Word count delta
+            word_delta = changes['word_delta']
+            if word_delta > 0:
+                summary_parts.append(f"+{word_delta:,} words")
+            elif word_delta < 0:
+                summary_parts.append(f"{word_delta:,} words")
+
+            # Chapter counts
+            if changes['added']:
+                summary_parts.append(f"{len(changes['added'])} new chapter{'s' if len(changes['added']) > 1 else ''}")
+            if changes['removed']:
+                summary_parts.append(f"{len(changes['removed'])} removed")
+            if changes['modified']:
+                summary_parts.append(f"{len(changes['modified'])} edited")
+
+            basic_summary = " | ".join(summary_parts) if summary_parts else "No significant changes"
+
+            # Build detailed chapter info
+            details = []
+            for ch in changes['added']:
+                details.append(f"New: \"{ch['title']}\"")
+            for ch in changes['removed']:
+                details.append(f"Removed: \"{ch['title']}\"")
+            for ch in changes['modified'][:3]:  # Limit to 3 most-changed
+                delta_str = f"+{ch['word_delta']}" if ch['word_delta'] > 0 else str(ch['word_delta'])
+                details.append(f"Edited: \"{ch['title']}\" ({delta_str} words)")
+
+            if len(changes['modified']) > 3:
+                details.append(f"...and {len(changes['modified']) - 3} more edited")
+
+            # Combine basic + details
+            full_summary = basic_summary
+            if details:
+                full_summary += "\n" + "\n".join(details)
+
+            # AI enhancement (optional)
+            if use_ai and api_key and (changes['added'] or changes['modified']):
+                try:
+                    ai_narrative = await self._generate_ai_narrative(
+                        changes, api_key, manuscript_id
+                    )
+                    if ai_narrative:
+                        full_summary = ai_narrative
+                except Exception as e:
+                    # Fallback to basic summary on AI failure
+                    import logging
+                    logging.getLogger(__name__).warning(f"AI summary generation failed: {e}")
+
+            return full_summary
+
+        finally:
+            db.close()
+
+    async def _generate_ai_narrative(
+        self,
+        changes: Dict[str, Any],
+        api_key: str,
+        manuscript_id: str
+    ) -> Optional[str]:
+        """
+        Generate an AI-enhanced narrative summary of changes.
+
+        Args:
+            changes: Chapter change data from _get_chapter_changes()
+            api_key: OpenRouter API key
+            manuscript_id: ID of the manuscript
+
+        Returns:
+            AI-generated narrative summary or None on failure
+        """
+        from app.services.openrouter_service import OpenRouterService
+
+        # Build context for AI
+        word_delta = changes['word_delta']
+        word_str = f"+{word_delta:,}" if word_delta > 0 else f"{word_delta:,}"
+
+        context = f"""You are summarizing changes made to a fiction manuscript between two snapshots (like a Git commit message).
+
+Write a brief, engaging 1-2 sentence summary that describes what changed in a narrative way.
+Focus on the creative work: new chapters added, content expanded, scenes edited.
+Be concise and writer-friendly. Don't mention technical details like "snapshots" or "commits".
+
+Format: Start with the word count change, then describe the creative changes.
+Example outputs:
+- "+1,250 words. Added climactic confrontation in Chapter 8 and expanded the tavern scene."
+- "-340 words. Trimmed Chapter 5 dialogue and removed a redundant flashback."
+- "+2,100 words across 3 chapters. New chapter introduces the mysterious stranger."""
+
+        # Build the changes description
+        changes_text = f"Word count change: {word_str}\n"
+
+        if changes['added']:
+            chapter_names = [f'"{ch["title"]}"' for ch in changes['added']]
+            changes_text += f"New chapters: {', '.join(chapter_names)}\n"
+
+        if changes['removed']:
+            chapter_names = [f'"{ch["title"]}"' for ch in changes['removed']]
+            changes_text += f"Removed chapters: {', '.join(chapter_names)}\n"
+
+        if changes['modified']:
+            modified_details = []
+            for ch in changes['modified'][:5]:
+                delta = ch['word_delta']
+                delta_str = f"+{delta}" if delta > 0 else str(delta)
+                modified_details.append(f'"{ch["title"]}" ({delta_str} words)')
+            changes_text += f"Edited chapters: {', '.join(modified_details)}\n"
+
+        prompt = f"Summarize these manuscript changes:\n\n{changes_text}"
+
+        service = OpenRouterService(api_key)
+        result = await service.get_writing_suggestion(
+            text=prompt,
+            context=context,
+            suggestion_type="general",
+            max_tokens=150,
+            temperature=0.6
+        )
+
+        if result.get("success") and result.get("suggestion"):
+            return result["suggestion"].strip()
+
+        return None
 
     def create_variant_branch(
         self,

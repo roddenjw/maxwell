@@ -30,6 +30,9 @@ class Snapshot(Base):
     # Word count at time of snapshot
     word_count = Column(Integer, default=0)
 
+    # Auto-generated changeset summary (like commit messages)
+    auto_summary = Column(Text, default="")
+
     # Timestamp
     created_at = Column(DateTime, default=datetime.utcnow)
 

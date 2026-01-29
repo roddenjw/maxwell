@@ -44,8 +44,15 @@ export default function SnapshotCard({
           </span>
         </div>
 
+        {/* Auto-generated summary */}
+        {snapshot.auto_summary && (
+          <p className="text-xs text-midnight/70 font-sans italic mb-2 line-clamp-2">
+            {snapshot.auto_summary.split('\n')[0]}
+          </p>
+        )}
+
         {/* Metadata */}
-        <p className="text-xs text-faded-ink font-sans mb-2">
+        <p className="text-xs text-faded-ink font-sans mb-1">
           {new Date(snapshot.created_at).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',

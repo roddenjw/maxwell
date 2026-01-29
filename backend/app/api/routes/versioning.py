@@ -74,6 +74,7 @@ async def create_snapshot(request: CreateSnapshotRequest):
                 "commit_hash": snapshot.commit_hash,
                 "label": snapshot.label,
                 "description": snapshot.description,
+                "auto_summary": snapshot.auto_summary or "",
                 "trigger_type": snapshot.trigger_type,
                 "word_count": snapshot.word_count,
                 "created_at": snapshot.created_at.isoformat()

@@ -43,13 +43,25 @@ Timeline View:
 
 1. ✅ **RESOLVED (2026-01-10)** - In the timeline view when hovering over the events most of the text is cut off to the left of the event summary and I can't see anything else about it.
    - **Fix:** Added smart tooltip positioning in TimelineView.tsx. Tooltips at edges (<20% or >80%) now align to left/right instead of center to prevent cutoff. Also made beat description scrollable with max-h-12 overflow-y-auto.
-2. In the Swimlanes feature it mentions that I need characters. My manuscript has characters but theyre not being tied to events. How does the swimlane feature intend to work? How are characters linked to Events?
+2. ✅ **RESOLVED (2026-01-29)** - In the Swimlanes feature it mentions that I need characters. My manuscript has characters but theyre not being tied to events. How does the swimlane feature intend to work? How are characters linked to Events?
+   - **Fix:** Added character-event linking UX improvements in TimelineSwimlanes.tsx:
+     - Now fetches events with character linkage status
+     - Visual indicator (person icon) shows when character linked to event
+     - "Link" button allows quick character-to-event linking directly from swimlanes view
+     - Events appear under character lanes when linked
 3. ✅ **RESOLVED (2026-01-25)** - Timeline doesn't actually seem to detect across the whole manuscript when you use the detection feature or Analyze featue. It seems to be stuck on the crrent chapter.
    - **Fix:** Created new AnalyzeModal component with scope selection. Users can now choose "Current Chapter" or "Entire Manuscript" when clicking the Analyze button. Manuscript-wide analysis fetches all chapters, combines their content, and runs both Codex (entity detection) and Timeline (event detection) analysis on the full text.
 
 Time Machine
 
-1. Would be nice to note the changes in between versions. Almost like auto generated commit messages that are detailing the edits made and progress in the story.
+1. ✅ **RESOLVED (2026-01-29)** - Would be nice to note the changes in between versions. Almost like auto generated commit messages that are detailing the edits made and progress in the story.
+   - **Fix:** Implemented auto-generated changeset summaries for Time Machine snapshots:
+     - Added `auto_summary` field to Snapshot model (new migration)
+     - `generate_basic_summary()` method in version_service.py computes changes between snapshots
+     - Summary shows: word count delta (+/-), chapters added/removed/modified, chapter names
+     - Summaries auto-generated when creating snapshots (compares with previous snapshot)
+     - Frontend displays summaries in SnapshotCard, HistorySlider, and snapshot details view
+     - Optional AI-enhanced narrative summaries via `generate_changeset_summary()` (uses OpenRouter)
 
 Text Editor
 
