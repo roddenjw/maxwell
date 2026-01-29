@@ -117,16 +117,51 @@ export default function CharacterJourneySwimlane({ manuscriptId }: CharacterJour
   }
 
   if (characterLanes.length === 0) {
+    const hasCharacters = entities.filter(e => e.type === 'CHARACTER').length > 0;
+    const hasEvents = events.length > 0;
+
     return (
       <div className="h-full flex items-center justify-center p-8">
-        <div className="text-center max-w-md">
+        <div className="text-center max-w-lg">
           <span className="text-6xl mb-4 block">🏊</span>
           <p className="text-midnight font-garamond text-xl font-semibold mb-3">
             No character journeys to display
           </p>
-          <p className="text-sm text-faded-ink font-sans">
-            Add characters to timeline events to see their journeys visualized as swimlanes.
-          </p>
+
+          {!hasCharacters ? (
+            <div className="space-y-3">
+              <p className="text-sm text-faded-ink font-sans">
+                You need characters in your Codex first.
+              </p>
+              <p className="text-xs text-faded-ink font-sans bg-vellum p-3 rounded">
+                <strong>Tip:</strong> Go to the Codex panel and create CHARACTER entities for your story's characters.
+              </p>
+            </div>
+          ) : !hasEvents ? (
+            <div className="space-y-3">
+              <p className="text-sm text-faded-ink font-sans">
+                You need timeline events to track character journeys.
+              </p>
+              <p className="text-xs text-faded-ink font-sans bg-vellum p-3 rounded">
+                <strong>Tip:</strong> Use the "Events" tab to create events manually or "Extract Timeline" to analyze your manuscript.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-faded-ink font-sans">
+                Your events exist but don't have characters linked to them.
+              </p>
+              <p className="text-xs text-faded-ink font-sans bg-vellum p-3 rounded">
+                <strong>How to fix:</strong> Go to the "Events" tab, click on an event to edit it,
+                and check the characters who appear in that event. Once characters are linked to events,
+                their journeys will appear here as swimlanes.
+              </p>
+              <p className="text-xs text-faded-ink font-sans mt-2">
+                You have <strong>{entities.filter(e => e.type === 'CHARACTER').length}</strong> characters
+                and <strong>{events.length}</strong> events ready to connect.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );

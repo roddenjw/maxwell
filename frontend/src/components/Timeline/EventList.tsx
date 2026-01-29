@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { EventType } from '@/types/timeline';
 import { timelineApi } from '@/lib/api';
 import { useTimelineStore } from '@/stores/timelineStore';
+import { useCodexStore } from '@/stores/codexStore';
 import EventCard from './EventCard';
 import EventDetail from './EventDetail';
 
@@ -20,6 +21,7 @@ export default function EventList({ manuscriptId }: EventListProps) {
     selectedEventId,
     setSelectedEvent,
   } = useTimelineStore();
+  const { entities } = useCodexStore();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +35,10 @@ export default function EventList({ manuscriptId }: EventListProps) {
   const [newEventDesc, setNewEventDesc] = useState('');
   const [newEventType, setNewEventType] = useState<EventType>(EventType.SCENE);
   const [newEventTimestamp, setNewEventTimestamp] = useState('');
+  const [newEventCharacterIds, setNewEventCharacterIds] = useState<string[]>([]);
+
+  // Get available characters from Codex
+  const availableCharacters = entities.filter((e) => e.type === 'CHARACTER');
 
   // Load events on mount
   useEffect(() => {
@@ -67,6 +73,7 @@ export default function EventList({ manuscriptId }: EventListProps) {
         description: newEventDesc.trim(),
         event_type: newEventType,
         timestamp: newEventTimestamp.trim() || undefined,
+        character_ids: newEventCharacterIds.length > 0 ? newEventCharacterIds : undefined,
       });
 
       // Add to store
@@ -76,6 +83,7 @@ export default function EventList({ manuscriptId }: EventListProps) {
       setNewEventDesc('');
       setNewEventType(EventType.SCENE);
       setNewEventTimestamp('');
+      setNewEventCharacterIds([]);
       setShowCreateForm(false);
 
       // Select new event
@@ -404,6 +412,39 @@ export default function EventList({ manuscriptId }: EventListProps) {
               />
             </div>
 
+            {/* Characters */}
+            <div>
+              <label className="block text-xs font-sans text-faded-ink uppercase mb-1">
+                Characters (optional)
+              </label>
+              {availableCharacters.length === 0 ? (
+                <p className="text-xs text-faded-ink font-sans py-2">
+                  No characters in Codex yet. Create characters first to link them to events.
+                </p>
+              ) : (
+                <div className="bg-white border border-slate-ui p-2 max-h-32 overflow-y-auto" style={{ borderRadius: '2px' }}>
+                  {availableCharacters.map((char) => (
+                    <label key={char.id} className="flex items-center gap-2 py-1 hover:bg-vellum cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newEventCharacterIds.includes(char.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setNewEventCharacterIds([...newEventCharacterIds, char.id]);
+                          } else {
+                            setNewEventCharacterIds(newEventCharacterIds.filter((id) => id !== char.id));
+                          }
+                        }}
+                        className="text-bronze"
+                        disabled={creating}
+                      />
+                      <span className="text-sm font-sans text-midnight">{char.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <button
                 onClick={handleCreateEvent}
@@ -419,6 +460,7 @@ export default function EventList({ manuscriptId }: EventListProps) {
                   setShowCreateForm(false);
                   setNewEventDesc('');
                   setNewEventTimestamp('');
+                  setNewEventCharacterIds([]);
                   setError(null);
                 }}
                 disabled={creating}

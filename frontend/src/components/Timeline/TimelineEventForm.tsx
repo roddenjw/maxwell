@@ -7,6 +7,7 @@ import { useTimelineStore } from '@/stores/timelineStore';
 import { useCodexStore } from '@/stores/codexStore';
 import { EventType } from '@/types/timeline';
 import type { TimelineEvent } from '@/types/timeline';
+import { timelineApi } from '@/lib/api';
 
 interface TimelineEventFormProps {
   manuscriptId: string;
@@ -71,28 +72,31 @@ export default function TimelineEventForm({
     try {
       setSaving(true);
 
-      const eventData: Partial<TimelineEvent> = {
-        manuscript_id: manuscriptId,
-        description: description.trim(),
-        event_type: eventType,
-        order_index: orderIndex,
-        timestamp: timestamp || null,
-        location_id: locationId || null,
-        character_ids: characterIds,
-        narrative_importance: narrativeImportance,
-        prerequisite_ids: prerequisiteIds,
-        event_metadata: {},
-      };
-
       if (eventToEdit) {
-        updateEvent(eventToEdit.id, { ...eventToEdit, ...eventData } as TimelineEvent);
+        // Update existing event via API
+        const updatedEvent = await timelineApi.updateEvent(eventToEdit.id, {
+          description: description.trim(),
+          event_type: eventType,
+          order_index: orderIndex,
+          timestamp: timestamp || undefined,
+          location_id: locationId || undefined,
+          character_ids: characterIds,
+        });
+        // Update local store with API response
+        updateEvent(eventToEdit.id, updatedEvent);
       } else {
-        addEvent({
-          id: crypto.randomUUID(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          ...eventData,
-        } as TimelineEvent);
+        // Create new event via API
+        const newEvent = await timelineApi.createEvent({
+          manuscript_id: manuscriptId,
+          description: description.trim(),
+          event_type: eventType,
+          order_index: orderIndex,
+          timestamp: timestamp || undefined,
+          location_id: locationId || undefined,
+          character_ids: characterIds,
+        });
+        // Add to local store
+        addEvent(newEvent);
       }
 
       onSave();

@@ -7,6 +7,7 @@ import type { TimelineEvent } from '@/types/timeline';
 import { EventType, getEventTypeColor, getEventTypeIcon } from '@/types/timeline';
 import { timelineApi } from '@/lib/api';
 import { useCodexStore } from '@/stores/codexStore';
+import { useTimelineStore } from '@/stores/timelineStore';
 
 interface EventDetailProps {
   event: TimelineEvent;
@@ -20,6 +21,7 @@ export default function EventDetail({
   onUpdate,
 }: EventDetailProps) {
   const { entities } = useCodexStore();
+  const { updateEvent: updateEventInStore } = useTimelineStore();
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -49,13 +51,16 @@ export default function EventDetail({
     try {
       setSaving(true);
 
-      await timelineApi.updateEvent(event.id, {
+      const updatedEvent = await timelineApi.updateEvent(event.id, {
         description: editedDesc,
         event_type: editedType,
         timestamp: editedTimestamp || undefined,
         location_id: editedLocationId || undefined,
         character_ids: editedCharacterIds,
       });
+
+      // Update local store with the response from API
+      updateEventInStore(event.id, updatedEvent);
 
       setIsEditing(false);
       onUpdate();
