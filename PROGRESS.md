@@ -197,6 +197,33 @@
            `frontend/src/components/TimeMachine/TimeMachine.tsx`,
            `frontend/src/lib/api.ts`
 
+- **Scrivener-Style Document Types with Codex Integration**
+  - New document types: CHARACTER_SHEET, NOTES, TITLE_PAGE (extends Chapter model)
+  - Backend: Added `document_type`, `linked_entity_id`, `document_metadata` columns
+  - Backend: New endpoints for creating sheets from entities and bidirectional sync
+  - Frontend: Document type icons in binder (📄 Chapter, 📁 Folder, 👤 Character Sheet, 📝 Notes, 📜 Title Page)
+  - Frontend: Context menu for creating different document types
+  - CharacterSheetEditor: Form-based character editing with sections for physical, personality, backstory, motivation
+  - NotesEditor: Simplified text editor with tags/category support
+  - TitlePageForm: Book front matter (title, author, synopsis, dedication, epigraph)
+  - Codex integration:
+    - Visual link indicator (🔗) for character sheets linked to entities
+    - "Add to Binder" button in Codex EntityDetail
+    - "Link to Entity" / "Unlink" buttons with EntityPickerModal
+    - Automatic sync from Codex when opening linked character sheets
+    - Manual "Pull from Codex" / "Push to Codex" sync buttons
+  - Files: `backend/app/models/manuscript.py`, `backend/app/api/routes/chapters.py`,
+           `backend/migrations/versions/a1b2c3d4e5f6_add_document_types_to_chapters.py`,
+           `frontend/src/components/Editor/CharacterSheetEditor.tsx` (NEW),
+           `frontend/src/components/Editor/NotesEditor.tsx` (NEW),
+           `frontend/src/components/Editor/TitlePageForm.tsx` (NEW),
+           `frontend/src/components/Editor/EntityPickerModal.tsx` (NEW),
+           `frontend/src/components/Document/DocumentNavigator.tsx`,
+           `frontend/src/components/Document/ChapterCorkboard.tsx`,
+           `frontend/src/components/Codex/EntityDetail.tsx`,
+           `frontend/src/components/Codex/CodexMainView.tsx`,
+           `frontend/src/App.tsx`, `frontend/src/lib/api.ts`
+
 - **Timeline Swimlanes Character-Event Linking (FEEDBACK Timeline #2)**
   - Added manual character-event linking UI in TimelineSwimlanes.tsx
   - Visual indicator (person icon) shows when character is linked to event

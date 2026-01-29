@@ -2,7 +2,7 @@
 
 This document provides user guides and technical overviews for Maxwell's major features. For architecture details, see [CLAUDE.md](./CLAUDE.md). For implementation status, see [PROGRESS.md](./PROGRESS.md).
 
-**Last Updated:** 2026-01-07
+**Last Updated:** 2026-01-29
 
 ---
 
@@ -12,6 +12,7 @@ This document provides user guides and technical overviews for Maxwell's major f
 2. [Fast Coach (Writing Feedback)](#2-fast-coach-writing-feedback)
 3. [AI Integration (OpenRouter BYOK)](#3-ai-integration-openrouter-byok)
 4. [Recap Engine (Chapter Summaries)](#4-recap-engine-chapter-summaries)
+5. [Document Types (Scrivener-Style)](#5-document-types-scrivener-style)
 
 ---
 
@@ -669,6 +670,122 @@ Potential additions:
 
 ---
 
+## 5. Document Types (Scrivener-Style)
+
+**Status:** ✅ Complete
+
+Maxwell supports multiple document types in your binder, similar to Scrivener's approach. Each type has a specialized editor tailored to its purpose.
+
+### Document Types
+
+| Type | Icon | Purpose |
+|------|------|---------|
+| **Chapter** | 📄 | Standard manuscript content with rich text editor |
+| **Folder** | 📁 | Organize chapters and other documents |
+| **Character Sheet** | 👤 | Form-based character profiles linked to Codex |
+| **Notes** | 📝 | Freeform notes with tags and categories |
+| **Title Page** | 📜 | Book front matter (title, author, synopsis) |
+
+### Creating Documents
+
+**From Context Menu:**
+1. Right-click a folder in the binder
+2. Select the document type:
+   - "New Chapter"
+   - "New Character Sheet"
+   - "New Notes"
+   - "New Title Page"
+   - "New Folder"
+3. Document is created inside that folder
+
+### Character Sheets
+
+Character sheets are form-based documents for tracking character details. They can be **linked to Codex entities** for bidirectional sync.
+
+**Sections:**
+- **Basic Info:** Name, aliases, role in story
+- **Physical Appearance:** Age, general appearance, distinguishing features
+- **Personality:** Key traits, strengths, flaws
+- **Backstory:** Origin, key events, secrets
+- **Motivation:** What they want vs what they need
+- **Notes:** Freeform additional notes
+
+**Codex Integration:**
+
+- **Create from Codex:** Click "Add to Binder" on any CHARACTER entity in the Codex to create a linked character sheet
+- **Link Existing Sheet:** Click "Link to Entity" in the character sheet editor to connect it to a Codex entity
+- **Auto-Sync:** When opening a linked character sheet, data is automatically pulled from the Codex
+- **Manual Sync:** Use "Pull from Codex" or "Push to Codex" buttons for manual sync
+- **Visual Indicator:** Linked sheets show a 🔗 badge on their icon
+
+### Notes Editor
+
+A simplified editor for research notes, worldbuilding, and other reference material.
+
+**Features:**
+- Basic text editing (no rich formatting)
+- Tags for organization
+- Category dropdown (Research, Worldbuilding, Plot Ideas, Character Notes, Reference, To-Do)
+- Word count display
+
+### Title Page Editor
+
+A form for capturing book front matter that can be used during export.
+
+**Fields:**
+- Book title and subtitle
+- Author name and bio
+- Synopsis/blurb
+- Dedication
+- Epigraph with attribution
+
+**Live Preview:** Shows how the title page will look as you edit.
+
+### How to Use
+
+**Creating a Character Sheet from Codex:**
+
+1. Navigate to the Codex (📖 icon in sidebar)
+2. Select a CHARACTER entity
+3. Click "Add to Binder" button
+4. A linked character sheet is created in your binder
+
+**Linking an Existing Character Sheet:**
+
+1. Open a character sheet (not already linked)
+2. Click "Link to Entity" button
+3. Select a CHARACTER from the picker
+4. Sheet is linked and data is synced
+
+**Syncing Data:**
+
+| Direction | Button | Action |
+|-----------|--------|--------|
+| Codex → Sheet | "Pull from Codex" | Updates sheet with latest entity data |
+| Sheet → Codex | "Push to Codex" | Saves sheet changes to the Codex entity |
+
+### Technical Details
+
+**Backend:**
+- Model: `backend/app/models/manuscript.py` (Chapter with `document_type`)
+- Routes: `backend/app/api/routes/chapters.py`
+- Endpoints: `/api/chapters/from-entity`, `/api/chapters/{id}/sync-entity`
+
+**Frontend:**
+- Components: `frontend/src/components/Editor/CharacterSheetEditor.tsx`, `NotesEditor.tsx`, `TitlePageForm.tsx`
+- Entity picker: `frontend/src/components/Editor/EntityPickerModal.tsx`
+- Routing: `frontend/src/App.tsx` (document type switch)
+
+**Database Schema:**
+```sql
+-- Chapter table additions
+document_type TEXT DEFAULT 'CHAPTER'  -- CHAPTER, FOLDER, CHARACTER_SHEET, NOTES, TITLE_PAGE
+linked_entity_id TEXT REFERENCES entities(id)  -- For character sheet ↔ entity link
+document_metadata JSON  -- Type-specific structured data
+```
+
+---
+
 ## Feature Comparison
 
 | Feature | Fast Coach | AI Suggestions | Recap Engine | Time Machine |
@@ -699,5 +816,5 @@ Potential additions:
 
 ---
 
-**Last Updated:** 2026-01-07
+**Last Updated:** 2026-01-29
 **Maintainer:** Maxwell Development Team
