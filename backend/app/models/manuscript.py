@@ -10,6 +10,14 @@ import uuid
 from app.database import Base
 
 
+# Document type constants for Chapter model
+DOCUMENT_TYPE_CHAPTER = "CHAPTER"
+DOCUMENT_TYPE_FOLDER = "FOLDER"
+DOCUMENT_TYPE_CHARACTER_SHEET = "CHARACTER_SHEET"
+DOCUMENT_TYPE_NOTES = "NOTES"
+DOCUMENT_TYPE_TITLE_PAGE = "TITLE_PAGE"
+
+
 class Manuscript(Base):
     """Main manuscript/book entity"""
     __tablename__ = "manuscripts"
@@ -57,8 +65,20 @@ class Chapter(Base):
 
     # Chapter metadata
     title = Column(String, nullable=False, default="Untitled")
-    is_folder = Column(Integer, default=0)  # 0 = document, 1 = folder
+    is_folder = Column(Integer, default=0)  # 0 = document, 1 = folder (legacy, use document_type)
     order_index = Column(Integer, nullable=False, default=0)  # Order within parent
+
+    # Document type: CHAPTER, FOLDER, CHARACTER_SHEET, NOTES, TITLE_PAGE
+    document_type = Column(String, default=DOCUMENT_TYPE_CHAPTER, nullable=False)
+
+    # Link to Codex entity (for CHARACTER_SHEET documents)
+    linked_entity_id = Column(String, ForeignKey("entities.id"), nullable=True)
+
+    # Structured metadata for non-chapter document types
+    # CHARACTER_SHEET: character data fields
+    # NOTES: tags, category
+    # TITLE_PAGE: title, subtitle, author, synopsis, dedication, epigraph
+    document_metadata = Column(JSON, default=dict)
 
     # Content (only for documents, not folders)
     lexical_state = Column(Text, default="")  # Lexical editor JSON state
@@ -73,10 +93,10 @@ class Chapter(Base):
     manuscript = relationship("Manuscript", back_populates="chapters")
     parent = relationship("Chapter", remote_side=[id], backref="children")
     chapter_scenes = relationship("ChapterScene", back_populates="chapter", cascade="all, delete-orphan")
+    linked_entity = relationship("Entity", foreign_keys=[linked_entity_id])
 
     def __repr__(self):
-        type_str = "Folder" if self.is_folder else "Chapter"
-        return f"<Chapter(id={self.id}, title='{self.title}', type={type_str})>"
+        return f"<Chapter(id={self.id}, title='{self.title}', type={self.document_type})>"
 
 
 class Scene(Base):

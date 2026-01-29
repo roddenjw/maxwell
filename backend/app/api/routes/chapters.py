@@ -5,18 +5,30 @@ Handles hierarchical chapter/folder structure (Scrivener-like navigation)
 
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.manuscript import Chapter
+from app.models.manuscript import (
+    Chapter,
+    DOCUMENT_TYPE_CHAPTER,
+    DOCUMENT_TYPE_FOLDER,
+    DOCUMENT_TYPE_CHARACTER_SHEET,
+    DOCUMENT_TYPE_NOTES,
+    DOCUMENT_TYPE_TITLE_PAGE,
+)
+from app.models.entity import Entity
 from app.models.outline import PlotBeat
 from app.services.manuscript_aggregation_service import manuscript_aggregation_service
 from app.services.scene_detection_service import scene_detection_service
 from app.services.lexical_utils import extract_text_from_lexical
+
+
+# Type alias for document types
+DocumentType = Literal["CHAPTER", "FOLDER", "CHARACTER_SHEET", "NOTES", "TITLE_PAGE"]
 
 
 router = APIRouter(prefix="/api/chapters", tags=["chapters"])
@@ -32,6 +44,9 @@ class ChapterCreate(BaseModel):
     order_index: int = 0
     lexical_state: Optional[str] = ""
     content: Optional[str] = ""
+    document_type: Optional[DocumentType] = None
+    linked_entity_id: Optional[str] = None
+    document_metadata: Optional[dict] = None
 
 
 class ChapterUpdate(BaseModel):
@@ -42,6 +57,9 @@ class ChapterUpdate(BaseModel):
     lexical_state: Optional[str] = None
     content: Optional[str] = None
     word_count: Optional[int] = None
+    document_type: Optional[DocumentType] = None
+    linked_entity_id: Optional[str] = None
+    document_metadata: Optional[dict] = None
 
 
 class ChapterResponse(BaseModel):
@@ -54,6 +72,9 @@ class ChapterResponse(BaseModel):
     lexical_state: str
     content: str
     word_count: int
+    document_type: str
+    linked_entity_id: Optional[str]
+    document_metadata: Optional[dict]
     created_at: datetime
     updated_at: datetime
     children: List['ChapterResponse'] = []
@@ -71,6 +92,8 @@ class ChapterTreeResponse(BaseModel):
     title: str
     is_folder: bool
     order_index: int
+    document_type: str
+    linked_entity_id: Optional[str]
     children: List['ChapterTreeResponse'] = []
 
     class Config:
@@ -78,6 +101,14 @@ class ChapterTreeResponse(BaseModel):
 
 
 ChapterTreeResponse.model_rebuild()
+
+
+class ChapterFromEntityCreate(BaseModel):
+    """Create a character sheet document from an existing Codex entity"""
+    manuscript_id: str
+    entity_id: str
+    parent_id: Optional[str] = None
+    order_index: int = 0
 
 
 def serialize_chapter(chapter: Chapter) -> dict:
@@ -99,6 +130,9 @@ def serialize_chapter(chapter: Chapter) -> dict:
         "lexical_state": chapter.lexical_state or "",
         "content": chapter.content or "",
         "word_count": chapter.word_count,
+        "document_type": chapter.document_type or DOCUMENT_TYPE_CHAPTER,
+        "linked_entity_id": chapter.linked_entity_id,
+        "document_metadata": chapter.document_metadata or {},
         "created_at": chapter.created_at.isoformat() if chapter.created_at else None,
         "updated_at": chapter.updated_at.isoformat() if chapter.updated_at else None,
         "children": []
@@ -121,31 +155,47 @@ async def create_chapter(
     lexical_state = chapter.lexical_state or ""
     content = chapter.content or ""
 
+    # Determine document_type
+    # If explicit document_type provided, use it
+    # Otherwise infer from is_folder
+    if chapter.document_type:
+        document_type = chapter.document_type
+    elif chapter.is_folder:
+        document_type = DOCUMENT_TYPE_FOLDER
+    else:
+        document_type = DOCUMENT_TYPE_CHAPTER
+
+    # Is this a folder-like document type?
+    is_folder_type = document_type == DOCUMENT_TYPE_FOLDER
+
     # If lexical state exists but no explicit content, extract it
-    if lexical_state and not content and not chapter.is_folder:
+    if lexical_state and not content and not is_folder_type:
         extracted_text = extract_text_from_lexical(lexical_state)
         if extracted_text:
             content = extracted_text
 
-    word_count = 0 if chapter.is_folder else len(content.split()) if content else 0
+    word_count = 0 if is_folder_type else len(content.split()) if content else 0
 
     db_chapter = Chapter(
         id=str(uuid.uuid4()),
         manuscript_id=chapter.manuscript_id,
         parent_id=chapter.parent_id,
         title=chapter.title,
-        is_folder=1 if chapter.is_folder else 0,
+        is_folder=1 if chapter.is_folder or is_folder_type else 0,
         order_index=chapter.order_index,
         lexical_state=lexical_state,
         content=content,
-        word_count=word_count
+        word_count=word_count,
+        document_type=document_type,
+        linked_entity_id=chapter.linked_entity_id,
+        document_metadata=chapter.document_metadata or {}
     )
     db.add(db_chapter)
     db.commit()
     db.refresh(db_chapter)
 
     # Update manuscript word count if this is a document (not folder)
-    if not chapter.is_folder:
+    if not is_folder_type:
         manuscript_aggregation_service.update_manuscript_word_count(
             db,
             chapter.manuscript_id
@@ -202,13 +252,17 @@ async def get_chapter_tree(
 
         result = []
         for chapter in chapters:
-            children = build_tree(chapter.id) if chapter.is_folder else []
+            # Folders can have children
+            is_folder = chapter.is_folder or chapter.document_type == DOCUMENT_TYPE_FOLDER
+            children = build_tree(chapter.id) if is_folder else []
             result.append({
                 "id": chapter.id,
                 "title": chapter.title,
                 "is_folder": bool(chapter.is_folder),
                 "order_index": chapter.order_index,
                 "word_count": chapter.word_count,
+                "document_type": chapter.document_type or DOCUMENT_TYPE_CHAPTER,
+                "linked_entity_id": chapter.linked_entity_id,
                 "children": children
             })
 
@@ -312,10 +366,17 @@ async def update_chapter(
         chapter.parent_id = update_data['parent_id']
     if 'order_index' in update_data:
         chapter.order_index = update_data['order_index']
+    if 'document_type' in update_data:
+        chapter.document_type = update_data['document_type']
+    if 'linked_entity_id' in update_data:
+        chapter.linked_entity_id = update_data['linked_entity_id']
+    if 'document_metadata' in update_data:
+        chapter.document_metadata = update_data['document_metadata']
     if 'lexical_state' in update_data:
         chapter.lexical_state = update_data['lexical_state']
         # Auto-extract plain text from lexical state for search/analysis
-        if chapter.lexical_state and not chapter.is_folder:
+        is_folder_type = chapter.is_folder or chapter.document_type == DOCUMENT_TYPE_FOLDER
+        if chapter.lexical_state and not is_folder_type:
             extracted_text = extract_text_from_lexical(chapter.lexical_state)
             if extracted_text:
                 chapter.content = extracted_text
@@ -323,7 +384,8 @@ async def update_chapter(
     if 'content' in update_data:
         chapter.content = update_data['content']
         # Auto-calculate word count from content
-        if chapter.content and not chapter.is_folder:
+        is_folder_type = chapter.is_folder or chapter.document_type == DOCUMENT_TYPE_FOLDER
+        if chapter.content and not is_folder_type:
             chapter.word_count = len(chapter.content.split())
     if 'word_count' in update_data:
         chapter.word_count = update_data['word_count']
@@ -432,5 +494,148 @@ async def reorder_chapters(
         "data": {
             "message": "Chapters reordered successfully",
             "count": len(chapter_ids)
+        }
+    }
+
+
+@router.post("/from-entity")
+async def create_chapter_from_entity(
+    request: ChapterFromEntityCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a character sheet document from an existing Codex entity.
+    The character sheet will be linked to the entity and pre-populated with its data.
+    """
+    # Verify entity exists
+    entity = db.query(Entity).filter(Entity.id == request.entity_id).first()
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity not found")
+
+    # Only allow CHARACTER entities
+    if entity.type != "CHARACTER":
+        raise HTTPException(
+            status_code=400,
+            detail="Only CHARACTER entities can be converted to character sheets"
+        )
+
+    # Build document_metadata from entity data
+    document_metadata = {
+        "name": entity.name,
+        "aliases": entity.aliases or [],
+        "attributes": entity.attributes or {},
+        "template_data": entity.template_data or {},
+        "synced_at": datetime.utcnow().isoformat()
+    }
+
+    # Create the character sheet chapter
+    db_chapter = Chapter(
+        id=str(uuid.uuid4()),
+        manuscript_id=request.manuscript_id,
+        parent_id=request.parent_id,
+        title=f"{entity.name} - Character Sheet",
+        is_folder=0,
+        order_index=request.order_index,
+        lexical_state="",
+        content="",
+        word_count=0,
+        document_type=DOCUMENT_TYPE_CHARACTER_SHEET,
+        linked_entity_id=entity.id,
+        document_metadata=document_metadata
+    )
+    db.add(db_chapter)
+    db.commit()
+    db.refresh(db_chapter)
+
+    return {
+        "success": True,
+        "data": serialize_chapter(db_chapter)
+    }
+
+
+@router.put("/{chapter_id}/sync-entity")
+async def sync_chapter_entity(
+    chapter_id: str,
+    direction: str = "from_entity",  # "from_entity" or "to_entity"
+    db: Session = Depends(get_db)
+):
+    """
+    Sync a character sheet with its linked Codex entity.
+
+    direction:
+    - "from_entity": Pull latest data from the entity into the character sheet
+    - "to_entity": Push character sheet changes to the entity
+    """
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+
+    if chapter.document_type != DOCUMENT_TYPE_CHARACTER_SHEET:
+        raise HTTPException(
+            status_code=400,
+            detail="Only CHARACTER_SHEET documents can be synced with entities"
+        )
+
+    if not chapter.linked_entity_id:
+        raise HTTPException(
+            status_code=400,
+            detail="This character sheet is not linked to an entity"
+        )
+
+    entity = db.query(Entity).filter(Entity.id == chapter.linked_entity_id).first()
+    if not entity:
+        raise HTTPException(status_code=404, detail="Linked entity not found")
+
+    if direction == "from_entity":
+        # Pull from entity to character sheet
+        chapter.document_metadata = {
+            "name": entity.name,
+            "aliases": entity.aliases or [],
+            "attributes": entity.attributes or {},
+            "template_data": entity.template_data or {},
+            "synced_at": datetime.utcnow().isoformat()
+        }
+        chapter.title = f"{entity.name} - Character Sheet"
+        chapter.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(chapter)
+
+    elif direction == "to_entity":
+        # Push from character sheet to entity
+        metadata = chapter.document_metadata or {}
+        if "name" in metadata:
+            entity.name = metadata["name"]
+        if "aliases" in metadata:
+            entity.aliases = metadata["aliases"]
+        if "attributes" in metadata:
+            entity.attributes = metadata["attributes"]
+        if "template_data" in metadata:
+            entity.template_data = metadata["template_data"]
+
+        entity.updated_at = datetime.utcnow()
+
+        # Update synced_at in chapter
+        chapter.document_metadata = {
+            **metadata,
+            "synced_at": datetime.utcnow().isoformat()
+        }
+        chapter.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(chapter)
+        db.refresh(entity)
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="direction must be 'from_entity' or 'to_entity'"
+        )
+
+    return {
+        "success": True,
+        "data": serialize_chapter(chapter),
+        "entity": {
+            "id": entity.id,
+            "name": entity.name,
+            "type": entity.type
         }
     }

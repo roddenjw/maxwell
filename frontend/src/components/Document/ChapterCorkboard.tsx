@@ -5,7 +5,22 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useChapterStore } from '@/stores/chapterStore';
-import { chaptersApi, type ChapterTree } from '@/lib/api';
+import { chaptersApi, type ChapterTree, type DocumentType } from '@/lib/api';
+
+// Icons for different document types
+const DOCUMENT_TYPE_ICONS: Record<DocumentType, string> = {
+  CHAPTER: '📄',
+  FOLDER: '📁',
+  CHARACTER_SHEET: '👤',
+  NOTES: '📝',
+  TITLE_PAGE: '📜',
+};
+
+// Get icon for a chapter tree node
+function getDocumentIcon(node: ChapterTree): string {
+  const docType = node.document_type || (node.is_folder ? 'FOLDER' : 'CHAPTER');
+  return DOCUMENT_TYPE_ICONS[docType] || '📄';
+}
 import { toast } from '@/stores/toastStore';
 import { retry, getErrorMessage } from '@/lib/retry';
 import {
@@ -108,7 +123,12 @@ function ChapterCard({
         {...listeners}
       >
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-2xl">📁</span>
+          <span className="text-2xl relative">
+            {getDocumentIcon(node)}
+            {node.linked_entity_id && (
+              <span className="absolute -bottom-1 -right-1 text-xs" title="Linked to Codex">🔗</span>
+            )}
+          </span>
           <h3 className="font-garamond font-semibold text-midnight truncate flex-1">
             {node.title}
           </h3>
@@ -120,14 +140,24 @@ function ChapterCard({
     );
   }
 
+  // Special styling for different document types
+  const docType = node.document_type || 'CHAPTER';
+  const isSpecialDocument = docType !== 'CHAPTER';
+  const cardBgClass = isSpecialDocument ? 'bg-blue-50' : 'bg-vellum';
+  const borderClass = isActive
+    ? 'border-bronze ring-2 ring-bronze/30'
+    : isSpecialDocument
+    ? 'border-blue-200 hover:border-blue-400'
+    : 'border-slate-ui hover:border-bronze/50';
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={`
-        relative bg-vellum border-2 rounded-lg overflow-hidden min-h-[160px]
+        relative ${cardBgClass} border-2 rounded-lg overflow-hidden min-h-[160px]
         transition-all cursor-pointer
-        ${isActive ? 'border-bronze ring-2 ring-bronze/30' : 'border-slate-ui hover:border-bronze/50'}
+        ${borderClass}
         ${isDragging ? 'shadow-xl z-10' : 'hover:shadow-md'}
       `}
       {...attributes}
@@ -138,36 +168,46 @@ function ChapterCard({
 
       {/* Card content */}
       <div className="p-3" onClick={onClick}>
-        {/* Header with title */}
+        {/* Header with title and document type icon */}
         <div className="flex items-start justify-between gap-2 mb-2">
-          {isRenaming ? (
-            <input
-              type="text"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onBlur={handleRenameSubmit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleRenameSubmit();
-                if (e.key === 'Escape') {
-                  setRenameValue(node.title);
-                  setIsRenaming(false);
-                }
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className="flex-1 px-2 py-1 text-sm border border-bronze rounded focus:outline-none focus:ring-2 focus:ring-bronze bg-white text-midnight"
-              autoFocus
-            />
-          ) : (
-            <h3
-              className="font-garamond font-semibold text-midnight text-sm line-clamp-2 flex-1"
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                setIsRenaming(true);
-              }}
-            >
-              {node.title}
-            </h3>
-          )}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {isSpecialDocument && (
+              <span className="text-base flex-shrink-0 relative" title={docType.replace('_', ' ')}>
+                {getDocumentIcon(node)}
+                {node.linked_entity_id && (
+                  <span className="absolute -bottom-1 -right-1 text-[10px]" title="Linked to Codex">🔗</span>
+                )}
+              </span>
+            )}
+            {isRenaming ? (
+              <input
+                type="text"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={handleRenameSubmit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRenameSubmit();
+                  if (e.key === 'Escape') {
+                    setRenameValue(node.title);
+                    setIsRenaming(false);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="flex-1 px-2 py-1 text-sm border border-bronze rounded focus:outline-none focus:ring-2 focus:ring-bronze bg-white text-midnight"
+                autoFocus
+              />
+            ) : (
+              <h3
+                className="font-garamond font-semibold text-midnight text-sm line-clamp-2 flex-1"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setIsRenaming(true);
+                }}
+              >
+                {node.title}
+              </h3>
+            )}
+          </div>
 
           {/* Menu button */}
           <button
@@ -522,7 +562,7 @@ export default function ChapterCorkboard({
               {activeNode ? (
                 <div className="bg-vellum border-2 border-bronze shadow-xl rounded-lg p-3 min-h-[100px] opacity-90">
                   <div className="flex items-center gap-2">
-                    <span>{activeNode.is_folder ? '📁' : '📄'}</span>
+                    <span>{getDocumentIcon(activeNode)}</span>
                     <span className="font-garamond font-semibold text-sm">
                       {activeNode.title}
                     </span>

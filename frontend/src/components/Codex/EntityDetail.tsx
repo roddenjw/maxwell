@@ -11,6 +11,7 @@ interface EntityDetailProps {
   onUpdate: (updates: Partial<Entity>) => void;
   onDelete?: (entityId: string) => void;
   onClose: () => void;
+  onAddToBinder?: (entityId: string) => void;
 }
 
 export default function EntityDetail({
@@ -18,6 +19,7 @@ export default function EntityDetail({
   onUpdate,
   onDelete,
   onClose,
+  onAddToBinder,
 }: EntityDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(entity.name);
@@ -143,6 +145,18 @@ export default function EntityDetail({
             </>
           ) : (
             <>
+              {/* Add to Binder button - only for CHARACTER entities */}
+              {onAddToBinder && entity.type === EntityType.CHARACTER && (
+                <button
+                  onClick={() => onAddToBinder(entity.id)}
+                  className="bg-blue-600 text-white px-3 py-1.5 text-sm font-sans hover:bg-blue-700 flex items-center gap-1"
+                  style={{ borderRadius: '2px' }}
+                  title="Create character sheet in Binder"
+                >
+                  <span>📄</span>
+                  Add to Binder
+                </button>
+              )}
               <button
                 onClick={() => setIsEditing(true)}
                 className="bg-bronze text-white px-3 py-1.5 text-sm font-sans hover:bg-bronze/90"

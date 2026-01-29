@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react'
 import ManuscriptEditor from './components/Editor/ManuscriptEditor'
+import { CharacterSheetEditor, NotesEditor, TitlePageForm } from './components/Editor'
+import type { Chapter } from './lib/api'
 import ManuscriptLibrary from './components/ManuscriptLibrary'
 import { WorldLibrary } from './components/WorldLibrary'
 import { CodexMainView } from './components/Codex'
@@ -54,6 +56,7 @@ function App() {
   const [activeView, setActiveView] = useState<'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export' | 'outline'>('chapters')
   const [editorKey, setEditorKey] = useState(0) // Force editor re-mount on restore
   const [currentChapterContent, setCurrentChapterContent] = useState<string>('')
+  const [currentChapterData, setCurrentChapterData] = useState<Chapter | null>(null)
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
@@ -234,6 +237,7 @@ function App() {
     }
     setCurrentManuscript(null)
     setCurrentChapter(null) // Clear chapter selection
+    setCurrentChapterData(null) // Clear chapter data
     clearOutline() // Clear outline state
     setSaveStatus('saved') // Reset save status
     setActiveView('chapters') // Reset view
@@ -410,6 +414,12 @@ function App() {
       setCurrentChapterContent(cached.content)
       setEditorKey(prev => prev + 1)
       setSaveStatus('saved')
+      // Still need to fetch chapter data for document type routing
+      chaptersApi.getChapter(chapterId).then(chapter => {
+        setCurrentChapterData(chapter)
+      }).catch(err => {
+        console.error('Failed to fetch chapter data:', err)
+      })
       return // Instant switch!
     }
 
@@ -432,6 +442,9 @@ function App() {
 
       // Fetch chapter content
       const chapter = await chaptersApi.getChapter(chapterId)
+
+      // Store full chapter data for document type routing
+      setCurrentChapterData(chapter)
 
       // Check if this request was aborted (user switched to a different chapter)
       if (abortController.signal.aborted) {
@@ -668,15 +681,62 @@ function App() {
                 </div>
                 <div className="flex-1 overflow-auto" data-tour="editor">
                   {currentChapterId ? (
-                    <ManuscriptEditor
-                      key={editorKey}
-                      manuscriptId={currentManuscript.id}
-                      chapterId={currentChapterId}
-                      initialContent={currentChapterContent}
-                      mode="normal"
-                      onSaveStatusChange={setSaveStatus}
-                      onViewBeat={handleViewBeat}
-                    />
+                    // Route to appropriate editor based on document type
+                    (() => {
+                      const docType = currentChapterData?.document_type || 'CHAPTER';
+                      switch (docType) {
+                        case 'CHARACTER_SHEET':
+                          return (
+                            <CharacterSheetEditor
+                              key={editorKey}
+                              chapterId={currentChapterId}
+                              manuscriptId={currentManuscript.id}
+                            />
+                          );
+                        case 'NOTES':
+                          return (
+                            <NotesEditor
+                              key={editorKey}
+                              chapterId={currentChapterId}
+                            />
+                          );
+                        case 'TITLE_PAGE':
+                          return (
+                            <TitlePageForm
+                              key={editorKey}
+                              chapterId={currentChapterId}
+                            />
+                          );
+                        case 'FOLDER':
+                          // Folders show a summary view
+                          return (
+                            <div className="flex items-center justify-center h-full bg-vellum">
+                              <div className="text-center max-w-md p-8">
+                                <div className="text-6xl mb-4">📁</div>
+                                <h2 className="font-garamond text-2xl font-semibold text-midnight mb-4">
+                                  {currentChapterData?.title || 'Folder'}
+                                </h2>
+                                <p className="font-sans text-faded-ink">
+                                  This is a folder. Select a document inside to view its contents.
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        default:
+                          // Default: standard manuscript editor for CHAPTER type
+                          return (
+                            <ManuscriptEditor
+                              key={editorKey}
+                              manuscriptId={currentManuscript.id}
+                              chapterId={currentChapterId}
+                              initialContent={currentChapterContent}
+                              mode="normal"
+                              onSaveStatusChange={setSaveStatus}
+                              onViewBeat={handleViewBeat}
+                            />
+                          );
+                      }
+                    })()
                   ) : (
                     <div className="flex items-center justify-center h-full bg-vellum">
                       <div className="text-center max-w-md p-8">

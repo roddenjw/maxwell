@@ -152,6 +152,8 @@ export interface SceneVariant {
 /**
  * Chapter types
  */
+export type DocumentType = 'CHAPTER' | 'FOLDER' | 'CHARACTER_SHEET' | 'NOTES' | 'TITLE_PAGE';
+
 export interface Chapter {
   id: string;
   manuscript_id: string;
@@ -162,6 +164,9 @@ export interface Chapter {
   lexical_state: string;
   content: string;
   word_count: number;
+  document_type: DocumentType;
+  linked_entity_id?: string | null;
+  document_metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   children?: Chapter[];
@@ -173,6 +178,8 @@ export interface ChapterTree {
   is_folder: boolean;
   order_index: number;
   word_count: number;
+  document_type: DocumentType;
+  linked_entity_id?: string | null;
   children: ChapterTree[];
 }
 
@@ -751,6 +758,9 @@ export const chaptersApi = {
     order_index?: number;
     lexical_state?: string;
     content?: string;
+    document_type?: DocumentType;
+    linked_entity_id?: string;
+    document_metadata?: Record<string, unknown>;
   }): Promise<Chapter> {
     return apiFetch<Chapter>('/chapters', {
       method: 'POST',
@@ -807,6 +817,43 @@ export const chaptersApi = {
       method: 'POST',
       body: JSON.stringify({ chapter_ids: chapterIds }),
     });
+  },
+
+  /**
+   * Create a character sheet from an existing Codex entity
+   */
+  async createFromEntity(data: {
+    manuscript_id: string;
+    entity_id: string;
+    parent_id?: string;
+    order_index?: number;
+  }): Promise<Chapter> {
+    return apiFetch<Chapter>('/chapters/from-entity', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Sync a character sheet with its linked Codex entity
+   * @param direction - "from_entity" pulls from entity, "to_entity" pushes to entity
+   */
+  async syncEntity(chapterId: string, direction: 'from_entity' | 'to_entity' = 'from_entity'): Promise<{
+    chapter: Chapter;
+    entity: { id: string; name: string; type: string };
+  }> {
+    // Backend returns { success, data (chapter), entity }
+    // apiFetch unwraps to the data field, but we need both chapter and entity
+    const url = `${API_BASE_URL}/chapters/${chapterId}/sync-entity?direction=${direction}`;
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error?.message || 'Failed to sync entity');
+    }
+    return { chapter: result.data, entity: result.entity };
   },
 };
 

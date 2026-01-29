@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useChapterStore } from '@/stores/chapterStore';
-import { chaptersApi, type ChapterTree } from '@/lib/api';
+import { chaptersApi, type ChapterTree, type DocumentType } from '@/lib/api';
 import { toast } from '@/stores/toastStore';
 import { ChapterTreeSkeleton } from '@/components/Common/SkeletonLoader';
 import { retry, getErrorMessage } from '@/lib/retry';
@@ -32,6 +32,33 @@ import ChapterCorkboard from './ChapterCorkboard';
 
 export type ViewMode = 'tree' | 'corkboard';
 
+// Icons for different document types
+const DOCUMENT_TYPE_ICONS: Record<DocumentType, string> = {
+  CHAPTER: '📄',
+  FOLDER: '📁',
+  CHARACTER_SHEET: '👤',
+  NOTES: '📝',
+  TITLE_PAGE: '📜',
+};
+
+// Labels for document types (used in context menu)
+const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  CHAPTER: 'Chapter',
+  FOLDER: 'Folder',
+  CHARACTER_SHEET: 'Character Sheet',
+  NOTES: 'Notes',
+  TITLE_PAGE: 'Title Page',
+};
+
+// Get icon for a chapter tree node
+function getDocumentIcon(node: ChapterTree, isExpanded?: boolean): string {
+  const docType = node.document_type || (node.is_folder ? 'FOLDER' : 'CHAPTER');
+  if (docType === 'FOLDER') {
+    return isExpanded ? '📂' : '📁';
+  }
+  return DOCUMENT_TYPE_ICONS[docType] || '📄';
+}
+
 interface DocumentNavigatorProps {
   manuscriptId: string;
   onChapterSelect?: (chapterId: string) => void;
@@ -48,6 +75,7 @@ interface SortableTreeNodeProps {
   onRename: (id: string, newTitle: string) => void;
   onDelete: (id: string) => void;
   onDuplicate?: (id: string) => void;
+  onCreateDocument?: (parentId: string | null, documentType: DocumentType) => void;
 }
 
 function SortableTreeNode({
@@ -60,6 +88,7 @@ function SortableTreeNode({
   onRename,
   onDelete,
   onDuplicate,
+  onCreateDocument,
 }: SortableTreeNodeProps) {
   const {
     attributes,
@@ -154,7 +183,7 @@ function SortableTreeNode({
         {...attributes}
         {...listeners}
       >
-        {/* Folder icon or chevron */}
+        {/* Document type icon */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -162,13 +191,18 @@ function SortableTreeNode({
           }}
           className="flex items-center gap-2 flex-1"
         >
-          {node.is_folder ? (
-            <span className="text-base">
-              {isExpanded ? '📂' : '📁'}
-            </span>
-          ) : (
-            <span className="text-base">📄</span>
-          )}
+          <span className="text-base relative">
+            {getDocumentIcon(node, isExpanded)}
+            {/* Link indicator for character sheets linked to Codex */}
+            {node.linked_entity_id && (
+              <span
+                className="absolute -bottom-1 -right-1 text-[10px]"
+                title="Linked to Codex"
+              >
+                🔗
+              </span>
+            )}
+          </span>
 
           {/* Title or rename input */}
           {isRenaming ? (
@@ -198,10 +232,64 @@ function SortableTreeNode({
       {/* Context Menu */}
       {showContextMenu && (
         <div
-          className="fixed bg-white border border-slate-ui shadow-lg rounded-sm z-50 py-1 min-w-[160px]"
+          className="fixed bg-white border border-slate-ui shadow-lg rounded-sm z-50 py-1 min-w-[180px]"
           style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Create new document options (only show for folders or at root level) */}
+          {node.is_folder && onCreateDocument && (
+            <>
+              <div className="px-4 py-1 text-xs text-faded-ink font-medium uppercase tracking-wider">
+                Add to Folder
+              </div>
+              <button
+                onClick={() => {
+                  setShowContextMenu(false);
+                  onCreateDocument(node.id, 'CHAPTER');
+                }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-slate-ui/20 text-midnight flex items-center gap-2"
+              >
+                <span>{DOCUMENT_TYPE_ICONS.CHAPTER}</span> New Chapter
+              </button>
+              <button
+                onClick={() => {
+                  setShowContextMenu(false);
+                  onCreateDocument(node.id, 'CHARACTER_SHEET');
+                }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-slate-ui/20 text-midnight flex items-center gap-2"
+              >
+                <span>{DOCUMENT_TYPE_ICONS.CHARACTER_SHEET}</span> New Character Sheet
+              </button>
+              <button
+                onClick={() => {
+                  setShowContextMenu(false);
+                  onCreateDocument(node.id, 'NOTES');
+                }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-slate-ui/20 text-midnight flex items-center gap-2"
+              >
+                <span>{DOCUMENT_TYPE_ICONS.NOTES}</span> New Notes
+              </button>
+              <button
+                onClick={() => {
+                  setShowContextMenu(false);
+                  onCreateDocument(node.id, 'TITLE_PAGE');
+                }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-slate-ui/20 text-midnight flex items-center gap-2"
+              >
+                <span>{DOCUMENT_TYPE_ICONS.TITLE_PAGE}</span> New Title Page
+              </button>
+              <button
+                onClick={() => {
+                  setShowContextMenu(false);
+                  onCreateDocument(node.id, 'FOLDER');
+                }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-slate-ui/20 text-midnight flex items-center gap-2"
+              >
+                <span>{DOCUMENT_TYPE_ICONS.FOLDER}</span> New Folder
+              </button>
+              <hr className="my-1 border-slate-ui" />
+            </>
+          )}
           <button
             onClick={() => {
               setShowContextMenu(false);
@@ -251,6 +339,7 @@ function SortableTreeNode({
                 onRename={onRename}
                 onDelete={onDelete}
                 onDuplicate={onDuplicate}
+                onCreateDocument={onCreateDocument}
               />
             ))}
           </div>
@@ -517,6 +606,51 @@ export default function DocumentNavigator({ manuscriptId, onChapterSelect, defau
     }
   };
 
+  const handleCreateDocument = async (parentId: string | null, documentType: DocumentType) => {
+    try {
+      const isFolder = documentType === 'FOLDER';
+      const title = DOCUMENT_TYPE_LABELS[documentType]
+        ? `New ${DOCUMENT_TYPE_LABELS[documentType]}`
+        : 'Untitled';
+
+      // Find parent to get order_index
+      let orderIndex = 0;
+      if (parentId) {
+        const parent = findNode(chapterTree, parentId);
+        orderIndex = (parent?.children?.length || 0);
+      } else {
+        orderIndex = chapterTree.length;
+      }
+
+      const newChapter = await chaptersApi.createChapter({
+        manuscript_id: manuscriptId,
+        title,
+        is_folder: isFolder,
+        parent_id: parentId || undefined,
+        order_index: orderIndex,
+        document_type: documentType,
+      });
+
+      await loadChapterTree();
+
+      // Expand the parent folder if it exists
+      if (parentId) {
+        expandFolder(parentId);
+      }
+
+      // Select the new document if it's not a folder
+      if (!isFolder) {
+        setCurrentChapter(newChapter.id);
+        onChapterSelect?.(newChapter.id);
+      }
+
+      toast.success(`${DOCUMENT_TYPE_LABELS[documentType]} created`);
+    } catch (err) {
+      console.error('Failed to create document:', err);
+      toast.error(getErrorMessage(err));
+    }
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
@@ -730,6 +864,7 @@ export default function DocumentNavigator({ manuscriptId, onChapterSelect, defau
                     onRename={handleRename}
                     onDelete={handleDelete}
                     onDuplicate={handleDuplicate}
+                    onCreateDocument={handleCreateDocument}
                   />
                 ))}
               </div>
@@ -740,7 +875,7 @@ export default function DocumentNavigator({ manuscriptId, onChapterSelect, defau
               {activeNode ? (
                 <div className="bg-white border-2 border-bronze shadow-lg px-3 py-2 text-sm font-sans flex items-center gap-2">
                   <span className="text-base">
-                    {activeNode.is_folder ? '📁' : '📄'}
+                    {getDocumentIcon(activeNode)}
                   </span>
                   <span>{activeNode.title}</span>
                 </div>

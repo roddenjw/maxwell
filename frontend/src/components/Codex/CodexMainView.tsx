@@ -7,7 +7,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useCodexStore } from '@/stores/codexStore';
 import { useBrainstormStore } from '@/stores/brainstormStore';
-import { codexApi } from '@/lib/api';
+import { codexApi, chaptersApi } from '@/lib/api';
+import { toast } from '@/stores/toastStore';
 import type { Entity, EntityType } from '@/types/codex';
 import EntityCard from './EntityCard';
 import EntityDetail from './EntityDetail';
@@ -174,6 +175,19 @@ export default function CodexMainView({
   const handleBrainstorm = () => {
     openModal(manuscriptId, undefined, 'character');
   };
+
+  // Handle adding entity to binder as character sheet
+  const handleAddToBinder = useCallback(async (entityId: string) => {
+    try {
+      const chapter = await chaptersApi.createFromEntity({
+        manuscript_id: manuscriptId,
+        entity_id: entityId,
+      });
+      toast.success(`Character sheet created: "${chapter.title}"`);
+    } catch (err) {
+      toast.error('Failed to create character sheet: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  }, [manuscriptId]);
 
   // Filter entities
   const filteredEntities = entities.filter((entity) => {
@@ -646,6 +660,7 @@ export default function CodexMainView({
                   onUpdate={(updates) => handleUpdateEntity(selectedEntity.id, updates)}
                   onDelete={handleDeleteEntity}
                   onClose={() => setSelectedEntity(null)}
+                  onAddToBinder={handleAddToBinder}
                 />
               ) : (
                 <div className="flex items-center justify-center h-full">
