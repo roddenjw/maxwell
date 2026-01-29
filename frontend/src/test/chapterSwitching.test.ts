@@ -380,4 +380,252 @@ describe('Chapter Switching', () => {
       expect(saveStatus).toBe('saved');
     });
   });
+
+  describe('View Switching Integration', () => {
+    it('should handle view change during chapter load', async () => {
+      type View = 'chapters' | 'codex' | 'outline' | 'coach';
+      let currentView: View = 'chapters';
+      let displayedContent: string | null = null;
+      let chapterLoadAborted = false;
+
+      // Simulate the App.tsx pattern with AbortController
+      let abortController: AbortController | null = null;
+
+      const switchView = (view: View) => {
+        currentView = view;
+        // View switching shouldn't abort chapter loads (they're independent)
+      };
+
+      const loadChapter = async (_chapterId: string, content: string, delayMs: number) => {
+        // Create new AbortController for this load
+        if (abortController) {
+          abortController.abort();
+        }
+        abortController = new AbortController();
+        const signal = abortController.signal;
+
+        await new Promise(r => setTimeout(r, delayMs));
+
+        if (signal.aborted) {
+          chapterLoadAborted = true;
+          return;
+        }
+
+        displayedContent = content;
+      };
+
+      // Start loading chapter in chapters view
+      const loadPromise = loadChapter('ch-1', 'Chapter 1 content', 100);
+
+      // Switch to codex view mid-load
+      await new Promise(r => setTimeout(r, 50));
+      switchView('codex');
+
+      // Wait for chapter load to complete
+      await loadPromise;
+
+      // Chapter should still load correctly even though view changed
+      expect(displayedContent).toBe('Chapter 1 content');
+      expect(currentView).toBe('codex');
+      expect(chapterLoadAborted).toBe(false);
+    });
+
+    it('should display correct content after returning from Codex view', async () => {
+      type View = 'chapters' | 'codex' | 'outline';
+      let currentView: View = 'chapters';
+      let currentChapterId = 'ch-1';
+      let displayedContent = 'Chapter 1 content';
+      let contentReloadCount = 0;
+
+      const chapters: Record<string, string> = {
+        'ch-1': 'Chapter 1 content',
+        'ch-2': 'Chapter 2 content',
+      };
+
+      const switchView = async (view: View) => {
+        currentView = view;
+
+        // Simulate the view-switching reload behavior from App.tsx
+        // Only reload when returning to an editor view
+        if (['chapters', 'codex', 'coach'].includes(view) && currentChapterId) {
+          contentReloadCount++;
+          // Simulate fetching latest content
+          displayedContent = chapters[currentChapterId];
+        }
+      };
+
+      // Edit chapter in chapters view
+      displayedContent = 'Chapter 1 content (edited)';
+
+      // Switch to codex (which now triggers a reload in the new implementation)
+      await switchView('codex');
+
+      // Return to chapters
+      await switchView('chapters');
+
+      // Content should be the latest saved version
+      expect(displayedContent).toBe('Chapter 1 content');
+      expect(currentView).toBe('chapters');
+    });
+
+    it('should display correct content after returning from Outline view', async () => {
+      type View = 'chapters' | 'outline';
+      let currentView: View = 'chapters';
+      let currentChapterId = 'ch-1';
+      let displayedContent = 'Chapter 1 content';
+
+      const chapters: Record<string, string> = {
+        'ch-1': 'Chapter 1 content',
+        'ch-2': 'Chapter 2 content',
+      };
+
+      const switchView = async (view: View) => {
+        currentView = view;
+
+        // Simulate reload when returning to chapters view
+        if (view === 'chapters' && currentChapterId) {
+          displayedContent = chapters[currentChapterId];
+        }
+      };
+
+      // Start in chapters view
+      expect(currentView).toBe('chapters');
+      expect(displayedContent).toBe('Chapter 1 content');
+
+      // Go to outline view
+      await switchView('outline');
+      expect(currentView).toBe('outline');
+
+      // Return to chapters
+      await switchView('chapters');
+      expect(displayedContent).toBe('Chapter 1 content');
+    });
+
+    it('should handle rapid view + chapter switching', async () => {
+      type View = 'chapters' | 'codex' | 'outline';
+      let currentView: View = 'chapters';
+      let currentChapterId: string | null = 'ch-1';
+      let displayedContent: string | null = null;
+      let abortController: AbortController | null = null;
+
+      const chapters: Record<string, string> = {
+        'ch-1': 'Chapter 1 content',
+        'ch-2': 'Chapter 2 content',
+        'ch-3': 'Chapter 3 content',
+      };
+
+      const selectChapter = async (chapterId: string, delayMs: number) => {
+        // Abort any in-flight request
+        if (abortController) {
+          abortController.abort();
+        }
+
+        const controller = new AbortController();
+        abortController = controller;
+
+        currentChapterId = chapterId;
+
+        return new Promise<void>((resolve) => {
+          const timeoutId = setTimeout(() => {
+            if (!controller.signal.aborted) {
+              displayedContent = chapters[chapterId];
+            }
+            resolve();
+          }, delayMs);
+
+          controller.signal.addEventListener('abort', () => {
+            clearTimeout(timeoutId);
+            resolve();
+          });
+        });
+      };
+
+      const switchView = (view: View) => {
+        currentView = view;
+      };
+
+      // Rapid sequence: view changes and chapter changes interleaved
+      // chapters -> select ch-1 (slow) -> codex -> select ch-2 (fast) -> chapters -> select ch-3 (medium)
+
+      const promises: Promise<void>[] = [];
+
+      // Start loading ch-1 (will be aborted)
+      promises.push(selectChapter('ch-1', 300));
+
+      await new Promise(r => setTimeout(r, 20));
+      switchView('codex');
+
+      await new Promise(r => setTimeout(r, 20));
+      // Start loading ch-2 (will be aborted)
+      promises.push(selectChapter('ch-2', 200));
+
+      await new Promise(r => setTimeout(r, 20));
+      switchView('chapters');
+
+      await new Promise(r => setTimeout(r, 20));
+      // Start loading ch-3 (this one should complete)
+      promises.push(selectChapter('ch-3', 100));
+
+      await Promise.all(promises);
+
+      // Final state should be ch-3 content in chapters view
+      expect(currentView).toBe('chapters');
+      expect(currentChapterId).toBe('ch-3');
+      expect(displayedContent).toBe('Chapter 3 content');
+    });
+  });
+
+  describe('Save Status Edge Cases', () => {
+    it('should not reset save status when view changes', () => {
+      let saveStatus: 'saved' | 'saving' | 'unsaved' = 'unsaved';
+
+      const switchView = () => {
+        // View switching should NOT reset save status
+        // Save status is only reset when chapter changes
+      };
+
+      saveStatus = 'unsaved';
+      switchView();
+      expect(saveStatus).toBe('unsaved');
+    });
+
+    it('should preserve save status during mid-save chapter switch', async () => {
+      let saveStatus: 'saved' | 'saving' | 'unsaved' = 'saved';
+      let saveCompleted = false;
+
+      const simulateSave = async () => {
+        saveStatus = 'saving';
+        await new Promise(r => setTimeout(r, 100));
+        saveStatus = 'saved';
+        saveCompleted = true;
+      };
+
+      const selectChapter = async () => {
+        // Wait for any in-progress save before switching
+        if (saveStatus === 'saving') {
+          await new Promise<void>((resolve) => {
+            const checkInterval = setInterval(() => {
+              if (saveStatus !== 'saving') {
+                clearInterval(checkInterval);
+                resolve();
+              }
+            }, 10);
+          });
+        }
+        // After switch, reset to saved
+        saveStatus = 'saved';
+      };
+
+      // Start a save operation
+      const savePromise = simulateSave();
+
+      // Try to switch chapters mid-save
+      const switchPromise = selectChapter();
+
+      await Promise.all([savePromise, switchPromise]);
+
+      expect(saveCompleted).toBe(true);
+      expect(saveStatus).toBe('saved');
+    });
+  });
 });

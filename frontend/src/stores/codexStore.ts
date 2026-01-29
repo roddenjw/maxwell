@@ -4,6 +4,7 @@
  */
 
 import { create } from 'zustand';
+import { codexApi } from '@/lib/api';
 import type {
   Entity,
   Relationship,
@@ -21,8 +22,11 @@ interface CodexStore {
   activeTab: CodexTab;
   isSidebarOpen: boolean;
   isAnalyzing: boolean;
+  isLoading: boolean;
+  currentManuscriptId: string | null;
 
   // Entity Actions
+  loadEntities: (manuscriptId: string) => Promise<void>;
   setEntities: (entities: Entity[]) => void;
   addEntity: (entity: Entity) => void;
   updateEntity: (entityId: string, updates: Partial<Entity>) => void;
@@ -61,8 +65,30 @@ export const useCodexStore = create<CodexStore>((set, get) => ({
   activeTab: 'entities',
   isSidebarOpen: false,
   isAnalyzing: false,
+  isLoading: false,
+  currentManuscriptId: null,
 
   // Entity Actions
+  loadEntities: async (manuscriptId: string) => {
+    const { currentManuscriptId, entities } = get();
+
+    // Skip if already loaded for this manuscript
+    if (currentManuscriptId === manuscriptId && entities.length > 0) {
+      return;
+    }
+
+    set({ isLoading: true, currentManuscriptId: manuscriptId });
+
+    try {
+      const data = await codexApi.listEntities(manuscriptId);
+      set({ entities: data, isLoading: false });
+    } catch (error) {
+      console.error('Failed to load entities:', error);
+      set({ isLoading: false });
+      throw error;
+    }
+  },
+
   setEntities: (entities) => set({ entities }),
 
   addEntity: (entity) => set((state) => ({
@@ -125,6 +151,8 @@ export const useCodexStore = create<CodexStore>((set, get) => ({
     selectedEntityId: null,
     activeTab: 'entities',
     isAnalyzing: false,
+    isLoading: false,
+    currentManuscriptId: null,
   }),
 
   getPendingSuggestionsCount: () => {

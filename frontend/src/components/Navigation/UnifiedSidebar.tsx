@@ -31,10 +31,10 @@ export default function UnifiedSidebar({
     { id: 'outline', label: 'Outline', icon: '📋', description: 'Story structure' },
     { id: 'codex', label: 'Codex', icon: '📖', description: 'Character & world info' },
     { id: 'timeline', label: 'Timeline', icon: '📜', description: 'Event chronology' },
+    { id: 'coach', label: 'Coach', icon: '✨', description: 'Writing assistance' },
     { id: 'analytics', label: 'Analytics', icon: '📊', description: 'Writing statistics' },
     { id: 'export', label: 'Export', icon: '📥', description: 'Export to DOCX/PDF' },
     { id: 'timemachine', label: 'Time Machine', icon: '⏰', description: 'Version history' },
-    { id: 'coach', label: 'Coach', icon: '✨', description: 'Writing assistance' },
     { id: 'recap', label: 'Recap', icon: '🎯', description: 'Progress summary' },
   ];
 

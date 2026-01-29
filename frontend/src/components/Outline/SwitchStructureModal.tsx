@@ -5,8 +5,10 @@
  */
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from '@/stores/toastStore';
 import { outlineApi } from '@/lib/api';
+import { Z_INDEX } from '@/lib/zIndex';
 
 interface StoryStructure {
   id: string;
@@ -139,11 +141,14 @@ export default function SwitchStructureModal({
 
   const selectedStructureData = structures.find((s) => s.id === selectedStructure);
 
-  return (
-    <div className="fixed inset-0 bg-midnight bg-opacity-50 flex items-center justify-center p-4 z-50">
+  return createPortal(
+    <div
+      className="fixed inset-0 bg-midnight bg-opacity-50 flex items-center justify-center p-4"
+      style={{ zIndex: Z_INDEX.MODAL_BACKDROP }}
+    >
       <div
         className="bg-white max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-book"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '2px', zIndex: Z_INDEX.MODAL }}
       >
         {/* Header */}
         <div className="border-b-2 border-slate-ui p-6">
@@ -315,6 +320,7 @@ export default function SwitchStructureModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

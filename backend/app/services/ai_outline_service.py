@@ -276,23 +276,63 @@ Respond in JSON format:
         self,
         beat: PlotBeat,
         outline: Outline,
-        previous_beats: List[PlotBeat]
+        previous_beats: List[PlotBeat],
+        db: Optional[Session] = None
     ) -> Dict[str, Any]:
         """
         Generate specific scene ideas and content suggestions for a single beat
+        with full manuscript context and Codex entities.
 
         Args:
             beat: PlotBeat to generate suggestions for
             outline: Parent outline with premise
             previous_beats: List of beats that come before this one
+            db: Database session for fetching manuscript context and entities
 
         Returns:
             Dict with content suggestions and usage info
         """
         try:
-            system_prompt = """You are a creative writing consultant helping authors brainstorm scenes.
-Provide 3-5 specific, concrete scene ideas or character moments for the given plot beat.
-Focus on actionable suggestions the author can immediately use."""
+            # Build manuscript context if database session available
+            manuscript_context = ""
+            entity_context = ""
+
+            if db and outline.manuscript_id:
+                # Get manuscript content for context
+                manuscript_context = _get_manuscript_context(db, outline)
+                if manuscript_context == "No chapters written yet.":
+                    manuscript_context = ""
+
+                # Get Codex entities for the manuscript
+                from app.models.entity import Entity
+                entities = db.query(Entity).filter(
+                    Entity.manuscript_id == outline.manuscript_id
+                ).all()
+
+                if entities:
+                    entity_summaries = []
+                    for entity in entities[:20]:  # Limit to 20 entities to control prompt size
+                        summary = f"- **{entity.name}** ({entity.type})"
+                        if entity.attributes:
+                            # Add key attributes
+                            attrs = entity.attributes
+                            if attrs.get('description'):
+                                summary += f": {attrs['description'][:150]}"
+                            elif attrs.get('role'):
+                                summary += f": {attrs['role']}"
+                        entity_summaries.append(summary)
+
+                    entity_context = "\n**Characters & Entities from Codex:**\n" + "\n".join(entity_summaries)
+
+            system_prompt = """You are a creative writing consultant helping authors brainstorm scenes for THEIR SPECIFIC STORY.
+
+CRITICAL RULES:
+1. You MUST reference the actual characters, locations, and events from the manuscript and Codex
+2. DO NOT invent new characters - use the ones the author has already created
+3. If the manuscript has existing content, your suggestions must logically follow from what's written
+4. Be specific - mention character names, established relationships, and existing plot elements
+
+Provide 3-5 specific, concrete scene ideas or character moments for the given plot beat."""
 
             # Build context from previous beats
             previous_context = ""
@@ -300,33 +340,51 @@ Focus on actionable suggestions the author can immediately use."""
                 prev_summaries = []
                 for prev in previous_beats[-3:]:  # Last 3 beats for context
                     if prev.user_notes:
-                        prev_summaries.append(f"- {prev.beat_label}: {prev.user_notes[:100]}")
+                        prev_summaries.append(f"- {prev.beat_label}: {prev.user_notes[:200]}")
+                    elif prev.beat_description:
+                        prev_summaries.append(f"- {prev.beat_label}: {prev.beat_description[:150]}")
                 if prev_summaries:
-                    previous_context = "\n**Previous beats:**\n" + "\n".join(prev_summaries)
+                    previous_context = "\n**Previous beats in outline:**\n" + "\n".join(prev_summaries)
 
-            user_prompt = f"""Suggest 3-5 specific scenes, conflicts, or character moments for this plot beat:
+            # Build manuscript excerpt (limited for token efficiency)
+            manuscript_excerpt = ""
+            if manuscript_context:
+                # Truncate to ~3000 chars for beat suggestions (keep it focused)
+                manuscript_excerpt = f"\n**Manuscript Excerpt (for context):**\n{manuscript_context[:3000]}"
+                if len(manuscript_context) > 3000:
+                    manuscript_excerpt += "...\n[truncated for brevity]"
 
-**Story Premise:** {outline.premise or "Not provided"}
+            user_prompt = f"""Suggest 3-5 specific scenes, conflicts, or character moments for this plot beat.
 
-**Beat:** {beat.beat_label} ({beat.beat_name})
+**Story Context:**
+- Premise: {outline.premise or "Infer from manuscript below"}
+- Genre: {outline.genre or "General fiction"}
+- Target Length: {outline.target_word_count:,} words
+{entity_context}
+{manuscript_excerpt}
+
+**Current Beat:** {beat.beat_label} ({beat.beat_name})
 **Position:** {int(beat.target_position_percent * 100)}% through story
-**Description:** {beat.beat_description or "Not provided"}
+**Beat Description:** {beat.beat_description or "Not provided"}
 **Target Word Count:** {beat.target_word_count:,} words
 {previous_context}
 
-Provide concrete, specific suggestions that fit this beat's purpose. Include:
-- Scene ideas (settings, conflicts, turning points)
-- Character moments (decisions, revelations, emotional beats)
-- Dialogue opportunities
-- Subplots or side conflicts
+IMPORTANT: Your suggestions MUST use the actual characters and settings from the manuscript/Codex above.
+DO NOT suggest generic placeholders like "the protagonist" - use their actual names.
+
+Provide concrete, specific suggestions that:
+- Use actual character names from the Codex
+- Reference established locations and relationships
+- Build on existing story events
+- Fit this beat's narrative purpose
 
 Format as a JSON array of suggestion objects:
 {{
   "suggestions": [
     {{
       "type": "scene|character|dialogue|subplot",
-      "title": "Brief title",
-      "description": "2-3 sentence detailed suggestion"
+      "title": "Brief title (use character names)",
+      "description": "2-3 sentence detailed suggestion using specific story elements"
     }},
     ...
   ]

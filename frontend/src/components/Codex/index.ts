@@ -3,6 +3,7 @@
  */
 
 export { default as CodexSidebar } from './CodexSidebar';
+export { default as CodexMainView } from './CodexMainView';
 export { default as EntityList } from './EntityList';
 export { default as EntityCard } from './EntityCard';
 export { default as EntityDetail } from './EntityDetail';

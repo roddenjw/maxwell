@@ -27,6 +27,8 @@ import EntityMentionsPlugin from './plugins/EntityMentionsPlugin';
 import RealtimeNLPPlugin from './plugins/RealtimeNLPPlugin';
 import FastCoachPlugin from './plugins/FastCoachPlugin';
 import SceneDetectionPlugin from './plugins/SceneDetectionPlugin';
+import SelectionToolbar from './SelectionToolbar';
+import QuickEntityModal from './QuickEntityModal';
 import { versioningApi, chaptersApi } from '@/lib/api';
 import { useOutlineStore } from '@/stores/outlineStore';
 
@@ -55,6 +57,11 @@ export default function ManuscriptEditor({
   const [latestEditorState, setLatestEditorState] = useState<EditorState | null>(null);
   const [chapterTitle, setChapterTitle] = useState<string>('');
   const [currentSceneContext, setCurrentSceneContext] = useState<any>(null);
+
+  // Quick entity creation state
+  const [showQuickEntityModal, setShowQuickEntityModal] = useState(false);
+  const [selectedTextForEntity, setSelectedTextForEntity] = useState('');
+  const [entityModalPosition, setEntityModalPosition] = useState({ x: 0, y: 0 });
 
   const {
     getBeatByChapterId,
@@ -86,6 +93,13 @@ export default function ManuscriptEditor({
 
     fetchChapterTitle();
   }, [chapterId]);
+
+  // Handle creating entity from selected text
+  const handleCreateEntityFromSelection = useCallback((selectedText: string, position: { x: number; y: number }) => {
+    setSelectedTextForEntity(selectedText);
+    setEntityModalPosition(position);
+    setShowQuickEntityModal(true);
+  }, []);
 
   // Handle scene changes from SceneDetectionPlugin
   const handleSceneChange = useCallback(async (_sceneIndex: number, cursorPosition: number) => {
@@ -304,6 +318,24 @@ export default function ManuscriptEditor({
               <SceneDetectionPlugin
                 chapterId={chapterId}
                 onSceneChange={handleSceneChange}
+              />
+            )}
+
+            {/* Selection Toolbar - appears when text is selected, offers "Create Entity" */}
+            {manuscriptId && (
+              <SelectionToolbar
+                manuscriptId={manuscriptId}
+                onCreateEntity={handleCreateEntityFromSelection}
+              />
+            )}
+
+            {/* Quick Entity Modal - for creating entities from selected text */}
+            {showQuickEntityModal && manuscriptId && (
+              <QuickEntityModal
+                manuscriptId={manuscriptId}
+                selectedText={selectedTextForEntity}
+                position={entityModalPosition}
+                onClose={() => setShowQuickEntityModal(false)}
               />
             )}
           </div>

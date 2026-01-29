@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
 import type { Outline } from '@/types/outline';
+import { Z_INDEX } from '@/lib/zIndex';
 
 interface AISuggestionsPanelProps {
   outline: Outline;
@@ -105,10 +106,11 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
 
   return (
     <div
-      className="fixed right-0 top-0 h-full bg-white border-l-2 border-slate-ui shadow-2xl flex flex-col z-50 transition-transform duration-300"
+      className="fixed right-0 top-0 h-full bg-white border-l-2 border-slate-ui shadow-2xl flex flex-col transition-transform duration-300"
       style={{
         width: '420px',
         transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
+        zIndex: Z_INDEX.SLIDE_PANEL,
       }}
     >
       {/* Header */}

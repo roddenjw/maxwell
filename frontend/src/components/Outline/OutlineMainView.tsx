@@ -5,8 +5,10 @@
  */
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useOutlineStore } from '@/stores/outlineStore';
 import { toast } from '@/stores/toastStore';
+import { Z_INDEX } from '@/lib/zIndex';
 import PlotBeatCard from './PlotBeatCard';
 import AddSceneButton from './AddSceneButton';
 import CreateOutlineModal from './CreateOutlineModal';
@@ -38,6 +40,7 @@ export default function OutlineMainView({
     setExpandedBeat,
     getBeatAISuggestions,
     getApiKey,
+    error: outlineError,
   } = useOutlineStore();
 
   // Modal and view state
@@ -162,6 +165,47 @@ export default function OutlineMainView({
         <div className="text-center">
           <div className="inline-block w-8 h-8 border-2 border-bronze border-t-transparent rounded-full animate-spin mb-3" />
           <p className="font-sans text-faded-ink text-sm">Loading outline...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state - show friendly message with retry option
+  if (outlineError && !outline) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-vellum p-8">
+        <div className="text-center max-w-lg">
+          <div className="text-6xl mb-6">📋</div>
+          <h2 className="font-serif text-3xl font-bold text-midnight mb-4">
+            Unable to Load Outline
+          </h2>
+          <p className="font-sans text-faded-ink text-lg mb-6">
+            {outlineError}
+          </p>
+          <div className="flex flex-col gap-3 items-center">
+            <button
+              onClick={() => loadOutline(manuscriptId)}
+              className="px-6 py-3 bg-bronze hover:bg-bronze-dark text-white font-sans font-medium uppercase tracking-button transition-colors shadow-book"
+              style={{ borderRadius: '2px' }}
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-6 py-3 border-2 border-bronze text-bronze hover:bg-bronze/10 font-sans font-medium uppercase tracking-button transition-colors"
+              style={{ borderRadius: '2px' }}
+            >
+              Create New Outline
+            </button>
+          </div>
+
+          {/* Create Outline Modal */}
+          <CreateOutlineModal
+            manuscriptId={manuscriptId}
+            isOpen={showCreateModal}
+            onClose={() => setShowCreateModal(false)}
+            onSuccess={handleCreateSuccess}
+          />
         </div>
       </div>
     );
@@ -452,11 +496,14 @@ export default function OutlineMainView({
       )}
 
       {/* Structure Info Modal */}
-      {showStructureInfo && structureDetails && (
-        <div className="fixed inset-0 bg-midnight bg-opacity-50 flex items-center justify-center p-4 z-50">
+      {showStructureInfo && structureDetails && createPortal(
+        <div
+          className="fixed inset-0 bg-midnight bg-opacity-50 flex items-center justify-center p-4"
+          style={{ zIndex: Z_INDEX.MODAL_BACKDROP }}
+        >
           <div
             className="bg-white max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-book"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '2px', zIndex: Z_INDEX.MODAL }}
           >
             {/* Header */}
             <div className="border-b-2 border-slate-ui p-6">
@@ -557,7 +604,8 @@ export default function OutlineMainView({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

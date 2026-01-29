@@ -801,11 +801,12 @@ async def get_beat_content_suggestions(
         # Initialize AI service
         ai_service = AIOutlineService(request.api_key)
 
-        # Get suggestions
+        # Get suggestions with manuscript context and entities
         result = await ai_service.generate_beat_content_suggestions(
             beat=beat,
             outline=outline,
-            previous_beats=previous_beats
+            previous_beats=previous_beats,
+            db=db  # Pass DB session for manuscript/entity context
         )
 
         if not result["success"]:

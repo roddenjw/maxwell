@@ -182,6 +182,44 @@
 
 ## Recent Completions (Last 2 Weeks)
 
+### January 29, 2026
+- **Context-Aware AI Suggestions (FEEDBACK Outline #10)**
+  - AI beat suggestions now include full manuscript context (chapter content)
+  - AI suggestions include Codex entities (characters, locations, items)
+  - `generate_beat_content_suggestions` method updated to use `_get_manuscript_context()`
+  - Suggestions reference specific character names and story events
+  - Files: `backend/app/services/ai_outline_service.py`, `backend/app/api/routes/outlines.py`
+
+- **Entity Creation from Editor (FEEDBACK Entity Creation #1)**
+  - New `SelectionToolbar` component appears when text is selected
+  - "Create Entity" button converts selected text to Codex entity
+  - `QuickEntityModal` for minimal entity creation (name, type, description)
+  - Option to replace selection with EntityMentionNode (clickable link)
+  - Files: `frontend/src/components/Editor/SelectionToolbar.tsx` (NEW),
+           `frontend/src/components/Editor/QuickEntityModal.tsx` (NEW),
+           `frontend/src/components/Editor/ManuscriptEditor.tsx` (modified)
+
+- **EntityHoverCard Component (NEW)**
+  - Hover tooltips for entity mentions in editor
+  - Shows entity type, name, description, and attributes
+  - "View in Codex" button opens sidebar
+  - Files: `frontend/src/components/Editor/EntityHoverCard.tsx` (NEW)
+
+- **CodexMainView Component (NEW)**
+  - Full-page entity browser accessible from navigation
+  - List and grid view modes
+  - Entity filtering by type
+  - Search functionality
+  - Files: `frontend/src/components/Codex/CodexMainView.tsx` (NEW)
+
+- **Z-Index System (NEW)**
+  - Centralized z-index hierarchy in `frontend/src/lib/zIndex.ts`
+  - Prevents z-index conflicts between modals, tooltips, sidebars
+
+- **Chapter Cache Store (NEW)**
+  - `chapterCacheStore.ts` for race condition prevention
+  - Prevents chapter data conflicts during rapid switching
+
 ### January 25, 2026 (Night - Later)
 - **LangChain Agent Framework - All Phases Complete (1-5)**
   - **Phase 5: Advanced Features**

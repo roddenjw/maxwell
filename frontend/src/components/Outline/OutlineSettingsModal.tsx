@@ -4,8 +4,10 @@
  */
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useOutlineStore } from '@/stores/outlineStore';
 import { outlineApi } from '@/lib/api';
+import { Z_INDEX } from '@/lib/zIndex';
 
 interface OutlineSettingsModalProps {
   isOpen: boolean;
@@ -67,9 +69,15 @@ export default function OutlineSettingsModal({ isOpen, onClose, outlineId }: Out
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+  return createPortal(
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50"
+      style={{ zIndex: Z_INDEX.MODAL_BACKDROP }}
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+        style={{ zIndex: Z_INDEX.MODAL }}
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-2xl font-semibold text-gray-900">Outline Settings</h2>
@@ -220,6 +228,7 @@ export default function OutlineSettingsModal({ isOpen, onClose, outlineId }: Out
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

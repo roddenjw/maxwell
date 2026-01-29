@@ -1,8 +1,8 @@
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import ManuscriptEditor from './components/Editor/ManuscriptEditor'
 import ManuscriptLibrary from './components/ManuscriptLibrary'
 import { WorldLibrary } from './components/WorldLibrary'
-import { CodexSidebar } from './components/Codex'
+import { CodexMainView } from './components/Codex'
 import TimelineSidebar from './components/Timeline/TimelineSidebar'
 import DocumentNavigator from './components/Document/DocumentNavigator'
 import FastCoachSidebar from './components/FastCoach/FastCoachSidebar'
@@ -17,6 +17,7 @@ import { useOnboardingStore } from './stores/onboardingStore'
 import { useCodexStore } from './stores/codexStore'
 import { useTimelineStore } from './stores/timelineStore'
 import { useChapterStore } from './stores/chapterStore'
+import { useChapterCacheStore } from './stores/chapterCacheStore'
 import { useFastCoachStore } from './stores/fastCoachStore'
 import { useOutlineStore } from './stores/outlineStore'
 import { useAchievementStore } from './stores/achievementStore'
@@ -44,7 +45,7 @@ import { AchievementDashboard } from './components/Achievements'
 function App() {
   const { currentManuscriptId, setCurrentManuscript, getCurrentManuscript } = useManuscriptStore()
   const currentManuscript = getCurrentManuscript()
-  const { isSidebarOpen, toggleSidebar } = useCodexStore()
+  const { loadEntities } = useCodexStore()
   const { isTimelineOpen, setTimelineOpen } = useTimelineStore()
   const { setCurrentChapter, currentChapterId } = useChapterStore()
   const { isSidebarOpen: isCoachOpen, toggleSidebar: toggleCoach } = useFastCoachStore()
@@ -56,6 +57,9 @@ function App() {
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+
+  // Ref to track and abort in-flight chapter load requests (prevents race conditions)
+  const chapterLoadAbortRef = useRef<AbortController | null>(null)
 
   // Onboarding state
   const {
@@ -182,6 +186,15 @@ function App() {
       analytics.manuscriptOpened(manuscriptId, manuscript.title)
     }
 
+    // Preload entities for hover cards (load in background)
+    try {
+      loadEntities(manuscriptId).catch(error => {
+        console.error('Failed to preload entities:', error)
+      })
+    } catch (error) {
+      console.error('Failed to preload entities:', error)
+    }
+
     // Auto-select first chapter if available
     try {
       const response = await fetch(`http://localhost:8000/api/chapters/manuscript/${manuscriptId}/tree`)
@@ -260,7 +273,7 @@ function App() {
     if (view === 'chapters') {
       // No additional state needed
     } else if (view === 'codex') {
-      if (!isSidebarOpen) toggleSidebar()
+      // Codex is now a full-page view, no sidebar toggle needed
     } else if (view === 'timeline') {
       if (!isTimelineOpen) setTimelineOpen(true)
     } else if (view === 'timemachine') {
@@ -387,11 +400,52 @@ function App() {
       return
     }
 
+    // Get cache store
+    const { getFromCache, setCache, setLoading } = useChapterCacheStore.getState()
+
+    // Check cache first for instant loading
+    const cached = getFromCache(chapterId)
+    if (cached) {
+      setCurrentChapter(chapterId)
+      setCurrentChapterContent(cached.content)
+      setEditorKey(prev => prev + 1)
+      setSaveStatus('saved')
+      return // Instant switch!
+    }
+
+    // Abort any in-flight chapter load request to prevent race conditions
+    if (chapterLoadAbortRef.current) {
+      chapterLoadAbortRef.current.abort()
+    }
+
+    // Create new AbortController for this request
+    const abortController = new AbortController()
+    chapterLoadAbortRef.current = abortController
+
+    // Store the chapter ID we're loading to verify it hasn't changed
+    const targetChapterId = chapterId
+
     try {
+      // Set loading state - this prevents editing
+      setLoading(chapterId)
       setCurrentChapter(chapterId)
 
       // Fetch chapter content
       const chapter = await chaptersApi.getChapter(chapterId)
+
+      // Check if this request was aborted (user switched to a different chapter)
+      if (abortController.signal.aborted) {
+        console.log('Chapter load aborted - user switched chapters:', chapterId)
+        return
+      }
+
+      // Defense in depth: verify we're still loading the same chapter
+      // This handles edge cases where abort didn't fire but state changed
+      const { currentChapterId: currentId } = useChapterStore.getState()
+      if (currentId !== targetChapterId) {
+        console.log('Chapter changed during load, discarding stale response:', chapterId)
+        return
+      }
 
       // Data integrity check: Log chapter content status
       const hasLexicalState = chapter.lexical_state && chapter.lexical_state.trim() !== ''
@@ -432,57 +486,90 @@ function App() {
         }
       }
 
+      // Update cache with fetched content
+      setCache(chapterId, {
+        content: editorContent || '',
+        lexicalState: chapter.lexical_state || null,
+        loadedAt: Date.now(),
+        wordCount: chapter.word_count || 0,
+      })
+
+      // Clear loading state
+      setLoading(null)
+
       setCurrentChapterContent(editorContent || '')
 
       // Force editor re-mount with new content
       setEditorKey(prev => prev + 1)
       setSaveStatus('saved') // Reset save status for new chapter
     } catch (error) {
+      // Clear loading state on error
+      setLoading(null)
+
+      // Silently ignore aborted requests
+      if (error instanceof Error && error.name === 'AbortError') {
+        return
+      }
       console.error('Failed to load chapter:', error)
       toast.error(getErrorMessage(error))
     }
   }
 
-  // Reload chapter content when switching views OR when chapter changes
-  // This ensures the editor always has the latest saved content
+  // Reload chapter content when switching views (back to an editor view)
+  // Note: Chapter switching is handled by handleChapterSelect, NOT here
+  // This only handles the case where user navigates away (e.g., to Analytics) and back
   useEffect(() => {
     const viewsWithEditor = ['chapters', 'codex', 'coach'];
 
-    // Only reload if:
-    // 1. We're in a view that shows the editor
-    // 2. There's a current chapter selected
-    // 3. We're not already in a saving state (to avoid conflicts)
-    if (viewsWithEditor.includes(activeView) && currentChapterId && saveStatus !== 'saving') {
-      // Reload the chapter content from the database
-      const reloadChapterContent = async () => {
-        try {
-          const chapter = await chaptersApi.getChapter(currentChapterId);
-
-          const hasLexicalState = chapter.lexical_state && chapter.lexical_state.trim() !== '';
-          const hasPlainContent = chapter.content && chapter.content.trim() !== '';
-
-          let editorContent: string | undefined;
-
-          if (hasLexicalState) {
-            editorContent = chapter.lexical_state;
-          } else if (hasPlainContent) {
-            editorContent = convertPlainTextToLexical(chapter.content);
-          }
-
-          // Only update if content has actually changed to avoid unnecessary re-renders
-          if (editorContent !== currentChapterContent) {
-            setCurrentChapterContent(editorContent || '');
-            setEditorKey(prev => prev + 1); // Force editor remount with new content
-          }
-        } catch (error) {
-          console.error('Failed to reload chapter content:', error);
-          toast.error('Failed to load chapter content');
-        }
-      };
-
-      reloadChapterContent();
+    // Only reload when returning TO an editor view from a non-editor view
+    // We track the previous view to avoid reloading on initial mount or chapter changes
+    if (!viewsWithEditor.includes(activeView) || !currentChapterId || saveStatus === 'saving') {
+      return;
     }
-  }, [activeView, currentChapterId]); // Run when activeView OR currentChapterId changes
+
+    // Use abort controller to handle race conditions when view changes rapidly
+    const abortController = new AbortController();
+
+    const reloadChapterContent = async () => {
+      try {
+        const chapter = await chaptersApi.getChapter(currentChapterId);
+
+        // Check if we were aborted (view changed again)
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        const hasLexicalState = chapter.lexical_state && chapter.lexical_state.trim() !== '';
+        const hasPlainContent = chapter.content && chapter.content.trim() !== '';
+
+        let editorContent: string | undefined;
+
+        if (hasLexicalState) {
+          editorContent = chapter.lexical_state;
+        } else if (hasPlainContent) {
+          editorContent = convertPlainTextToLexical(chapter.content);
+        }
+
+        // Only update if content has actually changed to avoid unnecessary re-renders
+        if (editorContent !== currentChapterContent) {
+          setCurrentChapterContent(editorContent || '');
+          setEditorKey(prev => prev + 1); // Force editor remount with new content
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+        console.error('Failed to reload chapter content:', error);
+        toast.error('Failed to load chapter content');
+      }
+    };
+
+    reloadChapterContent();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [activeView]); // Only run when activeView changes, NOT when chapter changes
 
   // Listen for openSettings custom event from brainstorming components
   useEffect(() => {
@@ -606,28 +693,14 @@ function App() {
               </>
             )}
 
-            {/* Codex View */}
+            {/* Codex View - Full-page entity browser */}
             {activeView === 'codex' && (
-              <>
-                {currentChapterId && (
-                  <div className="flex-1 overflow-auto">
-                    <ManuscriptEditor
-                      key={editorKey}
-                      manuscriptId={currentManuscript.id}
-                      chapterId={currentChapterId}
-                      initialContent={currentChapterContent}
-                      mode="normal"
-                      onSaveStatusChange={setSaveStatus}
-                      onViewBeat={handleViewBeat}
-                    />
-                  </div>
-                )}
-                <CodexSidebar
+              <div className="flex-1 flex bg-vellum">
+                <CodexMainView
                   manuscriptId={currentManuscript.id}
-                  isOpen={true}
-                  onToggle={() => setActiveView('chapters')}
+                  onOpenChapter={handleChapterSelect}
                 />
-              </>
+              </div>
             )}
 
             {/* Timeline View */}
@@ -644,8 +717,8 @@ function App() {
             {/* Coach View */}
             {activeView === 'coach' && (
               <>
-                {currentChapterId && (
-                  <div className="flex-1 overflow-auto">
+                <div className="flex-1 overflow-auto">
+                  {currentChapterId ? (
                     <ManuscriptEditor
                       key={editorKey}
                       manuscriptId={currentManuscript.id}
@@ -655,8 +728,28 @@ function App() {
                       onSaveStatusChange={setSaveStatus}
                       onViewBeat={handleViewBeat}
                     />
-                  </div>
-                )}
+                  ) : (
+                    <div className="flex items-center justify-center h-full bg-vellum">
+                      <div className="text-center max-w-md p-8">
+                        <div className="text-6xl mb-6">✨</div>
+                        <h2 className="font-garamond text-2xl font-semibold text-midnight mb-4">
+                          Writing Coach
+                        </h2>
+                        <p className="font-sans text-faded-ink mb-6">
+                          Select a chapter to get AI-powered writing assistance.
+                          The coach analyzes your text in real-time.
+                        </p>
+                        <button
+                          onClick={() => setActiveView('chapters')}
+                          className="px-6 py-3 bg-bronze hover:bg-bronze-dark text-white font-sans font-medium uppercase tracking-button transition-colors"
+                          style={{ borderRadius: '2px' }}
+                        >
+                          Select a Chapter
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <FastCoachSidebar
                   manuscriptId={currentManuscript.id}
                   isOpen={true}

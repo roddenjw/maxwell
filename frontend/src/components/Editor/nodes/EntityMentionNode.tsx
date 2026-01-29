@@ -118,7 +118,9 @@ export function $isEntityMentionNode(
   return node instanceof EntityMentionNode;
 }
 
+import { useState, useRef, useCallback } from 'react';
 import { useCodexStore } from '@/stores/codexStore';
+import { EntityHoverCard } from '../EntityHoverCard';
 
 // React component that renders the entity mention
 interface EntityMentionComponentProps {
@@ -134,7 +136,13 @@ function EntityMentionComponent({
   entityName,
   entityType,
 }: EntityMentionComponentProps) {
-  const { setSidebarOpen, setActiveTab, setSelectedEntity } = useCodexStore();
+  const { setSidebarOpen, setActiveTab, setSelectedEntity, entities } = useCodexStore();
+  const [isHovered, setIsHovered] = useState(false);
+  const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Look up full entity from store
+  const entity = entities.find((e) => e.id === entityId) || null;
 
   const handleClick = () => {
     // Open Codex sidebar and navigate to this entity
@@ -142,6 +150,27 @@ function EntityMentionComponent({
     setActiveTab('entities');
     setSidebarOpen(true);
   };
+
+  const handleMouseEnter = useCallback((e: React.MouseEvent<HTMLSpanElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoverPosition({
+      x: rect.left,
+      y: rect.bottom,
+    });
+
+    // Delay showing the card to prevent flash on quick mouse movements
+    hoverTimeoutRef.current = setTimeout(() => {
+      setIsHovered(true);
+    }, 150);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setIsHovered(false);
+  }, []);
 
   const getTypeColor = () => {
     switch (entityType) {
@@ -159,16 +188,28 @@ function EntityMentionComponent({
   };
 
   return (
-    <span
-      className={`entity-mention cursor-pointer border-b-2 border-dotted ${getTypeColor()} hover:bg-bronze hover:bg-opacity-10 transition-colors`}
-      onClick={handleClick}
-      data-lexical-decorator="true"
-      data-node-key={nodeKey}
-      data-entity-id={entityId}
-      data-entity-type={entityType}
-      title={`${entityType}: ${entityName}`}
-    >
-      {entityName}
-    </span>
+    <>
+      <span
+        className={`entity-mention cursor-pointer border-b-2 border-dotted ${getTypeColor()} hover:bg-bronze hover:bg-opacity-10 transition-colors`}
+        onClick={handleClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        data-lexical-decorator="true"
+        data-node-key={nodeKey}
+        data-entity-id={entityId}
+        data-entity-type={entityType}
+      >
+        {entityName}
+      </span>
+      {isHovered && (
+        <EntityHoverCard
+          entity={entity}
+          entityName={entityName}
+          entityType={entityType}
+          position={hoverPosition}
+          onViewInCodex={handleClick}
+        />
+      )}
+    </>
   );
 }

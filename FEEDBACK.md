@@ -1,4 +1,4 @@
-This document is used for containing my feedback as I'm testing different components for future phases. It should be read and then once incorporated into a main implementation plan marked as resolved in here.
+ This document is used for containing my feedback as I'm testing different components for future phases. It should be read and then once incorporated into a main implementation plan marked as resolved in here.
 
 Outline
 
@@ -32,7 +32,12 @@ Outline
    - **Fix:** Created OutlineMainView.tsx component that displays full outline info in center area including: structure type, progress bar, premise/logline/synopsis, and all beats organized by act. Sidebar remains as an optional quick-access panel. Error handling improved with proper null checks.
 9. ✅ **RESOLVED (2026-01-25)** - There's an annoying Create Outline popup that appears in a manuscript with out one and it cant be dismissed until you make one. Users should be able to close it out.
    - **Fix:** Added "Maybe Later" button to the no-outline state in OutlineSidebar.tsx. Users can now dismiss the panel without creating an outline. The header close button (X) also works.
-10. Scene suggestions and beat suggestions should take into account the current manuscript rather than generic scene suggestions. If I have a manuscript or idea or premise I want those taken into account. Before I got generic ones that didn't fit the story or the genre even.
+10. ✅ **RESOLVED (2026-01-29)** - Scene suggestions and beat suggestions should take into account the current manuscript rather than generic scene suggestions. If I have a manuscript or idea or premise I want those taken into account. Before I got generic ones that didn't fit the story or the genre even.
+    - **Fix:** Updated `generate_beat_content_suggestions()` in ai_outline_service.py to:
+      - Include manuscript context via `_get_manuscript_context()` (chapter content)
+      - Include Codex entities (characters, locations, items) from the manuscript
+      - System prompt now instructs AI to reference specific characters and story elements
+      - AI suggestions must use actual character names instead of generic placeholders
 
 Timeline View:
 
@@ -71,11 +76,22 @@ Brainstorming
 
 Quick Reference
 
-1. Allow users to highlight words or text, or when we pick up the name of an already defined entity allow a hover to remind them of quick descriptions of the entities state at that point in time.
+1. ✅ **RESOLVED (2026-01-29)** - Allow users to highlight words or text, or when we pick up the name of an already defined entity allow a hover to remind them of quick descriptions of the entities state at that point in time.
+   - **Fix:** Created EntityHoverCard component (frontend/src/components/Editor/EntityHoverCard.tsx):
+     - Hovering over EntityMentionNodes in editor shows floating tooltip card
+     - Displays entity type icon, name, description, and key attributes
+     - "View in Codex" button opens full entity details in sidebar
+     - Integrated into EntityMentionNode component with 150ms hover delay to prevent flash
 
 Entity Creation
 
-1. Allow users to hover over a word or words and turn them into an entity or entity description right within the text editor.
+1. ✅ **RESOLVED (2026-01-29)** - Allow users to hover over a word or words and turn them into an entity or entity description right within the text editor.
+   - **Fix:** Created SelectionToolbar and QuickEntityModal components:
+     - SelectionToolbar: Floating toolbar appears when text is selected in editor
+     - "Create Entity" button opens QuickEntityModal with selection pre-filled as name
+     - QuickEntityModal: Minimal form with name, type (CHARACTER/LOCATION/ITEM/LORE), and optional description
+     - Option to replace selected text with EntityMentionNode (clickable link in editor)
+     - Full integration with Codex store for entity management
 
 Codex
 
