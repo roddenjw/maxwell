@@ -2,17 +2,19 @@
  * QuickEntityModal Component
  * Minimal modal for quickly creating an entity from selected text.
  * Pre-fills the entity name with the selection.
+ * Supports AI-powered entity extraction from surrounding context.
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { $getSelection, $isRangeSelection } from 'lexical';
+import { $getSelection, $isRangeSelection, $getRoot } from 'lexical';
 import { $createEntityMentionNode } from './nodes/EntityMentionNode';
 import { codexApi } from '@/lib/api';
 import { useCodexStore } from '@/stores/codexStore';
 import { toast } from '@/stores/toastStore';
 import { Z_INDEX } from '@/lib/zIndex';
 import { EntityType } from '@/types/codex';
+import { getErrorMessage } from '@/lib/retry';
 
 interface QuickEntityModalProps {
   manuscriptId: string;
@@ -42,11 +44,21 @@ export default function QuickEntityModal({
   const [name, setName] = useState(selectedText);
   const [type, setType] = useState<EntityType>(EntityType.CHARACTER);
   const [description, setDescription] = useState('');
+  const [aliases, setAliases] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [insertMention, setInsertMention] = useState(true);
+  const [storedApiKey, setStoredApiKey] = useState<string | null>(null);
+  const [aiConfidence, setAiConfidence] = useState<'high' | 'medium' | 'low' | null>(null);
 
   const modalRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Load API key on mount
+  useEffect(() => {
+    const key = localStorage.getItem('openrouter_api_key');
+    setStoredApiKey(key);
+  }, []);
 
   // Focus name input on mount
   useEffect(() => {
@@ -94,11 +106,17 @@ export default function QuickEntityModal({
     setIsCreating(true);
 
     try {
+      // Parse aliases
+      const aliasesList = aliases
+        ? aliases.split(',').map((a) => a.trim()).filter((a) => a.length > 0)
+        : [];
+
       // Create the entity
       const entity = await codexApi.createEntity({
         manuscript_id: manuscriptId,
         name: name.trim(),
         type,
+        aliases: aliasesList.length > 0 ? aliasesList : undefined,
         attributes: description ? { description } : {},
       });
 
@@ -136,6 +154,76 @@ export default function QuickEntityModal({
     }
   };
 
+  // Get surrounding context from the editor
+  const getSurroundingContext = (): string => {
+    let context = '';
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      const fullText = root.getTextContent();
+
+      // Find the selected text position
+      const selectedIndex = fullText.indexOf(selectedText);
+      if (selectedIndex === -1) {
+        // If we can't find the exact text, just use a portion of the document
+        context = fullText.slice(0, 2000);
+        return;
+      }
+
+      // Get ~500 chars before and after the selection
+      const contextRadius = 500;
+      const start = Math.max(0, selectedIndex - contextRadius);
+      const end = Math.min(fullText.length, selectedIndex + selectedText.length + contextRadius);
+
+      context = fullText.slice(start, end);
+    });
+    return context;
+  };
+
+  // AI Analyze - extract entity info from context
+  const handleAIAnalyze = async () => {
+    if (!storedApiKey) {
+      toast.error('Please set your OpenRouter API key in Settings');
+      return;
+    }
+
+    setIsAnalyzing(true);
+
+    try {
+      const surroundingContext = getSurroundingContext();
+
+      const result = await codexApi.extractEntityFromSelection({
+        api_key: storedApiKey,
+        selected_text: selectedText,
+        surrounding_context: surroundingContext,
+      });
+
+      // Populate form with extracted data
+      if (result.name) {
+        setName(result.name);
+      }
+
+      if (result.type && Object.values(EntityType).includes(result.type as EntityType)) {
+        setType(result.type as EntityType);
+      }
+
+      if (result.description) {
+        setDescription(result.description);
+      }
+
+      if (result.suggested_aliases && result.suggested_aliases.length > 0) {
+        setAliases(result.suggested_aliases.join(', '));
+      }
+
+      setAiConfidence(result.confidence);
+
+      toast.success(`AI analyzed "${selectedText}" (${result.confidence} confidence)`);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   // Calculate modal position (below or above the toolbar position)
   const modalTop = position.y + 60;
   const modalLeft = Math.max(20, Math.min(position.x - 100, window.innerWidth - 340));
@@ -161,9 +249,19 @@ export default function QuickEntityModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-serif font-bold text-lg text-midnight">
-            Quick Create Entity
-          </h3>
+          <div>
+            <h3 className="font-serif font-bold text-lg text-midnight">
+              Quick Create Entity
+            </h3>
+            {aiConfidence && (
+              <span className={`text-xs font-sans ${
+                aiConfidence === 'high' ? 'text-green-600' :
+                aiConfidence === 'medium' ? 'text-amber-600' : 'text-faded-ink'
+              }`}>
+                AI confidence: {aiConfidence}
+              </span>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center text-faded-ink hover:text-midnight transition-colors"
@@ -171,6 +269,28 @@ export default function QuickEntityModal({
             ✕
           </button>
         </div>
+
+        {/* AI Analyze Button */}
+        {storedApiKey && (
+          <button
+            onClick={handleAIAnalyze}
+            disabled={isAnalyzing}
+            className="w-full mb-4 px-4 py-2 text-sm font-sans font-semibold bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            style={{ borderRadius: '2px' }}
+          >
+            {isAnalyzing ? (
+              <>
+                <span className="animate-spin">⟳</span>
+                Analyzing context...
+              </>
+            ) : (
+              <>
+                <span>✨</span>
+                AI Analyze Selection
+              </>
+            )}
+          </button>
+        )}
 
         {/* Form */}
         <div className="space-y-4">
@@ -213,6 +333,21 @@ export default function QuickEntityModal({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Aliases (optional) */}
+          <div>
+            <label className="block text-sm font-sans font-semibold text-midnight mb-1">
+              Aliases <span className="text-faded-ink font-normal">(optional, comma-separated)</span>
+            </label>
+            <input
+              type="text"
+              value={aliases}
+              onChange={(e) => setAliases(e.target.value)}
+              placeholder="e.g., The Dark Knight, Bruce"
+              className="w-full px-3 py-2 border border-slate-ui focus:border-bronze focus:outline-none font-sans text-sm"
+              style={{ borderRadius: '2px' }}
+            />
           </div>
 
           {/* Description (optional) */}

@@ -213,17 +213,24 @@ class OpenRouterService:
     def _build_system_prompt(self, suggestion_type: str) -> str:
         """Build system prompt based on suggestion type"""
 
-        base_prompt = """You are an expert writing coach helping authors improve their fiction manuscripts.
-Provide specific, actionable suggestions that are encouraging and constructive."""
+        base_prompt = """You are an expert fiction writer helping authors improve their manuscripts.
+Your job is to provide ACTUAL WRITTEN PROSE that can be directly inserted into the author's text.
+
+CRITICAL RULES:
+1. NEVER use placeholder text like "[describe what they saw]" or "[insert description]"
+2. NEVER use template patterns - write actual, concrete prose
+3. Provide 2-3 alternative versions the author can choose from
+4. Each version should be complete and ready to insert
+5. Match the tone and style of the existing text"""
 
         type_specific = {
-            "general": "Focus on overall writing quality, clarity, and engagement.",
-            "dialogue": "Focus on dialogue tags, character voice, and conversation flow.",
-            "pacing": "Focus on scene pacing, tension, and narrative momentum.",
-            "description": "Focus on sensory details, show-don't-tell, and vivid imagery.",
-            "character": "Focus on character consistency, motivation, and development.",
-            "style": "Focus on prose style, word choice, and sentence variety.",
-            "consistency": "Focus on plot consistency, continuity, and logical coherence.",
+            "general": "Suggest improvements to prose, clarity, and engagement with actual rewritten text.",
+            "dialogue": "Provide alternative dialogue with better tags, voice, and flow.",
+            "pacing": "Rewrite sections with better pacing and tension.",
+            "description": "Provide vivid, sensory descriptions with show-don't-tell.",
+            "character": "Write character moments with clear motivation and development.",
+            "style": "Offer prose rewrites with varied sentence structure and word choice.",
+            "consistency": "Provide fixes that maintain continuity and logical coherence.",
         }
 
         specific = type_specific.get(suggestion_type, type_specific["general"])
@@ -238,14 +245,26 @@ Provide specific, actionable suggestions that are encouraging and constructive."
     ) -> str:
         """Build user prompt with text and context"""
 
-        prompt = f"""Please analyze this excerpt and provide 1-2 specific, actionable suggestions for improvement.
+        prompt = f"""Analyze this excerpt and provide 2-3 ALTERNATIVE VERSIONS of actual prose that the author can directly insert.
 
 Context: {context if context else "Fiction manuscript excerpt"}
 
 Excerpt:
-{text[:1000]}  # Limit text length
+{text[:1000]}
 
-Provide your suggestions in a friendly, encouraging tone. Be specific about what to improve and why."""
+IMPORTANT: Do NOT give advice or templates. Write actual prose that continues or improves this text.
+
+Format your response like this:
+**Option 1:**
+[Actual prose the author can use]
+
+**Option 2:**
+[Different version of prose]
+
+**Option 3 (if applicable):**
+[Another alternative]
+
+Remember: Write REAL prose, not instructions or placeholders."""
 
         return prompt
 

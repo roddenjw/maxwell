@@ -42,6 +42,10 @@ class TimelineEvent(Base):
     location_id = Column(String, ForeignKey("entities.id"), nullable=True)  # Where event happens
     character_ids = Column(JSON, nullable=False, default=list)  # List of character entity IDs involved
 
+    # Source tracking - where this event was detected/written
+    source_chapter_id = Column(String, ForeignKey("chapters.id"), nullable=True)  # Chapter where event occurs
+    source_text_offset = Column(Integer, nullable=True)  # Character offset in chapter text
+
     # Event metadata (renamed from 'metadata' to avoid SQLAlchemy reserved word)
     event_metadata = Column(JSON, nullable=False, default=dict)  # Additional data (word_count, dialogue_count, etc.)
 

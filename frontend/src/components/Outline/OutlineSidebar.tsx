@@ -14,7 +14,6 @@ import OutlineSettingsModal from './OutlineSettingsModal';
 // Removed: OutlineCompletionDonut - replaced with compact progress bar
 import TimelineView from './TimelineView';
 import ProgressDashboard from './ProgressDashboard';
-import AISuggestionsPanel from './AISuggestionsPanel';
 import type { PlotBeat } from '@/types/outline';
 
 interface OutlineSidebarProps {
@@ -50,7 +49,6 @@ export default function OutlineSidebar({
   const [showStructureInfo, setShowStructureInfo] = useState(false);
   const [structureDetails, setStructureDetails] = useState<any>(null);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
-  const [showAIPanel, setShowAIPanel] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'analytics'>('list');
   const beatRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -143,8 +141,7 @@ export default function OutlineSidebar({
     const apiKey = getApiKey();
 
     if (!apiKey) {
-      toast.error('Please set your OpenRouter API key in the AI panel first');
-      setShowAIPanel(true); // Open AI panel to settings tab
+      toast.error('Please set your OpenRouter API key in Settings first');
       return;
     }
 
@@ -432,14 +429,6 @@ export default function OutlineSidebar({
               >
                 🔄 Switch
               </button>
-              <button
-                onClick={() => setShowAIPanel(true)}
-                className="px-2.5 py-1.5 bg-bronze hover:bg-bronze-dark text-white font-sans text-xs font-medium uppercase tracking-button transition-colors shadow-md"
-                style={{ borderRadius: '2px' }}
-                title="Get AI-powered insights and suggestions"
-              >
-                🤖 AI Insights
-              </button>
             </div>
           </div>
         </>
@@ -587,15 +576,6 @@ export default function OutlineSidebar({
             </div>
           </div>
         </div>
-      )}
-
-      {/* AI Suggestions Panel */}
-      {outline && (
-        <AISuggestionsPanel
-          outline={outline}
-          isOpen={showAIPanel}
-          onClose={() => setShowAIPanel(false)}
-        />
       )}
 
       {/* Outline Settings Modal */}

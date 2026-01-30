@@ -52,6 +52,8 @@ class EventResponse(BaseModel):
     location_id: Optional[str]
     character_ids: List[str]
     event_metadata: Dict[str, Any]
+    source_chapter_id: Optional[str] = None
+    source_text_offset: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -88,6 +90,7 @@ class InconsistencyResponse(BaseModel):
     severity: str
     affected_event_ids: List[str]
     extra_data: Dict[str, Any]
+    source_chapter_id: Optional[str] = None  # From first affected event
     created_at: datetime
 
     class Config:
@@ -474,18 +477,40 @@ async def list_inconsistencies(manuscript_id: str, severity: Optional[str] = Non
     """Get all timeline inconsistencies for a manuscript"""
     try:
         inconsistencies = timeline_service.get_inconsistencies(manuscript_id, severity)
+
+        # Enrich with source chapter info from affected events
+        result = []
+        for inc in inconsistencies:
+            inc_dict = InconsistencyResponse.model_validate(inc).model_dump()
+
+            # Get source_chapter_id from first affected event
+            if inc.affected_event_ids:
+                first_event = timeline_service.get_event(inc.affected_event_ids[0])
+                if first_event and first_event.source_chapter_id:
+                    inc_dict["source_chapter_id"] = first_event.source_chapter_id
+
+            result.append(inc_dict)
+
         return {
             "success": True,
-            "data": [InconsistencyResponse.from_orm(inc).dict() for inc in inconsistencies]
+            "data": result
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/inconsistencies/{inconsistency_id}")
-async def resolve_inconsistency(inconsistency_id: str):
-    """Mark an inconsistency as resolved (delete it)"""
-    success = timeline_service.resolve_inconsistency(inconsistency_id)
+async def resolve_inconsistency(inconsistency_id: str, resolution_note: Optional[str] = None):
+    """Mark an inconsistency as resolved (delete it), with optional resolution note"""
+    if resolution_note:
+        # Use the method that stores resolution notes
+        success = timeline_service.resolve_inconsistency_with_notes(
+            inconsistency_id,
+            resolution_note
+        )
+    else:
+        success = timeline_service.resolve_inconsistency(inconsistency_id)
+
     if not success:
         raise HTTPException(status_code=404, detail="Inconsistency not found")
     return {"success": True, "message": "Inconsistency resolved"}

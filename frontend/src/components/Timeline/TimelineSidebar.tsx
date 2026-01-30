@@ -1,11 +1,11 @@
 /**
  * TimelineSidebar - Main timeline sidebar component
- * Tabbed interface for Events, Inconsistencies, and Timeline Graph
+ * Tabbed interface for Events and Timeline Graph
+ * Note: Issues/Inconsistencies moved to Coach section
  */
 
 import { useTimelineStore } from '@/stores/timelineStore';
 import EventList from './EventList';
-import InconsistencyList from './InconsistencyList';
 import InteractiveTimeline from './InteractiveTimeline';
 import TimelineHeatmap from './TimelineHeatmap';
 import CharacterNetwork from './CharacterNetwork';
@@ -13,8 +13,8 @@ import EmotionalArc from './EmotionalArc';
 import CharacterLocationTracker from './CharacterLocationTracker';
 import ConflictTracker from './ConflictTracker';
 import TimelineOrchestrator from './TimelineOrchestrator';
-import GanttTimelineView from './GanttTimelineView';
 import ForeshadowingTracker from './ForeshadowingTracker';
+import { FeatureErrorBoundary } from '@/components/Common';
 
 interface TimelineSidebarProps {
   manuscriptId: string;
@@ -27,15 +27,11 @@ export default function TimelineSidebar({
   isOpen,
   onToggle,
 }: TimelineSidebarProps) {
-  const { activeTab, setActiveTab, inconsistencies } = useTimelineStore();
-
-  const pendingCount = inconsistencies.length;
+  const { activeTab, setActiveTab } = useTimelineStore();
 
   const tabs = [
     { id: 'visual' as const, label: 'Visual', icon: '📜' },
-    { id: 'gantt' as const, label: 'Gantt', icon: '📊' },
     { id: 'events' as const, label: 'Events', icon: '🎬' },
-    { id: 'inconsistencies' as const, label: 'Issues', icon: '⚠️', badge: pendingCount },
     { id: 'orchestrator' as const, label: 'Orchestrator', icon: '🎭' },
     { id: 'locations' as const, label: 'Locations', icon: '🗺️' },
     { id: 'conflicts' as const, label: 'Conflicts', icon: '⚔️' },
@@ -127,13 +123,15 @@ export default function TimelineSidebar({
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'visual' && <InteractiveTimeline manuscriptId={manuscriptId} />}
-        {activeTab === 'gantt' && <GanttTimelineView manuscriptId={manuscriptId} />}
         {activeTab === 'events' && <EventList manuscriptId={manuscriptId} />}
-        {activeTab === 'inconsistencies' && <InconsistencyList manuscriptId={manuscriptId} />}
         {activeTab === 'orchestrator' && <TimelineOrchestrator manuscriptId={manuscriptId} />}
         {activeTab === 'locations' && <CharacterLocationTracker manuscriptId={manuscriptId} />}
         {activeTab === 'conflicts' && <ConflictTracker manuscriptId={manuscriptId} />}
-        {activeTab === 'foreshadow' && <ForeshadowingTracker manuscriptId={manuscriptId} />}
+        {activeTab === 'foreshadow' && (
+          <FeatureErrorBoundary featureName="Foreshadowing">
+            <ForeshadowingTracker manuscriptId={manuscriptId} />
+          </FeatureErrorBoundary>
+        )}
         {activeTab === 'heatmap' && <TimelineHeatmap manuscriptId={manuscriptId} />}
         {activeTab === 'network' && <CharacterNetwork manuscriptId={manuscriptId} />}
         {activeTab === 'emotion' && <EmotionalArc manuscriptId={manuscriptId} />}

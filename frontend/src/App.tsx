@@ -12,6 +12,7 @@ import UnifiedSidebar from './components/Navigation/UnifiedSidebar'
 import ToastContainer from './components/Common/ToastContainer'
 import KeyboardShortcutsModal from './components/Common/KeyboardShortcutsModal'
 import ViewLoadingSpinner from './components/Common/ViewLoadingSpinner'
+import { FeatureErrorBoundary } from './components/Common'
 import { OutlineMainView } from './components/Outline'
 import { BrainstormingModal } from './components/Brainstorming'
 import { useManuscriptStore } from './stores/manuscriptStore'
@@ -866,11 +867,19 @@ function App() {
             {/* Outline View - Self-contained, no sidebar needed */}
             {activeView === 'outline' && (
               <div className="flex-1 flex bg-vellum">
-                <OutlineMainView
-                  manuscriptId={currentManuscript.id}
-                  onCreateChapter={handleCreateChapterFromBeat}
-                  onOpenChapter={handleChapterSelect}
-                />
+                <FeatureErrorBoundary
+                  featureName="Outline"
+                  onRetry={() => {
+                    const { loadOutline } = useOutlineStore.getState()
+                    loadOutline(currentManuscript.id)
+                  }}
+                >
+                  <OutlineMainView
+                    manuscriptId={currentManuscript.id}
+                    onCreateChapter={handleCreateChapterFromBeat}
+                    onOpenChapter={handleChapterSelect}
+                  />
+                </FeatureErrorBoundary>
               </div>
             )}
           </div>

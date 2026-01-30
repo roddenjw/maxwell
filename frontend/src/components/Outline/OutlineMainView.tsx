@@ -7,8 +7,11 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useOutlineStore } from '@/stores/outlineStore';
+import { useCodexStore } from '@/stores/codexStore';
 import { toast } from '@/stores/toastStore';
 import { Z_INDEX } from '@/lib/zIndex';
+import { brainstormingApi } from '@/lib/api';
+import { getErrorMessage } from '@/lib/retry';
 import PlotBeatCard from './PlotBeatCard';
 import AddSceneButton from './AddSceneButton';
 import CreateOutlineModal from './CreateOutlineModal';
@@ -17,6 +20,7 @@ import OutlineSettingsModal from './OutlineSettingsModal';
 import TimelineView from './TimelineView';
 import ProgressDashboard from './ProgressDashboard';
 import AISuggestionsPanel from './AISuggestionsPanel';
+import OutlineGanttView from './OutlineGanttView';
 import type { PlotBeat } from '@/types/outline';
 
 interface OutlineMainViewProps {
@@ -48,9 +52,24 @@ export default function OutlineMainView({
   const [showSwitchModal, setShowSwitchModal] = useState(false);
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'analytics'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'gantt' | 'analytics'>('list');
   const [showStructureInfo, setShowStructureInfo] = useState(false);
   const [structureDetails, setStructureDetails] = useState<any>(null);
+  const [isGeneratingFromCharacters, setIsGeneratingFromCharacters] = useState(false);
+
+  // Get characters from codex store
+  const { entities, loadEntities } = useCodexStore();
+  const characterCount = useMemo(() =>
+    entities.filter(e => e.type === 'CHARACTER').length,
+    [entities]
+  );
+
+  // Load entities on mount
+  useEffect(() => {
+    if (manuscriptId) {
+      loadEntities(manuscriptId);
+    }
+  }, [manuscriptId, loadEntities]);
 
   // Refs for beat navigation
   const beatRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -104,6 +123,11 @@ export default function OutlineMainView({
 
   const completionPercentage = getCompletionPercentage();
 
+  // Sorted beats for list view - must be defined before any early returns
+  const sortedBeats = useMemo(() => {
+    return outline?.plot_beats ? [...outline.plot_beats].sort((a, b) => a.order_index - b.order_index) : [];
+  }, [outline?.plot_beats]);
+
   // Handle AI suggestions
   const handleGetAIIdeas = useCallback(async (beatId: string) => {
     const apiKey = getApiKey();
@@ -120,6 +144,46 @@ export default function OutlineMainView({
       toast.error('Failed to generate AI suggestions. Check your API key.');
     }
   }, [getApiKey, getBeatAISuggestions]);
+
+  // Handle generating outline from characters
+  const handleGenerateFromCharacters = useCallback(async () => {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      toast.error('Please set your OpenRouter API key in Settings');
+      return;
+    }
+
+    if (characterCount === 0) {
+      toast.error('No characters found. Create some characters in the Codex first.');
+      return;
+    }
+
+    try {
+      setIsGeneratingFromCharacters(true);
+      toast.info(`Generating outline from ${characterCount} characters...`);
+
+      const result = await brainstormingApi.generateOutlineFromCharacters({
+        api_key: apiKey,
+        manuscript_id: manuscriptId,
+        genre: 'Fiction', // TODO: Could make this configurable
+        premise: 'A story driven by these characters',
+        target_word_count: 80000,
+      });
+
+      // Show results in a toast for now
+      toast.success(`Generated outline with ${result.beats.length} beats! Theme: ${result.theme}`);
+
+      // Log to console for review
+      console.log('Generated outline:', result);
+
+      // TODO: Could show a modal to review and create the outline from these beats
+      toast.info('Check console for full outline details. Create outline manually using the suggested beats.');
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setIsGeneratingFromCharacters(false);
+    }
+  }, [manuscriptId, getApiKey, characterCount]);
 
   // Handle structure info display
   const handleShowStructureInfo = useCallback(async () => {
@@ -223,7 +287,7 @@ export default function OutlineMainView({
           <p className="font-sans text-faded-ink text-lg mb-6">
             Create a story structure outline to guide your writing with proven plot beats and checkpoints.
           </p>
-          <div className="flex flex-col gap-3 items-center">
+          <div className="flex flex-col gap-4 items-center">
             <button
               onClick={() => setShowCreateModal(true)}
               className="px-6 py-3 bg-bronze hover:bg-bronze-dark text-white font-sans font-medium uppercase tracking-button transition-colors shadow-book"
@@ -234,6 +298,33 @@ export default function OutlineMainView({
             <p className="font-sans text-faded-ink text-sm">
               Choose from structures like Three Act, Hero's Journey, Save the Cat, and more.
             </p>
+
+            {/* Generate from Characters section */}
+            {characterCount > 0 && (
+              <div className="mt-4 pt-4 border-t border-slate-ui w-full">
+                <p className="font-sans text-faded-ink text-sm mb-3">
+                  Or generate an outline based on your {characterCount} character{characterCount !== 1 ? 's' : ''}:
+                </p>
+                <button
+                  onClick={handleGenerateFromCharacters}
+                  disabled={isGeneratingFromCharacters}
+                  className="px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-sans font-medium uppercase tracking-button transition-all shadow-book disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+                  style={{ borderRadius: '2px' }}
+                >
+                  {isGeneratingFromCharacters ? (
+                    <>
+                      <span className="animate-spin">⟳</span>
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <span>✨</span>
+                      Generate from Characters
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -247,11 +338,6 @@ export default function OutlineMainView({
       </div>
     );
   }
-
-  // Sorted beats for list view
-  const sortedBeats = useMemo(() => {
-    return outline?.plot_beats ? [...outline.plot_beats].sort((a, b) => a.order_index - b.order_index) : [];
-  }, [outline?.plot_beats]);
 
   return (
     <div className="flex-1 flex flex-col bg-vellum overflow-hidden">
@@ -336,6 +422,17 @@ export default function OutlineMainView({
             ⏱️ Timeline
           </button>
           <button
+            onClick={() => setViewMode('gantt')}
+            className={`flex-1 px-4 py-2 font-sans text-sm font-medium uppercase tracking-button transition-colors ${
+              viewMode === 'gantt'
+                ? 'bg-bronze text-white'
+                : 'bg-slate-ui/20 text-faded-ink hover:bg-slate-ui/40'
+            }`}
+            style={{ borderRadius: '2px' }}
+          >
+            📊 Gantt
+          </button>
+          <button
             onClick={() => setViewMode('analytics')}
             className={`flex-1 px-4 py-2 font-sans text-sm font-medium uppercase tracking-button transition-colors ${
               viewMode === 'analytics'
@@ -344,7 +441,7 @@ export default function OutlineMainView({
             }`}
             style={{ borderRadius: '2px' }}
           >
-            📊 Analytics
+            📈 Analytics
           </button>
         </div>
       </div>
@@ -429,6 +526,15 @@ export default function OutlineMainView({
         {/* Timeline View */}
         {viewMode === 'timeline' && outline?.plot_beats && (
           <TimelineView
+            beats={outline.plot_beats}
+            onBeatClick={handleBeatNavigation}
+            expandedBeatId={expandedBeatId}
+          />
+        )}
+
+        {/* Gantt View */}
+        {viewMode === 'gantt' && outline?.plot_beats && (
+          <OutlineGanttView
             beats={outline.plot_beats}
             onBeatClick={handleBeatNavigation}
             expandedBeatId={expandedBeatId}

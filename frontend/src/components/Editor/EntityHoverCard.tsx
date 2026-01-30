@@ -21,6 +21,9 @@ const TYPE_BADGE_STYLES: Record<EntityType, string> = {
   LOCATION: 'bg-green-100 text-green-700',
   ITEM: 'bg-amber-100 text-amber-700',
   LORE: 'bg-purple-100 text-purple-700',
+  CULTURE: 'bg-amber-100 text-amber-800',
+  CREATURE: 'bg-red-100 text-red-700',
+  RACE: 'bg-pink-100 text-pink-700',
 };
 
 const TYPE_LABELS: Record<EntityType, string> = {
@@ -28,6 +31,9 @@ const TYPE_LABELS: Record<EntityType, string> = {
   LOCATION: 'Location',
   ITEM: 'Item',
   LORE: 'Lore',
+  CULTURE: 'Culture',
+  CREATURE: 'Creature',
+  RACE: 'Race',
 };
 
 export function EntityHoverCard({

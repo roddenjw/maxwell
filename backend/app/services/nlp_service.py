@@ -1374,12 +1374,12 @@ class NLPService:
                 time.sleep(1.0)
 
             except Exception as e:
-                print(f"⚠️  Failed to process chunk {chunk_idx}: {e}")
+                print(f"⚠️  Failed to process chunk {chunk_idx}/{len(chunks)}: {e}")
                 # On error, wait a bit longer before retrying next chunk
                 time.sleep(2.0)
                 continue
 
-        print(f"✅ Extracted {len(scenes)} scenes using LLM")
+        print(f"✅ Extracted {len(scenes)} scenes from {len(chunks)} chunks using LLM")
         return scenes
 
     def _chunk_text_into_scenes(self, text: str) -> List[str]:
@@ -1394,8 +1394,11 @@ class NLPService:
         chunks = []
 
         # First, split by chapter markers
-        chapter_pattern = r'\n\s*(Chapter|CHAPTER|Ch\.?)\s+\d+[^\n]*\n'
+        # Use non-capturing group (?:...) to avoid including marker in results
+        chapter_pattern = r'\n\s*(?:Chapter|CHAPTER|Ch\.?)\s+\d+[^\n]*\n'
         chapters = re.split(chapter_pattern, text)
+
+        print(f"📖 Chunking: Split text into {len(chapters)} chapter segments")
 
         for chapter in chapters:
             if not chapter.strip():

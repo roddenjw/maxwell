@@ -45,6 +45,10 @@ class ManuscriptUpdate(BaseModel):
     title: Optional[str] = None
     lexical_state: Optional[str] = None
     word_count: Optional[int] = None
+    # Story metadata
+    premise: Optional[str] = None
+    premise_source: Optional[str] = None  # 'ai_generated' or 'user_written'
+    genre: Optional[str] = None
 
 
 class ManuscriptResponse(BaseModel):
@@ -52,6 +56,10 @@ class ManuscriptResponse(BaseModel):
     title: str
     lexical_state: str
     word_count: int
+    # Story metadata
+    premise: Optional[str] = ""
+    premise_source: Optional[str] = ""
+    genre: Optional[str] = ""
     created_at: datetime
     updated_at: datetime
     scenes: List[SceneResponse] = []
@@ -134,6 +142,13 @@ async def update_manuscript(
         manuscript.lexical_state = manuscript_update.lexical_state
     if manuscript_update.word_count is not None:
         manuscript.word_count = manuscript_update.word_count
+    # Story metadata
+    if manuscript_update.premise is not None:
+        manuscript.premise = manuscript_update.premise
+    if manuscript_update.premise_source is not None:
+        manuscript.premise_source = manuscript_update.premise_source
+    if manuscript_update.genre is not None:
+        manuscript.genre = manuscript_update.genre
 
     manuscript.updated_at = datetime.utcnow()
     db.commit()

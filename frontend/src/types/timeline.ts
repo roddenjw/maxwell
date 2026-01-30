@@ -78,6 +78,8 @@ export interface TimelineInconsistency {
   severity: Severity;
   affected_event_ids: string[];
   extra_data: Record<string, any>;
+  // Source tracking
+  source_chapter_id?: string | null;
   // Timeline Orchestrator fields
   suggestion?: string | null;
   teaching_point?: string | null;

@@ -303,11 +303,11 @@ def sample_entity(test_db, sample_manuscript):
         manuscript_id=sample_manuscript.id,
         name="Test Character",
         type="CHARACTER",
-        description="A brave adventurer with a mysterious past.",
         attributes={
             "age": 28,
             "hair_color": "brown",
-            "occupation": "blacksmith"
+            "occupation": "blacksmith",
+            "description": "A brave adventurer with a mysterious past."
         },
         aliases=["The Smith", "Alex"]
     )

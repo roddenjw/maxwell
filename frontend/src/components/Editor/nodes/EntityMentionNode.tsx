@@ -118,9 +118,11 @@ export function $isEntityMentionNode(
   return node instanceof EntityMentionNode;
 }
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useCodexStore } from '@/stores/codexStore';
 import { EntityHoverCard } from '../EntityHoverCard';
+import { codexApi } from '@/lib/api';
+import type { Entity } from '@/types/codex';
 
 // React component that renders the entity mention
 interface EntityMentionComponentProps {
@@ -140,9 +142,22 @@ function EntityMentionComponent({
   const [isHovered, setIsHovered] = useState(false);
   const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [fetchedEntity, setFetchedEntity] = useState<Entity | null>(null);
+  const hasFetched = useRef(false);
 
-  // Look up full entity from store
-  const entity = entities.find((e) => e.id === entityId) || null;
+  // Look up full entity from store first, fallback to fetched
+  const storeEntity = entities.find((e) => e.id === entityId) || null;
+  const entity = storeEntity || fetchedEntity;
+
+  // Fetch entity data on first hover if not in store
+  useEffect(() => {
+    if (isHovered && !storeEntity && !hasFetched.current && entityId && entityId !== 'new') {
+      hasFetched.current = true;
+      codexApi.getEntity(entityId)
+        .then(setFetchedEntity)
+        .catch((err) => console.error('Failed to fetch entity:', err));
+    }
+  }, [isHovered, storeEntity, entityId]);
 
   const handleClick = () => {
     // Open Codex sidebar and navigate to this entity
@@ -182,6 +197,12 @@ function EntityMentionComponent({
         return 'border-yellow-700';
       case 'LORE':
         return 'border-purple-600';
+      case 'CULTURE':
+        return 'border-amber-600';
+      case 'CREATURE':
+        return 'border-red-500';
+      case 'RACE':
+        return 'border-pink-500';
       default:
         return 'border-faded-ink';
     }

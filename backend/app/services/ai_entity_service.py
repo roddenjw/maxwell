@@ -13,6 +13,50 @@ from app.services.openrouter_service import OpenRouterService
 logger = logging.getLogger(__name__)
 
 
+# Character archetype roles for AI context
+ARCHETYPE_ROLES = {
+    'PROTAGONIST': {'label': 'Protagonist', 'description': 'The main character whose journey drives the story'},
+    'ANTAGONIST': {'label': 'Antagonist', 'description': 'The primary opposition to the protagonist'},
+    'DEUTERAGONIST': {'label': 'Deuteragonist', 'description': 'The secondary main character, often the protagonist\'s closest ally'},
+    'MENTOR': {'label': 'Mentor', 'description': 'A wise guide who helps the protagonist learn and grow'},
+    'LOVE_INTEREST': {'label': 'Love Interest', 'description': 'A character who serves as the romantic focus'},
+    'SIDEKICK': {'label': 'Sidekick', 'description': 'A loyal companion who supports the protagonist'},
+    'FOIL': {'label': 'Foil', 'description': 'A character who contrasts with the protagonist'},
+    'CATALYST': {'label': 'Catalyst', 'description': 'A character whose actions set the plot in motion'},
+    'TRICKSTER': {'label': 'Trickster', 'description': 'A clever, mischievous character who uses wit and deception'},
+    'HERALD': {'label': 'Herald', 'description': 'A character who announces change or calls to adventure'},
+    'GUARDIAN': {'label': 'Guardian/Threshold', 'description': 'A character who tests the protagonist before allowing progress'},
+    'SHAPESHIFTER': {'label': 'Shapeshifter', 'description': 'A character whose loyalty or nature is uncertain'},
+}
+
+# Character tropes for AI context
+ARCHETYPE_TROPES = {
+    'CHOSEN_ONE': {'label': 'The Chosen One', 'description': 'Destined by prophecy or fate to fulfill a special role'},
+    'RELUCTANT_HERO': {'label': 'Reluctant Hero', 'description': 'Initially refuses the call to adventure but eventually accepts'},
+    'ANTI_HERO': {'label': 'Anti-Hero', 'description': 'Lacks conventional heroic qualities like morality or idealism'},
+    'TRAGIC_HERO': {'label': 'Tragic Hero', 'description': 'A noble character whose fatal flaw leads to their downfall'},
+    'BYRONIC_HERO': {'label': 'Byronic Hero', 'description': 'Charismatic but flawed - brooding, cynical, with a dark past'},
+    'EVERYMAN': {'label': 'Everyman', 'description': 'An ordinary person thrust into extraordinary circumstances'},
+    'DARK_LORD': {'label': 'Dark Lord', 'description': 'A powerful evil entity seeking domination or destruction'},
+    'WISE_OLD_WIZARD': {'label': 'Wise Old Wizard', 'description': 'An elderly magic user providing guidance and knowledge'},
+    'FALLEN_NOBLE': {'label': 'Fallen Noble', 'description': 'Of high birth but has lost status and must rebuild'},
+    'ENEMIES_TO_LOVERS': {'label': 'Enemies to Lovers', 'description': 'Characters who start as adversaries but develop romance'},
+    'FRIENDS_TO_LOVERS': {'label': 'Friends to Lovers', 'description': 'Long-time friends who realize they have deeper feelings'},
+    'GRUMPY_SUNSHINE': {'label': 'Grumpy/Sunshine', 'description': 'A pessimistic character paired with an optimistic one'},
+    'FORBIDDEN_LOVE': {'label': 'Forbidden Love', 'description': 'Romance facing external opposition'},
+    'HARDBOILED_DETECTIVE': {'label': 'Hardboiled Detective', 'description': 'A cynical, tough investigator in morally gray territory'},
+    'FEMME_FATALE': {'label': 'Femme Fatale', 'description': 'A seductive, dangerous woman who uses allure to manipulate'},
+    'GENTLEMAN_THIEF': {'label': 'Gentleman Thief', 'description': 'A charming criminal who steals with style and honor'},
+    'FINAL_GIRL': {'label': 'Final Girl', 'description': 'The last survivor who confronts and defeats the antagonist'},
+    'MAD_SCIENTIST': {'label': 'Mad Scientist', 'description': 'A brilliant but unethical researcher causing problems'},
+    'SPACE_COWBOY': {'label': 'Space Cowboy', 'description': 'A roguish spacefarer on the fringes of society'},
+    'HAUNTED_PAST': {'label': 'Haunted by the Past', 'description': 'Burdened by traumatic events affecting present behavior'},
+    'HIDDEN_DEPTHS': {'label': 'Hidden Depths', 'description': 'Appears simple but reveals unexpected complexity'},
+    'MAGNIFICENT_BASTARD': {'label': 'Magnificent Bastard', 'description': 'A villain so clever and charismatic audiences admire them'},
+    'HEART_OF_GOLD': {'label': 'Heart of Gold', 'description': 'Rough exterior but kind and caring underneath'},
+}
+
+
 # Template field prompts - guide the AI on what to generate
 FIELD_PROMPTS = {
     # Character fields
@@ -27,6 +71,13 @@ FIELD_PROMPTS = {
     "backstory.secrets": "hidden aspects of their past they don't want others to know",
     "motivation.want": "their conscious surface-level goal or desire",
     "motivation.need": "what they actually need (often in conflict with their want)",
+
+    # Character development fields (Brandon Sanderson methodology)
+    "want": "what this character consciously desires - their surface-level goal that drives their immediate actions (e.g., revenge, wealth, love, power, recognition)",
+    "need": "what this character truly needs for growth, often in conflict with their want - the deeper truth they must learn (e.g., forgiveness, self-acceptance, humility)",
+    "flaw": "a significant character flaw that creates internal conflict and obstacles - this should be meaningful and affect their journey (e.g., pride, fear of commitment, distrust)",
+    "strength": "their core strength or positive trait that will help them overcome challenges - what makes them capable of being the protagonist (e.g., determination, compassion, cleverness)",
+    "arc": "a brief description of their character arc - how they will change from beginning to end, what they'll learn, and how their flaw relates to their need",
 
     # Location fields
     "geography.terrain": "the physical landscape and terrain features",
@@ -91,6 +142,43 @@ FIELD_PROMPTS = {
     "allies": "allied groups or individuals",
     "enemies": "opposing forces",
     "secrets": "hidden agendas or activities",
+
+    # Culture fields
+    "origin": "where and how this culture originated",
+    "values.core_beliefs": "fundamental beliefs and worldview that guide behavior",
+    "values.taboos": "strictly forbidden actions or topics",
+    "values.ideals": "aspirational virtues and goals",
+    "society.structure": "social organization (hierarchical, egalitarian, clan-based, etc.)",
+    "society.roles": "how roles and responsibilities are assigned (by gender, birth, achievement, etc.)",
+    "society.family_structure": "typical family units and kinship patterns",
+    "traditions.rituals": "important ceremonies and practices",
+    "traditions.celebrations": "holidays, festivals, and communal events",
+    "traditions.rites_of_passage": "ceremonies marking life transitions",
+    "arts.music": "musical traditions, instruments, and styles",
+    "arts.visual_arts": "painting, sculpture, architecture, crafts",
+    "arts.storytelling": "oral traditions, literature, mythology",
+    "language": "language(s) spoken, dialects, writing systems",
+    "religion": "spiritual beliefs, deities, religious practices",
+    "conflicts": "internal tensions or conflicts with other cultures",
+    "notable_figures": "famous individuals from this culture",
+
+    # Race/Species fields
+    "origin.homeworld": "where this race originated or evolved",
+    "origin.creation_myth": "how this race believes they came to be",
+    "origin.evolution": "how they developed their current form",
+    "physical.appearance": "typical physical characteristics",
+    "physical.lifespan": "how long they typically live",
+    "physical.size_range": "typical height and build ranges",
+    "physical.distinguishing_features": "features that set them apart from other races",
+    "abilities.innate_powers": "natural abilities or magic",
+    "abilities.weaknesses": "vulnerabilities or limitations",
+    "abilities.special_senses": "enhanced or unique senses",
+    "society.typical_culture": "common cultural traits across the race",
+    "society.government": "how they typically organize politically",
+    "society.relations_with_others": "how they interact with other races",
+    "reproduction": "how they reproduce and raise young",
+    "notable_individuals": "famous members of this race",
+    "stereotypes": "common misconceptions or generalizations about them",
 }
 
 
@@ -145,8 +233,31 @@ Respond with ONLY the content for this field - no explanations, no field labels,
 
         if existing_data:
             filled_fields = []
+
+            # Handle character archetype information specially
+            character_role = existing_data.get('character_role')
+            character_tropes = existing_data.get('character_tropes', [])
+
+            if character_role or character_tropes:
+                archetype_context = []
+                if character_role:
+                    role_info = ARCHETYPE_ROLES.get(character_role)
+                    if role_info:
+                        archetype_context.append(f"Story Role: {role_info['label']} - {role_info['description']}")
+                if character_tropes:
+                    trope_descriptions = []
+                    for trope_id in character_tropes:
+                        trope_info = ARCHETYPE_TROPES.get(trope_id)
+                        if trope_info:
+                            trope_descriptions.append(f"- {trope_info['label']}: {trope_info['description']}")
+                    if trope_descriptions:
+                        archetype_context.append("Character Tropes:\n" + "\n".join(trope_descriptions))
+                if archetype_context:
+                    context_parts.append("Character Archetype:\n" + "\n".join(archetype_context))
+
             for key, value in self._flatten_dict(existing_data):
-                if value and key != 'name' and key != 'aliases':
+                # Skip archetype fields (already handled above) and empty values
+                if value and key not in ('name', 'aliases', 'character_role', 'character_tropes'):
                     if isinstance(value, list):
                         filled_fields.append(f"- {key}: {', '.join(str(v) for v in value)}")
                     else:
@@ -208,6 +319,224 @@ Respond with ONLY the content for this field - no explanations, no field labels,
             else:
                 items.append((new_key, v))
         return items
+
+    async def extract_entity_from_selection(
+        self,
+        api_key: str,
+        selected_text: str,
+        surrounding_context: str,
+        manuscript_genre: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze selected text and surrounding context to extract entity information
+
+        Args:
+            api_key: OpenRouter API key
+            selected_text: The text the user selected (typically an entity name)
+            surrounding_context: Text around the selection (before and after)
+            manuscript_genre: Optional genre for better context
+
+        Returns:
+            Dict with extracted entity info: type, name, description, attributes
+        """
+        logger.info(f"Extracting entity info from selection: '{selected_text}'")
+
+        system_prompt = """You are an expert at analyzing fiction text to identify and describe story entities.
+
+Given a selected text (typically an entity name) and its surrounding context, extract information about this entity.
+
+Respond with a JSON object containing:
+{
+  "type": "CHARACTER" | "LOCATION" | "ITEM" | "LORE",
+  "name": "the entity's proper name",
+  "description": "a brief description based on context clues",
+  "suggested_aliases": ["any alternative names or titles mentioned"],
+  "attributes": {
+    "role": "their role if a character (protagonist, antagonist, supporting, etc.)",
+    "appearance": "any physical description mentioned",
+    "personality": "any personality traits evident",
+    "notable_details": "other relevant details from context"
+  },
+  "confidence": "high" | "medium" | "low"
+}
+
+If information is not available from the context, use null for that field.
+Only include attributes that can be reasonably inferred from the text."""
+
+        user_prompt = f"""Analyze this entity from a story:
+
+Selected text: "{selected_text}"
+
+Surrounding context:
+{surrounding_context}
+
+{f"Genre: {manuscript_genre}" if manuscript_genre else ""}
+
+Extract all available information about this entity from the context."""
+
+        # Call OpenRouter
+        openrouter = OpenRouterService(api_key)
+        result = await openrouter.get_writing_suggestion(
+            text=user_prompt,
+            context=system_prompt,
+            suggestion_type="entity_extraction",
+            max_tokens=800,
+            temperature=0.3  # Lower temperature for more consistent extraction
+        )
+
+        if not result.get("success"):
+            logger.error(f"Entity extraction failed: {result.get('error')}")
+            return {
+                "success": False,
+                "error": result.get("error", "AI extraction failed")
+            }
+
+        # Parse the JSON response
+        suggestion = result.get("suggestion", "").strip()
+        usage = result.get("usage", {})
+
+        try:
+            # Try to extract JSON from the response
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', suggestion)
+            if json_match:
+                entity_data = json.loads(json_match.group())
+            else:
+                entity_data = json.loads(suggestion)
+
+            return {
+                "success": True,
+                "entity_data": entity_data,
+                "usage": usage,
+                "cost": OpenRouterService.calculate_cost(usage)
+            }
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse entity JSON: {e}")
+            # Return basic info derived from selection
+            return {
+                "success": True,
+                "entity_data": {
+                    "type": "CHARACTER",  # Default to character
+                    "name": selected_text,
+                    "description": None,
+                    "suggested_aliases": [],
+                    "attributes": {},
+                    "confidence": "low"
+                },
+                "usage": usage,
+                "cost": OpenRouterService.calculate_cost(usage),
+                "parse_warning": "AI response was not valid JSON, using defaults"
+            }
+
+
+    async def generate_comprehensive_entity_fill(
+        self,
+        api_key: str,
+        entity_name: str,
+        entity_type: str,
+        appearance_contexts: list,
+        existing_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Generate comprehensive entity content from all appearance contexts
+
+        Args:
+            api_key: OpenRouter API key
+            entity_name: Name of the entity
+            entity_type: Type (CHARACTER, LOCATION, ITEM, LORE)
+            appearance_contexts: List of {chapter_title, summary, context_text}
+            existing_data: Already filled template fields
+
+        Returns:
+            Dict with generated description and attributes
+        """
+        logger.info(f"Generating comprehensive fill for {entity_name} from {len(appearance_contexts)} appearances")
+
+        # Build context from all appearances
+        appearances_text = "\n\n".join([
+            f"Chapter: {ctx.get('chapter_title', 'Unknown')}\n"
+            f"Summary: {ctx.get('summary', '')}\n"
+            f"Context: {ctx.get('context_text', '') or 'N/A'}"
+            for ctx in appearance_contexts[:20]  # Limit to 20 to avoid token limits
+        ])
+
+        system_prompt = f"""You are an expert at analyzing fiction text to extract and synthesize information about story entities.
+
+Given all the appearances of a {entity_type.lower()} named "{entity_name}" throughout a story, generate comprehensive details about them.
+
+Respond with a JSON object containing:
+{{
+  "description": "A comprehensive description synthesized from all appearances (2-3 paragraphs)",
+  "attributes": {{
+    "appearance": "Physical description details found in the text",
+    "personality": "Personality traits and behaviors observed",
+    "background": "Background information and history mentioned",
+    "role": "Their role in the story",
+    "relationships": "Key relationships with other characters/entities mentioned",
+    "notable_actions": "Important actions or events they're involved in"
+  }},
+  "suggested_aliases": ["any alternative names or titles used"]
+}}
+
+Only include attributes where you found evidence in the text. Use null for fields with no information."""
+
+        user_prompt = f"""Analyze all appearances of "{entity_name}" and generate comprehensive details:
+
+APPEARANCES:
+{appearances_text}
+
+{f"EXISTING DATA: {json.dumps(existing_data)}" if existing_data else ""}
+
+Generate comprehensive details based on these appearances."""
+
+        # Call OpenRouter
+        openrouter = OpenRouterService(api_key)
+        result = await openrouter.get_writing_suggestion(
+            text=user_prompt,
+            context=system_prompt,
+            suggestion_type="entity_fill",
+            max_tokens=1500,
+            temperature=0.3
+        )
+
+        if not result.get("success"):
+            logger.error(f"Entity fill failed: {result.get('error')}")
+            return {
+                "success": False,
+                "error": result.get("error", "AI generation failed")
+            }
+
+        # Parse the JSON response
+        suggestion = result.get("suggestion", "").strip()
+        usage = result.get("usage", {})
+
+        try:
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', suggestion)
+            if json_match:
+                entity_data = json.loads(json_match.group())
+            else:
+                entity_data = json.loads(suggestion)
+
+            return {
+                "success": True,
+                "entity_data": entity_data,
+                "usage": usage,
+                "cost": OpenRouterService.calculate_cost(usage)
+            }
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse entity fill JSON: {e}")
+            return {
+                "success": True,
+                "entity_data": {
+                    "description": suggestion,
+                    "attributes": {},
+                    "suggested_aliases": []
+                },
+                "usage": usage,
+                "cost": OpenRouterService.calculate_cost(usage),
+                "parse_warning": "AI response was not valid JSON, using raw text as description"
+            }
 
 
 # Singleton instance

@@ -27,6 +27,11 @@ class Manuscript(Base):
     author = Column(String, default="")
     description = Column(Text, default="")
 
+    # Story metadata for AI context
+    premise = Column(Text, default="")  # Story premise/logline
+    premise_source = Column(String, default="")  # 'ai_generated' or 'user_written'
+    genre = Column(String, default="")  # e.g., 'Fantasy', 'Mystery', 'Romance'
+
     # Series relationship (nullable for standalone manuscripts)
     series_id = Column(String, ForeignKey("series.id"), nullable=True)
 

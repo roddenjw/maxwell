@@ -5,6 +5,7 @@ Implements Brandon Sanderson's character methodology and other proven techniques
 
 import json
 import logging
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
@@ -774,6 +775,7 @@ Your response must be parseable by JSON.parse(). Anything else will fail."""
     ) -> BrainstormIdea:
         """
         Refine an existing idea based on user feedback.
+        Updates the original idea in-place rather than creating a new one.
 
         Directions:
         - refine: Tweak the idea based on specific feedback
@@ -813,29 +815,35 @@ Your response must be parseable by JSON.parse(). Anything else will fail."""
         usage = result.get("usage", {})
         cost = OpenRouterService.calculate_cost(usage)
 
-        # Create new refined idea
-        refined_idea = BrainstormIdea(
-            session_id=original_idea.session_id,
-            idea_type=original_idea.idea_type,
-            title=refined_data.get('name', refined_data.get('title', original_idea.title + ' (Refined)')),
-            description=self._format_refined_description(refined_data, original_idea.idea_type),
-            idea_metadata={
-                **refined_data,
-                'refined_from': original_idea.id,
-                'refinement_direction': direction,
-                'refinement_feedback': feedback
-            },
-            ai_cost=cost,
-            ai_tokens=usage.get("total_tokens", 0),
-            ai_model=result.get("model", "anthropic/claude-3.5-sonnet")
-        )
+        # Store refinement history
+        refinement_history = original_idea.idea_metadata.get('refinement_history', [])
+        refinement_history.append({
+            'previous_title': original_idea.title,
+            'previous_description': original_idea.description,
+            'feedback': feedback,
+            'direction': direction,
+            'timestamp': datetime.utcnow().isoformat()
+        })
 
-        self.db.add(refined_idea)
+        # Update the original idea in-place
+        original_idea.title = refined_data.get('name', refined_data.get('title', original_idea.title))
+        original_idea.description = self._format_refined_description(refined_data, original_idea.idea_type)
+        original_idea.idea_metadata = {
+            **refined_data,
+            'refinement_history': refinement_history,
+            'last_refinement_direction': direction,
+            'last_refinement_feedback': feedback
+        }
+        # Accumulate AI costs
+        original_idea.ai_cost = (original_idea.ai_cost or 0) + cost
+        original_idea.ai_tokens = (original_idea.ai_tokens or 0) + usage.get("total_tokens", 0)
+        original_idea.updated_at = datetime.utcnow()
+
         self.db.commit()
-        self.db.refresh(refined_idea)
+        self.db.refresh(original_idea)
 
-        logger.info(f"Created refined idea {refined_idea.id} from {original_idea.id}")
-        return refined_idea
+        logger.info(f"Updated idea {original_idea.id} in-place with refinement")
+        return original_idea
 
     def _build_refinement_prompt(
         self,
@@ -1693,3 +1701,216 @@ Return as:
 }}"""
 
         return system_prompt, user_prompt
+
+    # ===== Outline from Characters Integration =====
+
+    async def generate_outline_from_characters(
+        self,
+        api_key: str,
+        characters: List[Entity],
+        genre: str,
+        premise: str,
+        target_word_count: int = 80000
+    ) -> Dict[str, Any]:
+        """
+        Generate plot beat suggestions based on existing characters
+
+        Analyzes character wants, needs, flaws, and relationships to create
+        a story outline that tests and develops those characters.
+        """
+        logger.info(f"Generating outline from {len(characters)} characters")
+
+        # Build character summary
+        char_summaries = []
+        for char in characters[:10]:  # Limit to 10 characters
+            attrs = char.attributes or {}
+            summary = f"""
+Character: {char.name}
+Role: {attrs.get('role', 'Unknown')}
+Want: {attrs.get('motivation', {}).get('want', attrs.get('want', 'Unknown'))}
+Need: {attrs.get('motivation', {}).get('need', attrs.get('need', 'Unknown'))}
+Flaw: {attrs.get('personality', {}).get('flaws', attrs.get('flaw', 'Unknown'))}
+Strength: {attrs.get('personality', {}).get('strengths', attrs.get('strength', 'Unknown'))}
+"""
+            char_summaries.append(summary)
+
+        characters_text = "\n".join(char_summaries)
+
+        system_prompt = """You are an expert story structure specialist who creates compelling narratives from character foundations.
+
+Your task is to generate a story outline based on the provided characters, ensuring the plot:
+1. Tests each character's flaws and forces growth
+2. Creates conflict from competing wants/needs
+3. Uses character relationships to drive the plot
+4. Builds to a climax where characters must confront their deepest fears/needs
+
+Return a JSON object with this structure:
+{
+  "beats": [
+    {
+      "beat_name": "Opening Image" | "Theme Stated" | "Setup" | "Catalyst" | "Debate" | "Break Into Two" | "B Story" | "Fun and Games" | "Midpoint" | "Bad Guys Close In" | "All Is Lost" | "Dark Night of the Soul" | "Break Into Three" | "Finale" | "Final Image",
+      "beat_label": "A short, compelling title for this specific beat",
+      "description": "What happens in this beat, referencing specific characters",
+      "characters_involved": ["Character Name 1", "Character Name 2"],
+      "character_growth": "How this beat tests or develops a character",
+      "target_position_percent": 0.0 to 1.0
+    }
+  ],
+  "central_conflict": "The main conflict driving the story",
+  "theme": "The underlying theme explored through character arcs"
+}
+
+Use the Save the Cat beat sheet structure (15 beats from Opening Image to Final Image)."""
+
+        user_prompt = f"""Genre: {genre}
+Premise: {premise}
+Target Word Count: {target_word_count:,} words
+
+CHARACTERS:
+{characters_text}
+
+Generate a complete story outline (15 beats) that:
+1. Uses these characters' wants, needs, and flaws to drive the plot
+2. Creates meaningful conflict between characters
+3. Ensures character arcs intersect with plot beats
+4. Builds to a satisfying climax and resolution"""
+
+        # Call OpenRouter
+        openrouter = OpenRouterService(api_key)
+        result = await openrouter.get_writing_suggestion(
+            text=user_prompt,
+            context=system_prompt,
+            suggestion_type="outline",
+            max_tokens=3000,
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+
+        if not result.get("success"):
+            logger.error(f"Outline generation failed: {result.get('error')}")
+            return {
+                "success": False,
+                "error": result.get("error", "AI generation failed")
+            }
+
+        # Parse the response
+        suggestion = result.get("suggestion", "")
+        usage = result.get("usage", {})
+
+        try:
+            outline_data = json.loads(suggestion)
+            return {
+                "success": True,
+                "outline_data": outline_data,
+                "usage": usage,
+                "cost": OpenRouterService.calculate_cost(usage)
+            }
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse outline JSON: {e}")
+            return {
+                "success": False,
+                "error": f"Failed to parse AI response: {e}"
+            }
+
+    # ===== Story Premise Generation =====
+
+    async def generate_story_premise(
+        self,
+        api_key: str,
+        manuscript_content: str,
+        existing_characters: List[Entity] = None,
+        existing_genre: str = None
+    ) -> Dict[str, Any]:
+        """
+        Generate a story premise/logline based on manuscript content and existing entities.
+
+        This is used to automatically derive the story's core premise when the writer
+        hasn't provided one, enabling consistent context across all brainstorming sessions.
+        """
+        logger.info("Generating story premise from manuscript content")
+
+        # Build character context if available
+        char_context = ""
+        if existing_characters:
+            char_names = [c.name for c in existing_characters[:10]]
+            char_context = f"\n\nKey Characters: {', '.join(char_names)}"
+
+        genre_context = ""
+        if existing_genre:
+            genre_context = f"\n\nGenre: {existing_genre}"
+
+        # Truncate content if too long (keep first ~4000 chars for context)
+        truncated_content = manuscript_content[:4000] if len(manuscript_content) > 4000 else manuscript_content
+        if len(manuscript_content) > 4000:
+            truncated_content += "\n[...content truncated...]"
+
+        system_prompt = """You are a skilled story analyst who can identify the core premise from narrative content.
+
+Your task is to analyze the provided manuscript content and generate:
+1. A compelling story premise (1-3 sentences that capture the central conflict and stakes)
+2. The likely genre
+3. Key themes present in the work
+
+The premise should be:
+- Focused on the protagonist's goal and obstacle
+- Include stakes (what's at risk)
+- Be specific to this story, not generic
+
+Return a JSON object with this structure:
+{
+  "premise": "A compelling 1-3 sentence story premise",
+  "genre": "Primary genre (Fantasy, Mystery, Romance, Thriller, Literary Fiction, etc.)",
+  "themes": ["theme1", "theme2", "theme3"],
+  "tone": "Overall tone (dark, hopeful, comedic, epic, intimate, etc.)",
+  "confidence": 0.0 to 1.0 (how confident you are based on the content provided)
+}
+
+CRITICAL: Return ONLY the JSON object, no additional text."""
+
+        user_prompt = f"""Based on the following manuscript content, identify the story's core premise.{char_context}{genre_context}
+
+MANUSCRIPT CONTENT:
+{truncated_content}
+
+Analyze this content and generate the story premise and metadata."""
+
+        # Call OpenRouter
+        openrouter = OpenRouterService(api_key)
+        result = await openrouter.get_writing_suggestion(
+            text=user_prompt,
+            context=system_prompt,
+            suggestion_type="premise",
+            max_tokens=500,
+            temperature=0.5,  # Lower temp for more focused analysis
+            response_format={"type": "json_object"}
+        )
+
+        if not result.get("success"):
+            logger.error(f"Premise generation failed: {result.get('error')}")
+            return {
+                "success": False,
+                "error": result.get("error", "AI generation failed")
+            }
+
+        # Parse the response
+        suggestion = result.get("suggestion", "")
+        usage = result.get("usage", {})
+
+        try:
+            premise_data = json.loads(suggestion)
+            return {
+                "success": True,
+                "premise": premise_data.get("premise", ""),
+                "genre": premise_data.get("genre", ""),
+                "themes": premise_data.get("themes", []),
+                "tone": premise_data.get("tone", ""),
+                "confidence": premise_data.get("confidence", 0.5),
+                "usage": usage,
+                "cost": OpenRouterService.calculate_cost(usage)
+            }
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse premise JSON: {e}")
+            return {
+                "success": False,
+                "error": f"Failed to parse AI response: {e}"
+            }

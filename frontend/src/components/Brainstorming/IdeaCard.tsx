@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import type { BrainstormIdea } from '@/types/brainstorm';
 import { useBrainstormStore } from '@/stores/brainstormStore';
 import { brainstormingApi } from '@/lib/api';
+import { AIGenerationProgress } from '@/components/Common';
 
 interface IdeaCardProps {
   idea: BrainstormIdea;
@@ -82,6 +83,35 @@ export default function IdeaCard({ idea }: IdeaCardProps) {
     } catch (err) {
       console.error('Refinement error:', err);
       setRefineError(err instanceof Error ? err.message : 'Failed to refine idea');
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
+  // Handle regenerate - create a completely new version from scratch
+  const handleRegenerate = async () => {
+    if (!storedApiKey) {
+      setRefineError('No API key configured');
+      return;
+    }
+
+    try {
+      setIsRefining(true);
+      setRefineError(null);
+
+      const refinedIdea = await brainstormingApi.refineIdea(idea.id, {
+        api_key: storedApiKey,
+        feedback: 'Generate a completely new and different version from scratch with fresh ideas',
+        direction: 'contrast', // Use contrast to get maximum difference
+      });
+
+      // Add the regenerated idea to the session
+      if (currentSession) {
+        addIdeas(currentSession.id, [refinedIdea]);
+      }
+    } catch (err) {
+      console.error('Regenerate error:', err);
+      setRefineError(err instanceof Error ? err.message : 'Failed to regenerate idea');
     } finally {
       setIsRefining(false);
     }
@@ -445,83 +475,61 @@ export default function IdeaCard({ idea }: IdeaCardProps) {
               </span>
             </div>
             <div className="flex items-center gap-1">
-              {/* Refine Button */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowRefineMenu(!showRefineMenu)}
-                  className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50"
-                  aria-label="Refine idea"
-                  title="Refine this idea"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
+              {/* Refine Menu Dropdown (controlled by footer button) */}
+              {showRefineMenu && (
+                <div className="absolute right-4 top-16 z-10 w-72 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
+                  <h5 className="font-medium text-gray-900 mb-3">Refine This Idea</h5>
 
-                {/* Refine Menu Dropdown */}
-                {showRefineMenu && (
-                  <div className="absolute right-0 top-8 z-10 w-72 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
-                    <h5 className="font-medium text-gray-900 mb-3">Refine This Idea</h5>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1">
+                        Your Feedback
+                      </label>
+                      <textarea
+                        value={refineFeedback}
+                        onChange={(e) => setRefineFeedback(e.target.value)}
+                        placeholder="e.g., 'Make them older', 'Add a secret', 'More humor'..."
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={isRefining}
+                      />
+                    </div>
 
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm text-gray-700 mb-1">
-                          Feedback / Direction
-                        </label>
-                        <textarea
-                          value={refineFeedback}
-                          onChange={(e) => setRefineFeedback(e.target.value)}
-                          placeholder="e.g., 'Make the character darker', 'Add more humor', 'Strengthen the motivation'..."
-                          rows={2}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          disabled={isRefining}
-                        />
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleRefine('refine')}
-                          disabled={isRefining || !refineFeedback.trim()}
-                          className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                        >
-                          {isRefining ? 'Refining...' : 'Refine'}
-                        </button>
-                        <button
-                          onClick={() => handleRefine('expand')}
-                          disabled={isRefining}
-                          className="px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:bg-gray-300"
-                          title="Add more depth and detail"
-                        >
-                          Expand
-                        </button>
-                        <button
-                          onClick={() => handleRefine('contrast')}
-                          disabled={isRefining}
-                          className="px-3 py-2 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700 disabled:bg-gray-300"
-                          title="Create a contrasting version"
-                        >
-                          Contrast
-                        </button>
-                      </div>
-
-                      {refineError && (
-                        <p className="text-xs text-red-600">{refineError}</p>
-                      )}
-
+                    <div className="flex gap-2">
                       <button
-                        onClick={() => {
-                          setShowRefineMenu(false);
-                          setRefineFeedback('');
-                          setRefineError(null);
-                        }}
-                        className="w-full px-3 py-1 text-gray-600 text-sm hover:bg-gray-100 rounded"
+                        onClick={() => handleRefine('refine')}
+                        disabled={isRefining || !refineFeedback.trim()}
+                        className="flex-1 px-3 py-2 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
-                        Cancel
+                        {isRefining ? 'Refining...' : 'Apply Feedback'}
+                      </button>
+                      <button
+                        onClick={() => handleRefine('expand')}
+                        disabled={isRefining}
+                        className="px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:bg-gray-300"
+                        title="Add more depth and detail"
+                      >
+                        Expand
                       </button>
                     </div>
+
+                    {refineError && (
+                      <p className="text-xs text-red-600">{refineError}</p>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setShowRefineMenu(false);
+                        setRefineFeedback('');
+                        setRefineError(null);
+                      }}
+                      className="w-full px-3 py-1 text-gray-600 text-sm hover:bg-gray-100 rounded"
+                    >
+                      Cancel
+                    </button>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
@@ -606,16 +614,50 @@ export default function IdeaCard({ idea }: IdeaCardProps) {
             </div>
           )}
 
-          {/* Footer Metadata */}
-          <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
-            <span>Cost: ${idea.ai_cost.toFixed(4)}</span>
-            <span>Tokens: {idea.ai_tokens.toLocaleString()}</span>
+          {/* Action Buttons - Prominent Regenerate and Refine */}
+          <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-200">
+            <button
+              onClick={handleRegenerate}
+              disabled={isRefining}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Regenerate
+            </button>
+            <button
+              onClick={() => setShowRefineMenu(!showRefineMenu)}
+              disabled={isRefining}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Refine
+            </button>
+            <div className="flex-1" />
+            <span className="text-xs text-gray-500">
+              Cost: ${idea.ai_cost.toFixed(4)} | Tokens: {idea.ai_tokens.toLocaleString()}
+            </span>
             {idea.integrated_to_codex && (
-              <span className="text-green-600 font-medium">In Codex</span>
+              <span className="text-xs text-green-600 font-medium">In Codex</span>
             )}
           </div>
+
+          {/* Error display */}
+          {refineError && !showRefineMenu && (
+            <p className="text-xs text-red-600 mt-2">{refineError}</p>
+          )}
         </div>
       </div>
+
+      {/* AI Generation Progress Overlay for this card */}
+      <AIGenerationProgress
+        isGenerating={isRefining}
+        message="Refining Idea"
+        estimatedSeconds={10}
+      />
     </div>
   );
 }

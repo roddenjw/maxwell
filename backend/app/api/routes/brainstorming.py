@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models.brainstorm import BrainstormSession, BrainstormIdea
 from app.models.entity import Entity
 from app.models.outline import PlotBeat, Outline
+from app.models.manuscript import Manuscript, Chapter
 from app.services.brainstorming_service import BrainstormingService
 
 router = APIRouter(prefix="/api/brainstorming", tags=["brainstorming"])
@@ -195,8 +196,13 @@ async def get_brainstorm_context(
     manuscript_id: str,
     db: Session = Depends(get_db)
 ):
-    """Get manuscript context for brainstorming (outline + entities)"""
+    """Get manuscript context for brainstorming (outline + entities + manuscript metadata)"""
     try:
+        # Get manuscript for stored premise/genre
+        manuscript = db.query(Manuscript).filter(
+            Manuscript.id == manuscript_id
+        ).first()
+
         # Get active outline
         outline = db.query(Outline).filter(
             Outline.manuscript_id == manuscript_id,
@@ -211,18 +217,39 @@ async def get_brainstorm_context(
         characters = [e for e in entities if e.type == 'CHARACTER']
         locations = [e for e in entities if e.type == 'LOCATION']
 
-        # Filter out auto-extracted premises (they're chapter content, not actual premises)
+        # Premise priority: manuscript.premise > outline.premise (if not auto-extracted)
         premise_value = None
-        if outline and outline.premise:
+        premise_source = None
+
+        # First check manuscript-level premise
+        if manuscript and manuscript.premise:
+            premise_value = manuscript.premise
+            premise_source = manuscript.premise_source or 'user_written'
+        # Fall back to outline premise if no manuscript premise
+        elif outline and outline.premise:
             # Skip if it's auto-extracted chapter content
             if not outline.premise.startswith("[Auto-extracted from manuscript]"):
                 premise_value = outline.premise
+                premise_source = 'outline'
+
+        # Genre priority: manuscript.genre > outline.genre
+        genre_value = None
+        if manuscript and manuscript.genre:
+            genre_value = manuscript.genre
+        elif outline and outline.genre:
+            genre_value = outline.genre
 
         return {
             "outline": {
-                "genre": outline.genre if outline else None,
+                "genre": genre_value,
                 "premise": premise_value,
+                "premise_source": premise_source,
                 "logline": outline.logline if outline else None,
+            },
+            "manuscript": {
+                "premise": manuscript.premise if manuscript else None,
+                "premise_source": manuscript.premise_source if manuscript else None,
+                "genre": manuscript.genre if manuscript else None,
             },
             "existing_entities": {
                 "characters": [{"id": c.id, "name": c.name} for c in characters],
@@ -634,7 +661,7 @@ async def refine_idea(
 ):
     """
     Refine an existing idea based on user feedback.
-    Creates a new refined version while preserving the original.
+    Updates the idea in-place. Refinement history is preserved in idea_metadata.
     """
     try:
         service = BrainstormingService(db)
@@ -964,6 +991,152 @@ async def generate_related_entities(
             "success": True,
             "source_entity_id": entity_id,
             "related_entities": related
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Character to Outline Integration =====
+
+class OutlineFromCharactersRequest(BaseModel):
+    api_key: str
+    manuscript_id: str
+    genre: str
+    premise: str
+    target_word_count: int = 80000
+
+
+class GeneratePremiseRequest(BaseModel):
+    api_key: str
+    manuscript_id: str
+
+
+@router.post("/outline-from-characters")
+async def generate_outline_from_characters(
+    request: OutlineFromCharactersRequest,
+    db: Session = Depends(get_db)
+):
+    """Generate an outline based on existing character entities"""
+    try:
+        service = BrainstormingService(db)
+
+        # Get all CHARACTER entities for this manuscript
+        characters = db.query(Entity).filter(
+            Entity.manuscript_id == request.manuscript_id,
+            Entity.type == "CHARACTER"
+        ).all()
+
+        if not characters:
+            raise HTTPException(
+                status_code=400,
+                detail="No characters found. Create some characters first to generate an outline from them."
+            )
+
+        # Generate outline
+        result = await service.generate_outline_from_characters(
+            api_key=request.api_key,
+            characters=characters,
+            genre=request.genre,
+            premise=request.premise,
+            target_word_count=request.target_word_count
+        )
+
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "Generation failed"))
+
+        return {
+            "success": True,
+            "data": result["outline_data"],
+            "cost": {
+                "total": result.get("cost", 0),
+                "formatted": f"${result.get('cost', 0):.4f}"
+            },
+            "characters_used": len(characters)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Story Premise Generation =====
+
+@router.post("/generate-premise")
+async def generate_story_premise(
+    request: GeneratePremiseRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Generate a story premise from manuscript content.
+
+    Analyzes the manuscript text to derive a compelling premise/logline
+    that can be stored and reused across brainstorming sessions.
+    """
+    try:
+        service = BrainstormingService(db)
+
+        # Get manuscript
+        manuscript = db.query(Manuscript).filter(
+            Manuscript.id == request.manuscript_id
+        ).first()
+
+        if not manuscript:
+            raise HTTPException(status_code=404, detail="Manuscript not found")
+
+        # Get manuscript content from chapters
+        chapters = db.query(Chapter).filter(
+            Chapter.manuscript_id == request.manuscript_id
+        ).order_by(Chapter.order_index).all()
+
+        # Combine chapter content for analysis
+        manuscript_content = ""
+        for chapter in chapters[:10]:  # Limit to first 10 chapters
+            if chapter.content:
+                manuscript_content += f"\n\n--- {chapter.title} ---\n{chapter.content}"
+
+        if not manuscript_content.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="No manuscript content found. Write some chapters first."
+            )
+
+        # Get existing characters for context
+        characters = db.query(Entity).filter(
+            Entity.manuscript_id == request.manuscript_id,
+            Entity.type == "CHARACTER"
+        ).all()
+
+        # Get existing genre from outline if available
+        outline = db.query(Outline).filter(
+            Outline.manuscript_id == request.manuscript_id,
+            Outline.is_active == True
+        ).first()
+        existing_genre = outline.genre if outline else None
+
+        # Generate premise
+        result = await service.generate_story_premise(
+            api_key=request.api_key,
+            manuscript_content=manuscript_content,
+            existing_characters=characters,
+            existing_genre=existing_genre
+        )
+
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "Generation failed"))
+
+        return {
+            "success": True,
+            "premise": result["premise"],
+            "genre": result["genre"],
+            "themes": result.get("themes", []),
+            "tone": result.get("tone", ""),
+            "confidence": result.get("confidence", 0.5),
+            "cost": {
+                "total": result.get("cost", 0),
+                "formatted": f"${result.get('cost', 0):.4f}"
+            }
         }
     except HTTPException:
         raise

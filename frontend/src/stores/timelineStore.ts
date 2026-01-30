@@ -26,7 +26,7 @@ interface TimelineStore {
   stats: TimelineStats | null;
   selectedEventId: string | null;
   isTimelineOpen: boolean;
-  activeTab: 'visual' | 'gantt' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion' | 'foreshadow';
+  activeTab: 'visual' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion' | 'foreshadow';
 
   // Error handling state
   loadingError: string | null;
@@ -59,7 +59,7 @@ interface TimelineStore {
   setStats: (stats: TimelineStats) => void;
   setSelectedEvent: (eventId: string | null) => void;
   setTimelineOpen: (isOpen: boolean) => void;
-  setActiveTab: (tab: 'visual' | 'gantt' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion' | 'foreshadow') => void;
+  setActiveTab: (tab: 'visual' | 'events' | 'inconsistencies' | 'orchestrator' | 'locations' | 'conflicts' | 'graph' | 'heatmap' | 'network' | 'emotion' | 'foreshadow') => void;
 
   // Error handling actions
   setLoadingError: (error: string | null) => void;

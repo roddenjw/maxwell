@@ -114,3 +114,6 @@ Codex
      - "Quick Approve": Creates entity with NLP-suggested values (existing behavior)
      - "Edit & Approve": Expands card into edit mode with editable name field, type dropdown (CHARACTER/LOCATION/ITEM/LORE), and description textarea. Users can correct names, change types, and add descriptions before creating the entity.
    - Also added extracted_description and extracted_attributes fields to suggestions. NLP now extracts descriptions from patterns like "X is a..." and categorized attributes (appearance, personality) which are displayed on suggestion cards and pre-filled in edit mode.
+
+   General
+   1. We should have a place to create a culture and then as characters and other entites are linked to one or more cultures with a relationship such as 'born in' 'exiled from' 'part of' 'leader of' 'resents' etc. that cultural context is used to enrich characters and by the langchain agents to keep note of how a character should present themselves and respond to characters and items of another culture. Culture would essentially be a parent of different lore entities to anchor them more. Culture can also be used by the agents to identify plot holes, improvements, inconsistencies, and provide better more contextualized feedback. 

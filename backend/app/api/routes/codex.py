@@ -79,6 +79,27 @@ class AIFieldSuggestionRequest(BaseModel):
     manuscript_context: Optional[str] = None
 
 
+class MergeEntitiesRequest(BaseModel):
+    """Request to merge multiple entities into one"""
+    primary_entity_id: str
+    secondary_entity_ids: List[str]
+    merge_strategy: Optional[Dict[str, str]] = None  # e.g., {"aliases": "combine", "attributes": "primary_wins"}
+
+
+class AIEntityExtractionRequest(BaseModel):
+    """Request for AI-powered entity extraction from text selection"""
+    api_key: str
+    selected_text: str
+    surrounding_context: str
+    manuscript_genre: Optional[str] = None
+
+
+class AIEntityFillRequest(BaseModel):
+    """Request for AI-powered comprehensive entity fill from appearances"""
+    api_key: str
+    entity_id: str
+
+
 # Entity Endpoints
 
 @router.post("/entities")
@@ -144,6 +165,37 @@ async def list_entities(manuscript_id: str, type: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/entities/single/{entity_id}")
+async def get_entity(entity_id: str):
+    """Get a single entity by ID"""
+    try:
+        entity = codex_service.get_entity(entity_id)
+
+        if not entity:
+            raise HTTPException(status_code=404, detail="Entity not found")
+
+        return {
+            "success": True,
+            "data": {
+                "id": entity.id,
+                "manuscript_id": entity.manuscript_id,
+                "type": entity.type,
+                "template_type": entity.template_type,
+                "template_data": entity.template_data,
+                "name": entity.name,
+                "aliases": entity.aliases,
+                "attributes": entity.attributes,
+                "appearance_history": entity.appearance_history,
+                "created_at": entity.created_at.isoformat(),
+                "updated_at": entity.updated_at.isoformat()
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.put("/entities/{entity_id}")
 async def update_entity(entity_id: str, request: UpdateEntityRequest):
     """Update entity"""
@@ -195,6 +247,42 @@ async def delete_entity(entity_id: str):
         return {
             "success": True,
             "message": "Entity deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/entities/merge")
+async def merge_entities(request: MergeEntitiesRequest):
+    """Merge multiple entities into a primary entity"""
+    try:
+        merged_entity = codex_service.merge_entities(
+            primary_entity_id=request.primary_entity_id,
+            secondary_entity_ids=request.secondary_entity_ids,
+            merge_strategy=request.merge_strategy or {"aliases": "combine", "attributes": "merge"}
+        )
+
+        if not merged_entity:
+            raise HTTPException(status_code=404, detail="Primary entity not found")
+
+        return {
+            "success": True,
+            "data": {
+                "id": merged_entity.id,
+                "manuscript_id": merged_entity.manuscript_id,
+                "type": merged_entity.type,
+                "template_type": merged_entity.template_type,
+                "template_data": merged_entity.template_data,
+                "name": merged_entity.name,
+                "aliases": merged_entity.aliases,
+                "attributes": merged_entity.attributes,
+                "appearance_history": merged_entity.appearance_history,
+                "created_at": merged_entity.created_at.isoformat(),
+                "updated_at": merged_entity.updated_at.isoformat()
+            },
+            "message": f"Successfully merged {len(request.secondary_entity_ids)} entities"
         }
     except HTTPException:
         raise
@@ -255,6 +343,35 @@ async def generate_field_suggestion(request: AIFieldSuggestionRequest):
                 "total": result.get("cost", 0),
                 "formatted": f"${result.get('cost', 0):.4f}"
             }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/entities/ai-extract")
+async def extract_entity_from_selection(request: AIEntityExtractionRequest):
+    """Extract entity information from selected text and surrounding context using AI"""
+    try:
+        result = await ai_entity_service.extract_entity_from_selection(
+            api_key=request.api_key,
+            selected_text=request.selected_text,
+            surrounding_context=request.surrounding_context,
+            manuscript_genre=request.manuscript_genre
+        )
+
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "AI extraction failed"))
+
+        return {
+            "success": True,
+            "data": result["entity_data"],
+            "cost": {
+                "total": result.get("cost", 0),
+                "formatted": f"${result.get('cost', 0):.4f}"
+            },
+            "parse_warning": result.get("parse_warning")
         }
     except HTTPException:
         raise
@@ -414,6 +531,79 @@ async def reject_suggestion(request: RejectSuggestionRequest):
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Appearance Summary Endpoints
+
+@router.get("/entities/{entity_id}/appearances/summary")
+async def get_entity_appearance_summary(entity_id: str):
+    """Get first/last appearance summary for an entity"""
+    try:
+        summary = codex_service.get_entity_appearance_summary(entity_id)
+        return {
+            "success": True,
+            "data": summary
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/entities/{entity_id}/appearances/contexts")
+async def get_entity_appearance_contexts(entity_id: str):
+    """Get all appearance contexts for an entity (for AI analysis)"""
+    try:
+        contexts = codex_service.get_entity_appearance_contexts(entity_id)
+        return {
+            "success": True,
+            "data": contexts
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/entities/ai-fill")
+async def ai_fill_entity(request: AIEntityFillRequest):
+    """Generate comprehensive entity content from all appearances using AI"""
+    try:
+        # Get entity
+        entity = codex_service.get_entity(request.entity_id)
+        if not entity:
+            raise HTTPException(status_code=404, detail="Entity not found")
+
+        # Get all appearance contexts
+        contexts = codex_service.get_entity_appearance_contexts(request.entity_id)
+
+        if not contexts:
+            raise HTTPException(
+                status_code=400,
+                detail="No appearances found for this entity. AI Fill requires at least one appearance in the manuscript."
+            )
+
+        # Generate comprehensive fill
+        result = await ai_entity_service.generate_comprehensive_entity_fill(
+            api_key=request.api_key,
+            entity_name=entity.name,
+            entity_type=entity.type,
+            appearance_contexts=contexts,
+            existing_data=entity.attributes or {}
+        )
+
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "AI fill failed"))
+
+        return {
+            "success": True,
+            "data": result["entity_data"],
+            "cost": {
+                "total": result.get("cost", 0),
+                "formatted": f"${result.get('cost', 0):.4f}"
+            },
+            "parse_warning": result.get("parse_warning")
+        }
     except HTTPException:
         raise
     except Exception as e:

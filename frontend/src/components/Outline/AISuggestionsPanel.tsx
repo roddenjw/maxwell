@@ -463,13 +463,17 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
                                 </svg>
                               </button>
                               <button
-                                onClick={() => addBeatFeedbackDislike(beat.beat_name, aiDescription)}
+                                onClick={() => {
+                                  addBeatFeedbackDislike(beat.beat_name, aiDescription);
+                                  // Auto-expand feedback area when disliking
+                                  setExpandedFeedback(beat.beat_name);
+                                }}
                                 className={`p-1.5 rounded transition-colors ${
                                   isDisliked
                                     ? 'bg-red-100 text-red-600'
                                     : 'text-gray-400 hover:bg-red-50 hover:text-red-500'
                                 }`}
-                                title="Dislike this suggestion"
+                                title="Dislike - add feedback for better suggestions"
                               >
                                 <svg className="w-4 h-4" fill={isDisliked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018c.163 0 .326.02.485.06L17 4m-7 10v2a2 2 0 002 2h.095c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
@@ -497,18 +501,22 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
 
                           {/* Expanded feedback notes */}
                           {isFeedbackExpanded && (
-                            <div className="mt-3 pt-3 border-t border-bronze/30">
-                              <label className="block text-xs font-sans font-semibold text-faded-ink mb-1">
-                                What would you like different? (optional)
+                            <div className="mt-3 pt-3 border-t border-bronze/30 bg-amber-50/50 p-3 -mx-3 -mb-3">
+                              <label className="block text-xs font-sans font-semibold text-midnight mb-2">
+                                ✏️ Help improve this suggestion
                               </label>
                               <textarea
                                 value={feedback?.notes || ''}
                                 onChange={(e) => setBeatFeedbackNotes(beat.beat_name, e.target.value)}
-                                placeholder="e.g., 'Make it more action-focused' or 'Include the mentor character'"
-                                className="w-full px-2 py-1.5 text-sm border border-slate-ui focus:border-bronze focus:outline-none font-sans"
+                                placeholder="What would make this better? e.g., 'Make it more action-focused', 'The brothers should be in conflict here', 'Include the mentor character'..."
+                                className="w-full px-2 py-1.5 text-sm border border-bronze/40 focus:border-bronze focus:outline-none font-sans bg-white"
                                 style={{ borderRadius: '2px' }}
-                                rows={2}
+                                rows={3}
+                                autoFocus
                               />
+                              <p className="text-xs text-faded-ink mt-1">
+                                Your feedback will be used when you click "Refine Suggestions" to generate better ideas.
+                              </p>
                             </div>
                           )}
                         </div>

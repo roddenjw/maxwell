@@ -9,6 +9,9 @@ export enum EntityType {
   LOCATION = "LOCATION",
   ITEM = "ITEM",
   LORE = "LORE",
+  CULTURE = "CULTURE",
+  CREATURE = "CREATURE",
+  RACE = "RACE",
 }
 
 // Template Types for structured entity creation
@@ -19,6 +22,8 @@ export enum TemplateType {
   MAGIC_SYSTEM = "MAGIC_SYSTEM",
   CREATURE = "CREATURE",
   ORGANIZATION = "ORGANIZATION",
+  CULTURE = "CULTURE",
+  RACE = "RACE",
   CUSTOM = "CUSTOM",
 }
 
@@ -154,6 +159,65 @@ export interface OrganizationTemplateData {
   secrets?: string;
 }
 
+// Culture template data structure
+export interface CultureTemplateData {
+  name?: string;
+  origin?: string;  // where this culture originated
+  values?: {
+    core_beliefs?: string;
+    taboos?: string;
+    ideals?: string;
+  };
+  society?: {
+    structure?: string;  // hierarchical, egalitarian, etc.
+    roles?: string;  // how roles are assigned
+    family_structure?: string;
+  };
+  traditions?: {
+    rituals?: string;
+    celebrations?: string;
+    rites_of_passage?: string;
+  };
+  arts?: {
+    music?: string;
+    visual_arts?: string;
+    storytelling?: string;
+  };
+  language?: string;
+  religion?: string;
+  conflicts?: string;  // internal or external cultural conflicts
+  notable_figures?: string;
+}
+
+// Race/Species template data structure
+export interface RaceTemplateData {
+  name?: string;
+  origin?: {
+    homeworld?: string;
+    creation_myth?: string;
+    evolution?: string;
+  };
+  physical?: {
+    appearance?: string;
+    lifespan?: string;
+    size_range?: string;
+    distinguishing_features?: string;
+  };
+  abilities?: {
+    innate_powers?: string;
+    weaknesses?: string;
+    special_senses?: string;
+  };
+  society?: {
+    typical_culture?: string;
+    government?: string;
+    relations_with_others?: string;
+  };
+  reproduction?: string;
+  notable_individuals?: string;
+  stereotypes?: string;  // common misconceptions or generalizations
+}
+
 // Union type for all template data
 export type TemplateData =
   | CharacterTemplateData
@@ -162,6 +226,8 @@ export type TemplateData =
   | MagicSystemTemplateData
   | CreatureTemplateData
   | OrganizationTemplateData
+  | CultureTemplateData
+  | RaceTemplateData
   | Record<string, any>;
 
 // Relationship Types
@@ -382,6 +448,18 @@ export function isLore(entity: Entity): entity is Lore {
   return entity.type === EntityType.LORE;
 }
 
+export function isCulture(entity: Entity): entity is Entity {
+  return entity.type === EntityType.CULTURE;
+}
+
+export function isCreature(entity: Entity): entity is Entity {
+  return entity.type === EntityType.CREATURE;
+}
+
+export function isRace(entity: Entity): entity is Entity {
+  return entity.type === EntityType.RACE;
+}
+
 // Utility Functions
 
 export function getEntityTypeColor(type: EntityType): string {
@@ -394,6 +472,12 @@ export function getEntityTypeColor(type: EntityType): string {
       return "#34D399"; // green
     case EntityType.LORE:
       return "#A78BFA"; // purple
+    case EntityType.CULTURE:
+      return "#F59E0B"; // amber
+    case EntityType.CREATURE:
+      return "#EF4444"; // red
+    case EntityType.RACE:
+      return "#EC4899"; // pink
     default:
       return "#94A3B8"; // slate
   }
@@ -428,6 +512,12 @@ export function getEntityTypeIcon(type: EntityType): string {
       return "📦";
     case EntityType.LORE:
       return "📖";
+    case EntityType.CULTURE:
+      return "🏛️";
+    case EntityType.CREATURE:
+      return "🐉";
+    case EntityType.RACE:
+      return "👥";
     default:
       return "•";
   }

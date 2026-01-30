@@ -117,6 +117,10 @@ export interface Manuscript {
   description?: string;
   lexical_state: string;
   word_count: number;
+  // Story metadata for AI context
+  premise?: string;          // Story premise/logline
+  premise_source?: string;   // 'ai_generated' or 'user_written'
+  genre?: string;            // e.g., 'Fantasy', 'Mystery', 'Romance'
   created_at: string;
   updated_at: string;
   settings?: any;
@@ -400,6 +404,13 @@ export const codexApi = {
   },
 
   /**
+   * Get a single entity by ID
+   */
+  async getEntity(entityId: string): Promise<Entity> {
+    return apiFetch<Entity>(`/codex/entities/single/${entityId}`);
+  },
+
+  /**
    * Update an entity
    */
   async updateEntity(entityId: string, data: UpdateEntityRequest): Promise<Entity> {
@@ -415,6 +426,20 @@ export const codexApi = {
   async deleteEntity(entityId: string): Promise<void> {
     return apiFetch<void>(`/codex/entities/${entityId}`, {
       method: 'DELETE',
+    });
+  },
+
+  /**
+   * Merge multiple entities into a primary entity
+   */
+  async mergeEntities(data: {
+    primary_entity_id: string;
+    secondary_entity_ids: string[];
+    merge_strategy?: { aliases?: string; attributes?: string };
+  }): Promise<Entity> {
+    return apiFetch<Entity>('/codex/entities/merge', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   },
 
@@ -462,6 +487,99 @@ export const codexApi = {
       usage: result.data.usage,
       cost: result.cost,
     };
+  },
+
+  /**
+   * Extract entity information from selected text and surrounding context using AI
+   */
+  async extractEntityFromSelection(data: {
+    api_key: string;
+    selected_text: string;
+    surrounding_context: string;
+    manuscript_genre?: string;
+  }): Promise<{
+    type: 'CHARACTER' | 'LOCATION' | 'ITEM' | 'LORE';
+    name: string;
+    description: string | null;
+    suggested_aliases: string[];
+    attributes: Record<string, any>;
+    confidence: 'high' | 'medium' | 'low';
+  }> {
+    const url = `${API_BASE_URL}/codex/entities/ai-extract`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error?.message || result.detail || 'AI extraction failed');
+    }
+
+    return result.data;
+  },
+
+  /**
+   * Get first/last appearance summary for an entity
+   */
+  async getEntityAppearanceSummary(entityId: string): Promise<{
+    first_appearance: {
+      chapter_id: string;
+      chapter_title: string;
+      chapter_order: number;
+      summary: string;
+      created_at: string | null;
+    } | null;
+    last_appearance: {
+      chapter_id: string;
+      chapter_title: string;
+      chapter_order: number;
+      summary: string;
+      created_at: string | null;
+    } | null;
+    total_appearances: number;
+  }> {
+    return apiFetch(`/codex/entities/${entityId}/appearances/summary`);
+  },
+
+  /**
+   * Get all appearance contexts for an entity (for AI analysis)
+   */
+  async getEntityAppearanceContexts(entityId: string): Promise<Array<{
+    chapter_title: string;
+    summary: string;
+    context_text: string | null;
+  }>> {
+    return apiFetch(`/codex/entities/${entityId}/appearances/contexts`);
+  },
+
+  /**
+   * Generate comprehensive entity content from all appearances using AI
+   */
+  async aiEntityFill(data: {
+    api_key: string;
+    entity_id: string;
+  }): Promise<{
+    description: string;
+    attributes: Record<string, any>;
+    suggested_aliases: string[];
+  }> {
+    const url = `${API_BASE_URL}/codex/entities/ai-fill`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error?.message || result.detail || 'AI fill failed');
+    }
+
+    return result.data;
   },
 
   // Relationship Endpoints
@@ -687,10 +805,13 @@ export const timelineApi = {
   },
 
   /**
-   * Resolve an inconsistency
+   * Resolve an inconsistency with optional resolution notes
    */
-  async resolveInconsistency(inconsistencyId: string): Promise<{ success: boolean; message: string }> {
-    return apiFetch(`/timeline/inconsistencies/${inconsistencyId}`, {
+  async resolveInconsistency(inconsistencyId: string, resolutionNote?: string): Promise<{ success: boolean; message: string }> {
+    const url = resolutionNote
+      ? `/timeline/inconsistencies/${inconsistencyId}?resolution_note=${encodeURIComponent(resolutionNote)}`
+      : `/timeline/inconsistencies/${inconsistencyId}`;
+    return apiFetch(url, {
       method: 'DELETE',
     });
   },
@@ -1658,6 +1779,72 @@ export const brainstormingApi = {
 
     return response.json();
   },
+
+  /**
+   * Generate outline from existing characters
+   */
+  async generateOutlineFromCharacters(data: {
+    api_key: string;
+    manuscript_id: string;
+    genre: string;
+    premise: string;
+    target_word_count?: number;
+  }): Promise<{
+    beats: Array<{
+      beat_name: string;
+      beat_label: string;
+      description: string;
+      characters_involved: string[];
+      character_growth: string;
+      target_position_percent: number;
+    }>;
+    central_conflict: string;
+    theme: string;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/brainstorming/outline-from-characters`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate outline from characters');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Generate a story premise from manuscript content
+   * Uses AI to analyze the manuscript and derive a compelling premise/logline
+   */
+  async generatePremise(data: {
+    api_key: string;
+    manuscript_id: string;
+  }): Promise<{
+    success: boolean;
+    premise: string;
+    genre: string;
+    themes: string[];
+    tone: string;
+    confidence: number;
+    cost: { total: number; formatted: string };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/brainstorming/generate-premise`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to generate premise');
+    }
+
+    return response.json();
+  },
 };
 
 /**
@@ -2585,7 +2772,8 @@ export const foreshadowingApi = {
     const queryString = params.toString();
     const url = `/foreshadowing/pairs/${manuscriptId}${queryString ? `?${queryString}` : ''}`;
     const response = await apiFetch<{ success: boolean; data: ForeshadowingPair[] }>(url);
-    return response.data;
+    // Ensure we return an array even if data is undefined
+    return response.data || [];
   },
 
   /**

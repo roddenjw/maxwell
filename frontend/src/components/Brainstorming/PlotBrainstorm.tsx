@@ -9,6 +9,7 @@ import type { PlotGenerationRequest } from '@/types/brainstorm';
 
 import { brainstormingApi } from '@/lib/api';
 import { useBrainstormStore } from '@/stores/brainstormStore';
+import { AIGenerationProgress } from '@/components/Common';
 
 export default function PlotBrainstorm() {
   const {
@@ -295,6 +296,13 @@ export default function PlotBrainstorm() {
           <li><strong>Complication:</strong> Obstacle that raises stakes and tension</li>
         </ul>
       </div>
+
+      {/* AI Generation Progress Overlay */}
+      <AIGenerationProgress
+        isGenerating={isGenerating}
+        message="Generating Plot Ideas"
+        estimatedSeconds={numIdeas * 4}
+      />
     </div>
   );
 }

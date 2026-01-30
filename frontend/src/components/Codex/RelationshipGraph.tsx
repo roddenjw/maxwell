@@ -1,16 +1,17 @@
 /**
  * RelationshipGraph - Visual network diagram of entity relationships
- * Enhanced with PNG export and improved visualization
+ * Enhanced with PNG export, drag-to-create, and AI relationship inference
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { toPng } from 'html-to-image';
-import { getEntityTypeColor, getRelationshipTypeLabel } from '@/types/codex';
+import { getEntityTypeColor, getRelationshipTypeLabel, RelationshipType } from '@/types/codex';
 import { codexApi } from '@/lib/api';
 import { useCodexStore } from '@/stores/codexStore';
 import { toast } from '@/stores/toastStore';
 import analytics from '@/lib/analytics';
+import { getErrorMessage } from '@/lib/retry';
 
 interface RelationshipGraphProps {
   manuscriptId: string;
@@ -31,18 +32,29 @@ interface GraphLink {
 }
 
 export default function RelationshipGraph({ manuscriptId }: RelationshipGraphProps) {
-  const { entities, relationships, setRelationships } = useCodexStore();
+  const { entities, relationships, setRelationships, addRelationship } = useCodexStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
   const [nodeSize, setNodeSize] = useState(6);
+  const [editMode, setEditMode] = useState(false);
   const graphRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({
     nodes: [],
     links: [],
   });
+
+  // Drag-to-create state
+  const [dragSourceNode, setDragSourceNode] = useState<GraphNode | null>(null);
+  const [showRelationshipModal, setShowRelationshipModal] = useState(false);
+  const [pendingRelationship, setPendingRelationship] = useState<{
+    source: GraphNode;
+    target: GraphNode;
+  } | null>(null);
+  const [selectedRelationType, setSelectedRelationType] = useState<RelationshipType>(RelationshipType.ACQUAINTANCE);
+  const [creatingRelationship, setCreatingRelationship] = useState(false);
 
   // Load relationships on mount
   useEffect(() => {
@@ -101,9 +113,52 @@ export default function RelationshipGraph({ manuscriptId }: RelationshipGraphPro
   };
 
   const handleNodeClick = useCallback((node: any) => {
-    // Could select entity when node is clicked
-    console.log('Node clicked:', node);
-  }, []);
+    if (editMode && dragSourceNode && dragSourceNode.id !== node.id) {
+      // Completing a drag-to-create relationship
+      setPendingRelationship({
+        source: dragSourceNode,
+        target: node,
+      });
+      setShowRelationshipModal(true);
+      setDragSourceNode(null);
+    } else if (editMode) {
+      // Starting a drag-to-create relationship
+      setDragSourceNode(node);
+      toast.info(`Click another entity to create a relationship from "${node.name}"`);
+    } else {
+      console.log('Node clicked:', node);
+    }
+  }, [editMode, dragSourceNode]);
+
+  const handleCreateRelationship = async () => {
+    if (!pendingRelationship) return;
+
+    try {
+      setCreatingRelationship(true);
+      const newRelationship = await codexApi.createRelationship({
+        source_entity_id: pendingRelationship.source.id,
+        target_entity_id: pendingRelationship.target.id,
+        relationship_type: selectedRelationType,
+        strength: 1,
+      });
+      addRelationship(newRelationship);
+      toast.success(`Created ${getRelationshipTypeLabel(selectedRelationType)} relationship`);
+      setShowRelationshipModal(false);
+      setPendingRelationship(null);
+      setSelectedRelationType(RelationshipType.ACQUAINTANCE);
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setCreatingRelationship(false);
+    }
+  };
+
+  const cancelRelationshipCreate = () => {
+    setShowRelationshipModal(false);
+    setPendingRelationship(null);
+    setDragSourceNode(null);
+    setSelectedRelationType(RelationshipType.ACQUAINTANCE);
+  };
 
   const exportToPNG = async () => {
     if (!containerRef.current) return;
@@ -208,10 +263,37 @@ export default function RelationshipGraph({ manuscriptId }: RelationshipGraphPro
       {/* Header */}
       <div className="p-4 border-b border-slate-ui">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-garamond font-semibold text-midnight">
-            Relationship Network
-          </h3>
+          <div className="flex items-center gap-3">
+            <h3 className="font-garamond font-semibold text-midnight">
+              Relationship Network
+            </h3>
+            {editMode && (
+              <span className="px-2 py-0.5 text-xs font-sans bg-green-100 text-green-700 rounded-sm">
+                Edit Mode
+              </span>
+            )}
+            {dragSourceNode && (
+              <span className="px-2 py-0.5 text-xs font-sans bg-blue-100 text-blue-700 rounded-sm">
+                Connecting from: {dragSourceNode.name}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setEditMode(!editMode);
+                setDragSourceNode(null);
+              }}
+              className={`px-3 py-1 text-sm font-sans transition-colors ${
+                editMode
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-slate-ui text-midnight hover:bg-slate-ui/80'
+              }`}
+              style={{ borderRadius: '2px' }}
+              title={editMode ? 'Exit edit mode' : 'Enter edit mode to create relationships'}
+            >
+              {editMode ? '✓ Editing' : '✏️ Edit'}
+            </button>
             <button
               onClick={loadRelationships}
               className="text-sm font-sans text-bronze hover:underline"
@@ -381,6 +463,78 @@ export default function RelationshipGraph({ manuscriptId }: RelationshipGraphPro
           </div>
         </div>
       </div>
+
+      {/* Relationship Creation Modal */}
+      {showRelationshipModal && pendingRelationship && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div
+            className="bg-white p-6 w-[400px] shadow-2xl"
+            style={{ borderRadius: '2px' }}
+          >
+            <h3 className="font-garamond font-semibold text-lg text-midnight mb-4">
+              Create Relationship
+            </h3>
+
+            <div className="mb-4 p-3 bg-vellum border border-slate-ui" style={{ borderRadius: '2px' }}>
+              <div className="flex items-center justify-center gap-2 text-sm">
+                <span
+                  className="px-2 py-1 font-semibold text-white"
+                  style={{ backgroundColor: pendingRelationship.source.color, borderRadius: '2px' }}
+                >
+                  {pendingRelationship.source.name}
+                </span>
+                <span className="text-faded-ink">→</span>
+                <span
+                  className="px-2 py-1 font-semibold text-white"
+                  style={{ backgroundColor: pendingRelationship.target.color, borderRadius: '2px' }}
+                >
+                  {pendingRelationship.target.name}
+                </span>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-sans font-semibold text-midnight mb-2">
+                Relationship Type
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.values(RelationshipType).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setSelectedRelationType(type)}
+                    className={`px-3 py-2 text-sm font-sans text-left border transition-colors ${
+                      selectedRelationType === type
+                        ? 'border-bronze bg-bronze/10 text-bronze'
+                        : 'border-slate-ui hover:border-bronze/50 text-midnight'
+                    }`}
+                    style={{ borderRadius: '2px' }}
+                  >
+                    {getRelationshipTypeLabel(type)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={cancelRelationshipCreate}
+                disabled={creatingRelationship}
+                className="px-4 py-2 text-sm font-sans text-faded-ink hover:text-midnight transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateRelationship}
+                disabled={creatingRelationship}
+                className="px-4 py-2 text-sm font-sans font-semibold bg-bronze text-white hover:bg-bronze/90 transition-colors disabled:opacity-50"
+                style={{ borderRadius: '2px' }}
+              >
+                {creatingRelationship ? 'Creating...' : 'Create Relationship'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

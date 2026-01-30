@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { chaptersApi, type Chapter } from '@/lib/api';
+import { chaptersApi, codexApi, type Chapter } from '@/lib/api';
 import type { Entity } from '@/types/codex';
 import { toast } from '@/stores/toastStore';
 import { getErrorMessage } from '@/lib/retry';
@@ -64,6 +64,14 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
   const [syncing, setSyncing] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showEntityPicker, setShowEntityPicker] = useState(false);
+  const [generatingField, setGeneratingField] = useState<string | null>(null);
+  const [storedApiKey, setStoredApiKey] = useState<string | null>(null);
+
+  // Load API key on mount
+  useEffect(() => {
+    const key = localStorage.getItem('openrouter_api_key');
+    setStoredApiKey(key);
+  }, []);
 
   // Character data from document_metadata
   const [characterData, setCharacterData] = useState<CharacterData>({
@@ -316,6 +324,62 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
     }
   };
 
+  // AI Generate handler
+  const handleAIGenerate = async (fieldPath: string, fieldLabel: string) => {
+    if (!storedApiKey) {
+      toast.error('Please set your OpenRouter API key in Settings');
+      return;
+    }
+
+    if (!characterData.name) {
+      toast.error('Please enter a character name first');
+      return;
+    }
+
+    try {
+      setGeneratingField(fieldPath);
+
+      // Get manuscript context from linked entity appearances
+      let manuscript_context: string | undefined;
+      if (chapter?.linked_entity_id) {
+        try {
+          const contexts = await codexApi.getEntityAppearanceContexts(chapter.linked_entity_id);
+          if (contexts && contexts.length > 0) {
+            manuscript_context = contexts.slice(0, 5).map((ctx: { chapter_title: string; context_text: string | null; summary: string }) =>
+              `${ctx.chapter_title}: ${ctx.context_text || ctx.summary || 'N/A'}`
+            ).join('\n\n');
+          }
+        } catch {
+          // Silently fail - context is optional
+        }
+      }
+
+      const result = await codexApi.generateFieldSuggestion({
+        api_key: storedApiKey,
+        entity_name: characterData.name,
+        entity_type: 'CHARACTER',
+        template_type: 'CHARACTER',
+        field_path: fieldPath,
+        existing_data: characterData.attributes,
+        manuscript_context,
+      });
+
+      // Apply the suggestion
+      const suggestion = typeof result.suggestion === 'string'
+        ? result.suggestion
+        : Array.isArray(result.suggestion)
+          ? result.suggestion.join(', ')
+          : '';
+
+      updateField(fieldPath, suggestion);
+      toast.success(`Generated ${fieldLabel}` + (manuscript_context ? ' (using manuscript context)' : ''));
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setGeneratingField(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-vellum">
@@ -444,6 +508,8 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
               onChange={(v) => updateField('attributes.physical.appearance', v)}
               placeholder="Height, build, hair, eyes, skin tone..."
               rows={3}
+              onAIGenerate={() => handleAIGenerate('attributes.physical.appearance', 'appearance')}
+              isGenerating={generatingField === 'attributes.physical.appearance'}
             />
             <FormTextarea
               label="Distinguishing Features"
@@ -451,6 +517,8 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
               onChange={(v) => updateField('attributes.physical.distinguishing_features', v)}
               placeholder="Scars, birthmarks, unique traits..."
               rows={2}
+              onAIGenerate={() => handleAIGenerate('attributes.physical.distinguishing_features', 'distinguishing features')}
+              isGenerating={generatingField === 'attributes.physical.distinguishing_features'}
             />
           </FormSection>
 
@@ -479,6 +547,8 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
               onChange={(v) => updateField('attributes.personality.strengths', v)}
               placeholder="What are they good at?"
               rows={2}
+              onAIGenerate={() => handleAIGenerate('attributes.personality.strengths', 'strengths')}
+              isGenerating={generatingField === 'attributes.personality.strengths'}
             />
             <FormTextarea
               label="Flaws"
@@ -486,6 +556,8 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
               onChange={(v) => updateField('attributes.personality.flaws', v)}
               placeholder="What holds them back?"
               rows={2}
+              onAIGenerate={() => handleAIGenerate('attributes.personality.flaws', 'flaws')}
+              isGenerating={generatingField === 'attributes.personality.flaws'}
             />
           </FormSection>
 
@@ -497,6 +569,8 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
               onChange={(v) => updateField('attributes.backstory.origin', v)}
               placeholder="Where are they from? What was their childhood like?"
               rows={3}
+              onAIGenerate={() => handleAIGenerate('attributes.backstory.origin', 'origin story')}
+              isGenerating={generatingField === 'attributes.backstory.origin'}
             />
             <FormTextarea
               label="Key Life Events"
@@ -504,6 +578,8 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
               onChange={(v) => updateField('attributes.backstory.key_events', v)}
               placeholder="Formative experiences that shaped them"
               rows={3}
+              onAIGenerate={() => handleAIGenerate('attributes.backstory.key_events', 'key life events')}
+              isGenerating={generatingField === 'attributes.backstory.key_events'}
             />
             <FormTextarea
               label="Secrets"
@@ -511,6 +587,8 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
               onChange={(v) => updateField('attributes.backstory.secrets', v)}
               placeholder="What are they hiding?"
               rows={2}
+              onAIGenerate={() => handleAIGenerate('attributes.backstory.secrets', 'secrets')}
+              isGenerating={generatingField === 'attributes.backstory.secrets'}
             />
           </FormSection>
 
@@ -522,6 +600,8 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
               onChange={(v) => updateField('attributes.motivation.want', v)}
               placeholder="Their conscious goal or desire"
               rows={2}
+              onAIGenerate={() => handleAIGenerate('attributes.motivation.want', 'character want')}
+              isGenerating={generatingField === 'attributes.motivation.want'}
             />
             <FormTextarea
               label="What They Need"
@@ -529,6 +609,8 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
               onChange={(v) => updateField('attributes.motivation.need', v)}
               placeholder="What they actually need (often different from want)"
               rows={2}
+              onAIGenerate={() => handleAIGenerate('attributes.motivation.need', 'character need')}
+              isGenerating={generatingField === 'attributes.motivation.need'}
             />
           </FormSection>
 
@@ -607,12 +689,37 @@ interface FormTextareaProps {
   onChange: (value: string) => void;
   placeholder?: string;
   rows?: number;
+  onAIGenerate?: () => void;
+  isGenerating?: boolean;
 }
 
-function FormTextarea({ label, value, onChange, placeholder, rows = 3 }: FormTextareaProps) {
+function FormTextarea({ label, value, onChange, placeholder, rows = 3, onAIGenerate, isGenerating }: FormTextareaProps) {
   return (
     <div>
-      <label className="block text-sm font-medium text-midnight mb-1">{label}</label>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-sm font-medium text-midnight">{label}</label>
+        {onAIGenerate && (
+          <button
+            type="button"
+            onClick={onAIGenerate}
+            disabled={isGenerating}
+            className="px-2 py-0.5 text-xs font-sans bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-sm flex items-center gap-1 transition-all"
+            title="Generate with AI"
+          >
+            {isGenerating ? (
+              <>
+                <span className="animate-spin">⟳</span>
+                <span>Generating...</span>
+              </>
+            ) : (
+              <>
+                <span>✨</span>
+                <span>Generate</span>
+              </>
+            )}
+          </button>
+        )}
+      </div>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}

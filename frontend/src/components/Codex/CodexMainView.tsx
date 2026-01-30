@@ -15,6 +15,7 @@ import EntityDetail from './EntityDetail';
 import EntityTemplateWizard from './EntityTemplateWizard';
 import MergeEntitiesModal from './MergeEntitiesModal';
 import RelationshipGraph from './RelationshipGraph';
+import SuggestionQueue from './SuggestionQueue';
 import { EntityType as EntityTypeEnum, TemplateType } from '@/types/codex';
 
 interface CodexMainViewProps {
@@ -22,7 +23,7 @@ interface CodexMainViewProps {
   onOpenChapter?: (chapterId: string) => void;
 }
 
-type CodexTab = 'entities' | 'relationships';
+type CodexTab = 'entities' | 'relationships' | 'intel';
 
 export default function CodexMainView({
   manuscriptId,
@@ -36,6 +37,10 @@ export default function CodexMainView({
     selectedEntityId,
     setSelectedEntity,
     loadEntities,
+    getPendingSuggestionsCount,
+    activeTab: storeActiveTab,
+    isSidebarOpen: storeWantsOpen,
+    setSidebarOpen,
   } = useCodexStore();
 
   const { openModal } = useBrainstormStore();
@@ -50,7 +55,13 @@ export default function CodexMainView({
   const [creating, setCreating] = useState(false);
   const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set());
   const [showMergeModal, setShowMergeModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<CodexTab>('entities');
+  const [mergeSourceEntityId, setMergeSourceEntityId] = useState<string | null>(null); // For single-entity merge
+  // Initialize activeTab from store (in case user clicked "View in Queue" from entity detection toast)
+  const [activeTab, setActiveTab] = useState<CodexTab>(() => {
+    if (storeActiveTab === 'intel') return 'intel';
+    return 'entities';
+  });
+  const pendingSuggestionsCount = getPendingSuggestionsCount();
   // Local state for immediate entity selection feedback
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
 
@@ -81,6 +92,15 @@ export default function CodexMainView({
       setLocalSelectedId(selectedEntityId);
     }
   }, [selectedEntityId]);
+
+  // Sync with store activeTab when user clicks "View in Queue" from entity detection toast
+  useEffect(() => {
+    if (storeActiveTab === 'intel' && storeWantsOpen) {
+      setActiveTab('intel');
+      // Reset the store flag
+      setSidebarOpen(false);
+    }
+  }, [storeActiveTab, storeWantsOpen, setSidebarOpen]);
 
   // Handle entity selection - updates both local state (immediate) and store
   const handleEntitySelect = useCallback((entityId: string) => {
@@ -240,60 +260,36 @@ export default function CodexMainView({
     setShowMergeModal(true);
   };
 
-  const handleConfirmMerge = async (primaryEntityId: string) => {
-    const selectedEntities = entities.filter(e => selectedEntityIds.has(e.id));
-    const primaryEntity = selectedEntities.find(e => e.id === primaryEntityId);
-    const otherEntities = selectedEntities.filter(e => e.id !== primaryEntityId);
-
-    if (!primaryEntity) {
-      alert('Primary entity not found');
-      return;
-    }
-
+  const handleConfirmMerge = async (primaryEntityId: string, secondaryEntityIds: string[]) => {
     try {
-      const mergedAliases = new Set([
-        ...primaryEntity.aliases,
-        ...otherEntities.flatMap(e => [e.name, ...e.aliases])
-      ]);
-
-      const mergedAttributes = {
-        ...primaryEntity.attributes,
-        appearance: [
-          ...(primaryEntity.attributes?.appearance || []),
-          ...otherEntities.flatMap(e => e.attributes?.appearance || [])
-        ],
-        personality: [
-          ...(primaryEntity.attributes?.personality || []),
-          ...otherEntities.flatMap(e => e.attributes?.personality || [])
-        ],
-        background: [
-          ...(primaryEntity.attributes?.background || []),
-          ...otherEntities.flatMap(e => e.attributes?.background || [])
-        ],
-        actions: [
-          ...(primaryEntity.attributes?.actions || []),
-          ...otherEntities.flatMap(e => e.attributes?.actions || [])
-        ],
-      };
-
-      await handleUpdateEntity(primaryEntity.id, {
-        aliases: Array.from(mergedAliases).filter(a => a !== primaryEntity.name),
-        attributes: mergedAttributes
+      // Call the merge API
+      const mergedEntity = await codexApi.mergeEntities({
+        primary_entity_id: primaryEntityId,
+        secondary_entity_ids: secondaryEntityIds,
+        merge_strategy: { aliases: 'combine', attributes: 'merge' }
       });
 
-      await Promise.all(
-        otherEntities.map(e => codexApi.deleteEntity(e.id))
-      );
+      // Update local state - remove secondary entities, update primary
+      secondaryEntityIds.forEach(id => removeEntity(id));
+      updateEntity(primaryEntityId, mergedEntity);
 
-      otherEntities.forEach(e => removeEntity(e.id));
+      // Reset selection states
       setSelectedEntityIds(new Set());
       setShowMergeModal(false);
+      setMergeSourceEntityId(null);
+      setLocalSelectedId(primaryEntityId); // Select the merged entity
 
-      alert(`Successfully merged ${selectedEntities.length} entities into "${primaryEntity.name}"`);
+      toast.success(`Successfully merged entities into "${mergedEntity.name}"`);
     } catch (err) {
-      alert('Failed to merge entities: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to merge entities: ' + (err instanceof Error ? err.message : 'Unknown error'));
       throw err;
     }
+  };
+
+  // Handler for single-entity merge (from EntityDetail Merge button)
+  const handleStartMerge = (entityId: string) => {
+    setMergeSourceEntityId(entityId);
+    setShowMergeModal(true);
   };
 
   // Get selected entity - use local state for immediate feedback
@@ -515,6 +511,22 @@ export default function CodexMainView({
           >
             🕸️ Relationships
           </button>
+          <button
+            onClick={() => setActiveTab('intel')}
+            className={`flex-1 px-4 py-2 font-sans text-sm font-medium uppercase tracking-button transition-colors relative ${
+              activeTab === 'intel'
+                ? 'bg-bronze text-white'
+                : 'bg-slate-ui/20 text-faded-ink hover:bg-slate-ui/40'
+            }`}
+            style={{ borderRadius: '2px' }}
+          >
+            🔍 Intel
+            {pendingSuggestionsCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-redline text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
+                {pendingSuggestionsCount > 9 ? '9+' : pendingSuggestionsCount}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -661,6 +673,7 @@ export default function CodexMainView({
                   onDelete={handleDeleteEntity}
                   onClose={() => setSelectedEntity(null)}
                   onAddToBinder={handleAddToBinder}
+                  onMerge={handleStartMerge}
                 />
               ) : (
                 <div className="flex items-center justify-center h-full">
@@ -684,14 +697,36 @@ export default function CodexMainView({
             <RelationshipGraph manuscriptId={manuscriptId} />
           </div>
         )}
+
+        {activeTab === 'intel' && (
+          <div className="flex-1 overflow-y-auto bg-vellum">
+            <div className="max-w-4xl mx-auto p-6">
+              <div className="mb-6">
+                <h2 className="text-2xl font-serif font-bold text-midnight mb-2">Entity Intel</h2>
+                <p className="text-faded-ink font-sans text-sm">
+                  Review and approve automatically detected entities from your manuscript
+                </p>
+              </div>
+              <SuggestionQueue manuscriptId={manuscriptId} />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Merge Entities Modal */}
       {showMergeModal && (
         <MergeEntitiesModal
-          entities={entities.filter(e => selectedEntityIds.has(e.id))}
+          // Single-entity mode: pass the source entity
+          sourceEntity={mergeSourceEntityId ? entities.find(e => e.id === mergeSourceEntityId) : undefined}
+          // Multi-select mode: pass selected entities
+          entities={selectedEntityIds.size >= 2 ? entities.filter(e => selectedEntityIds.has(e.id)) : undefined}
+          // Available entities to pick from (for single-entity merge)
+          availableEntities={entities}
           onConfirm={handleConfirmMerge}
-          onCancel={() => setShowMergeModal(false)}
+          onCancel={() => {
+            setShowMergeModal(false);
+            setMergeSourceEntityId(null);
+          }}
         />
       )}
     </div>

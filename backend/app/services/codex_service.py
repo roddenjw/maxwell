@@ -10,6 +10,8 @@ from sqlalchemy import and_
 
 from app.database import SessionLocal
 from app.models.entity import Entity, Relationship, EntitySuggestion
+from app.models.scene import EntityAppearance
+from app.models.manuscript import Chapter
 
 
 class CodexService:
@@ -186,6 +188,128 @@ class CodexService:
             db.delete(entity)
             db.commit()
             return True
+        finally:
+            db.close()
+
+    def merge_entities(
+        self,
+        primary_entity_id: str,
+        secondary_entity_ids: List[str],
+        merge_strategy: Dict[str, str]
+    ) -> Optional[Entity]:
+        """
+        Merge multiple entities into a primary entity.
+
+        Args:
+            primary_entity_id: The entity to keep (primary)
+            secondary_entity_ids: Entities to merge into primary and then delete
+            merge_strategy: How to handle conflicts (e.g., {"aliases": "combine", "attributes": "merge"})
+
+        Returns:
+            The merged primary entity, or None if not found
+        """
+        db = SessionLocal()
+        try:
+            # Get primary entity
+            primary = db.query(Entity).filter(Entity.id == primary_entity_id).first()
+            if not primary:
+                return None
+
+            # Get secondary entities
+            secondaries = db.query(Entity).filter(Entity.id.in_(secondary_entity_ids)).all()
+
+            # Merge aliases
+            all_aliases = set(primary.aliases or [])
+            for secondary in secondaries:
+                # Add secondary's name as an alias (unless it's the same as primary)
+                if secondary.name != primary.name:
+                    all_aliases.add(secondary.name)
+                # Add secondary's aliases
+                all_aliases.update(secondary.aliases or [])
+
+            primary.aliases = list(all_aliases)
+
+            # Merge attributes based on strategy
+            attributes_strategy = merge_strategy.get("attributes", "merge")
+            merged_attributes = dict(primary.attributes or {})
+
+            if attributes_strategy == "merge":
+                for secondary in secondaries:
+                    if secondary.attributes:
+                        for key, value in secondary.attributes.items():
+                            if key not in merged_attributes or not merged_attributes[key]:
+                                merged_attributes[key] = value
+                            elif isinstance(merged_attributes[key], list) and isinstance(value, list):
+                                # Combine lists (e.g., appearance notes, personality traits)
+                                merged_attributes[key] = list(set(merged_attributes[key] + value))
+                            elif isinstance(merged_attributes[key], str) and isinstance(value, str):
+                                # Append text content with separator
+                                if value and value not in merged_attributes[key]:
+                                    merged_attributes[key] = merged_attributes[key] + "\n\n" + value
+
+            primary.attributes = merged_attributes
+
+            # Merge appearance history
+            all_appearances = list(primary.appearance_history or [])
+            for secondary in secondaries:
+                if secondary.appearance_history:
+                    all_appearances.extend(secondary.appearance_history)
+            primary.appearance_history = all_appearances
+
+            # Merge template_data if present
+            if primary.template_data or any(s.template_data for s in secondaries):
+                merged_template = dict(primary.template_data or {})
+                for secondary in secondaries:
+                    if secondary.template_data:
+                        for key, value in secondary.template_data.items():
+                            if key not in merged_template or not merged_template[key]:
+                                merged_template[key] = value
+                primary.template_data = merged_template
+
+            # Remap relationships from secondaries to primary
+            from app.models.entity import Relationship
+            for secondary in secondaries:
+                # Update relationships where secondary is source
+                db.query(Relationship).filter(
+                    Relationship.source_entity_id == secondary.id
+                ).update({Relationship.source_entity_id: primary.id})
+
+                # Update relationships where secondary is target
+                db.query(Relationship).filter(
+                    Relationship.target_entity_id == secondary.id
+                ).update({Relationship.target_entity_id: primary.id})
+
+            # Remap EntityAppearance records
+            from app.models.scene import EntityAppearance
+            db.query(EntityAppearance).filter(
+                EntityAppearance.entity_id.in_(secondary_entity_ids)
+            ).update({EntityAppearance.entity_id: primary.id})
+
+            # Remap character sheets (linked_entity_id in chapters table)
+            from app.models.manuscript import Chapter
+            db.query(Chapter).filter(
+                Chapter.linked_entity_id.in_(secondary_entity_ids)
+            ).update({Chapter.linked_entity_id: primary.id})
+
+            # Delete duplicate self-referential relationships
+            from sqlalchemy import and_
+            db.query(Relationship).filter(
+                and_(
+                    Relationship.source_entity_id == primary.id,
+                    Relationship.target_entity_id == primary.id
+                )
+            ).delete()
+
+            # Delete secondary entities
+            for secondary in secondaries:
+                db.delete(secondary)
+
+            db.commit()
+            db.refresh(primary)
+            return primary
+        except Exception as e:
+            db.rollback()
+            raise e
         finally:
             db.close()
 
@@ -391,18 +515,31 @@ class CodexService:
         """
         db = SessionLocal()
         try:
-            # Check if suggestion already exists
+            # Check if suggestion already exists (any status)
             existing = db.query(EntitySuggestion).filter(
                 and_(
                     EntitySuggestion.manuscript_id == manuscript_id,
                     EntitySuggestion.name == name,
-                    EntitySuggestion.type == entity_type,
-                    EntitySuggestion.status == "PENDING"
+                    EntitySuggestion.type == entity_type
                 )
             ).first()
 
             if existing:
+                # If already approved/rejected, don't create a new one
+                # If pending, return the existing one
                 return existing
+
+            # Also check if an entity with this name already exists
+            existing_entity = db.query(Entity).filter(
+                and_(
+                    Entity.manuscript_id == manuscript_id,
+                    Entity.name == name
+                )
+            ).first()
+
+            if existing_entity:
+                # Entity already exists, no need for a suggestion
+                return None
 
             suggestion = EntitySuggestion(
                 manuscript_id=manuscript_id,
@@ -552,6 +689,97 @@ class CodexService:
             suggestion.status = "REJECTED"
             db.commit()
             return True
+        finally:
+            db.close()
+
+    def get_entity_appearance_summary(self, entity_id: str) -> Dict[str, Any]:
+        """
+        Get first and last appearance summary for an entity
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            Dict with first_appearance, last_appearance, total_appearances
+        """
+        db = SessionLocal()
+        try:
+            # Get all appearances for this entity, ordered by chapter order and sequence
+            appearances = db.query(EntityAppearance).filter(
+                EntityAppearance.entity_id == entity_id
+            ).join(
+                Chapter, EntityAppearance.chapter_id == Chapter.id
+            ).order_by(
+                Chapter.order.asc(),
+                EntityAppearance.sequence_order.asc()
+            ).all()
+
+            if not appearances:
+                return {
+                    "first_appearance": None,
+                    "last_appearance": None,
+                    "total_appearances": 0
+                }
+
+            # Get first and last
+            first = appearances[0]
+            last = appearances[-1]
+
+            # Get chapter info for each
+            first_chapter = db.query(Chapter).filter(Chapter.id == first.chapter_id).first()
+            last_chapter = db.query(Chapter).filter(Chapter.id == last.chapter_id).first()
+
+            return {
+                "first_appearance": {
+                    "chapter_id": first.chapter_id,
+                    "chapter_title": first_chapter.title if first_chapter else "Unknown",
+                    "chapter_order": first_chapter.order if first_chapter else 0,
+                    "summary": first.summary,
+                    "created_at": first.created_at.isoformat() if first.created_at else None
+                },
+                "last_appearance": {
+                    "chapter_id": last.chapter_id,
+                    "chapter_title": last_chapter.title if last_chapter else "Unknown",
+                    "chapter_order": last_chapter.order if last_chapter else 0,
+                    "summary": last.summary,
+                    "created_at": last.created_at.isoformat() if last.created_at else None
+                },
+                "total_appearances": len(appearances)
+            }
+        finally:
+            db.close()
+
+    def get_entity_appearance_contexts(self, entity_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all appearance contexts for an entity (for AI analysis)
+
+        Args:
+            entity_id: Entity ID
+
+        Returns:
+            List of appearance context dicts
+        """
+        db = SessionLocal()
+        try:
+            appearances = db.query(EntityAppearance).filter(
+                EntityAppearance.entity_id == entity_id
+            ).join(
+                Chapter, EntityAppearance.chapter_id == Chapter.id
+            ).order_by(
+                Chapter.order.asc(),
+                EntityAppearance.sequence_order.asc()
+            ).all()
+
+            result = []
+            for app in appearances:
+                chapter = db.query(Chapter).filter(Chapter.id == app.chapter_id).first()
+                result.append({
+                    "chapter_title": chapter.title if chapter else "Unknown",
+                    "summary": app.summary,
+                    "context_text": app.context_text
+                })
+
+            return result
         finally:
             db.close()
 

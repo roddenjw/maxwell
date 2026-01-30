@@ -65,12 +65,39 @@ export default function ForeshadowingTracker({ manuscriptId }: ForeshadowingTrac
     setLoading(true);
     setError(null);
     try {
-      const [pairsData, statsData] = await Promise.all([
+      // Use Promise.allSettled so failures in one don't block the other
+      const [pairsResult, statsResult] = await Promise.allSettled([
         foreshadowingApi.getPairs(manuscriptId),
         foreshadowingApi.getStats(manuscriptId),
       ]);
-      setPairs(pairsData);
-      setStats(statsData);
+
+      // Handle pairs result - ensure we always have an array
+      if (pairsResult.status === 'fulfilled' && Array.isArray(pairsResult.value)) {
+        setPairs(pairsResult.value);
+      } else {
+        console.error('Failed to load foreshadowing pairs:', pairsResult.status === 'rejected' ? pairsResult.reason : 'Invalid response format');
+        setPairs([]);
+      }
+
+      // Handle stats result
+      if (statsResult.status === 'fulfilled') {
+        setStats(statsResult.value);
+      } else {
+        console.error('Failed to load foreshadowing stats:', statsResult.reason);
+        // Set default stats when API fails
+        setStats({
+          total: 0,
+          resolved: 0,
+          unresolved: 0,
+          average_confidence: 0,
+          by_type: { CHEKHOV_GUN: 0, PROPHECY: 0, SYMBOL: 0, HINT: 0, PARALLEL: 0 }
+        });
+      }
+
+      // Only show error if both failed
+      if (pairsResult.status === 'rejected' && statsResult.status === 'rejected') {
+        setError('Failed to load foreshadowing data. Please try again.');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load foreshadowing data');
     } finally {
@@ -78,8 +105,8 @@ export default function ForeshadowingTracker({ manuscriptId }: ForeshadowingTrac
     }
   };
 
-  // Filter pairs by tab
-  const filteredPairs = pairs.filter(pair => {
+  // Filter pairs by tab - ensure pairs is an array to prevent filter errors
+  const filteredPairs = (pairs || []).filter(pair => {
     if (activeTab === 'unresolved') return !pair.is_resolved;
     if (activeTab === 'resolved') return pair.is_resolved;
     return true;

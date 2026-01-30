@@ -38,17 +38,25 @@ export default function SuggestionQueue({ manuscriptId, pollingInterval = 30000 
 
       if (!isMountedRef.current) return;
 
+      // Get current suggestions from store (may have been added via WebSocket)
+      const currentSuggestions = suggestions;
+
+      // Merge API data with WebSocket-added suggestions (prefer API data for duplicates)
+      const apiIds = new Set(data.map(s => s.id));
+      const websocketOnly = currentSuggestions.filter(s => s.status === 'PENDING' && !apiIds.has(s.id));
+      const mergedData = [...data, ...websocketOnly];
+
       // Track new suggestions since last fetch
       if (isPolling && lastFetchedIds.size > 0) {
-        const newIds = data.filter(s => !lastFetchedIds.has(s.id));
+        const newIds = mergedData.filter(s => !lastFetchedIds.has(s.id));
         if (newIds.length > 0) {
           setNewSuggestionCount(prev => prev + newIds.length);
         }
       }
 
       // Update tracked IDs
-      setLastFetchedIds(new Set(data.map(s => s.id)));
-      setSuggestions(data);
+      setLastFetchedIds(new Set(mergedData.map(s => s.id)));
+      setSuggestions(mergedData);
     } catch (err) {
       if (isMountedRef.current) {
         setError(err instanceof Error ? err.message : 'Failed to load suggestions');

@@ -97,10 +97,59 @@
     @apply text-2xl text-faded-ink;
   }
 
-  /* Entity mention styles - Maxwell */
+  /* Entity mention styles - Maxwell (explicit @mentions) */
   .entity-mention {
     @apply cursor-pointer border-b-2 border-bronze border-dotted;
     @apply hover:bg-bronze hover:bg-opacity-10 transition-colors;
+  }
+
+  /* Entity highlight styles - plain text entity name matches */
+  .entity-highlight {
+    @apply cursor-pointer transition-colors;
+    background-color: rgba(180, 142, 85, 0.1);
+    border-bottom: 1px dotted rgba(180, 142, 85, 0.5);
+  }
+
+  .entity-highlight:hover {
+    background-color: rgba(180, 142, 85, 0.2);
+    border-bottom-color: rgba(180, 142, 85, 0.8);
+  }
+
+  /* Entity type-specific highlight colors */
+  .entity-highlight-character {
+    background-color: rgba(180, 142, 85, 0.1);
+    border-bottom-color: rgba(180, 142, 85, 0.5);
+  }
+
+  .entity-highlight-character:hover {
+    background-color: rgba(180, 142, 85, 0.2);
+  }
+
+  .entity-highlight-location {
+    background-color: rgba(22, 163, 74, 0.1);
+    border-bottom-color: rgba(22, 163, 74, 0.5);
+  }
+
+  .entity-highlight-location:hover {
+    background-color: rgba(22, 163, 74, 0.2);
+  }
+
+  .entity-highlight-item {
+    background-color: rgba(217, 119, 6, 0.1);
+    border-bottom-color: rgba(217, 119, 6, 0.5);
+  }
+
+  .entity-highlight-item:hover {
+    background-color: rgba(217, 119, 6, 0.2);
+  }
+
+  .entity-highlight-lore {
+    background-color: rgba(147, 51, 234, 0.1);
+    border-bottom-color: rgba(147, 51, 234, 0.5);
+  }
+
+  .entity-highlight-lore:hover {
+    background-color: rgba(147, 51, 234, 0.2);
   }
 
   /* Consistency error styles - Maxwell */

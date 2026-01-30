@@ -524,19 +524,19 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
   // Computed Values
   getCompletedBeatsCount: () => {
     const outline = get().outline;
-    if (!outline) return 0;
+    if (!outline?.plot_beats) return 0;
     return outline.plot_beats.filter((beat) => beat.is_completed).length;
   },
 
   getTotalBeatsCount: () => {
     const outline = get().outline;
-    if (!outline) return 0;
+    if (!outline?.plot_beats) return 0;
     return outline.plot_beats.length;
   },
 
   getBeatById: (beatId: string) => {
     const outline = get().outline;
-    if (!outline) return undefined;
+    if (!outline?.plot_beats) return undefined;
     return outline.plot_beats.find((beat) => beat.id === beatId);
   },
 

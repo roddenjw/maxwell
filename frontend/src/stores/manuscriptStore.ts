@@ -12,6 +12,10 @@ export interface Manuscript {
   title: string;
   content: string; // JSON stringified Lexical editor state
   wordCount: number;
+  // Story metadata for AI context
+  premise?: string;          // Story premise/logline
+  premiseSource?: string;    // 'ai_generated' or 'user_written'
+  genre?: string;            // e.g., 'Fantasy', 'Mystery', 'Romance'
   createdAt: string;
   updatedAt: string;
 }
@@ -55,6 +59,10 @@ export const useManuscriptStore = create<ManuscriptStore>()(
               title: m.title,
               content: '', // List endpoint doesn't return content
               wordCount: Number(m.word_count) || 0,
+              // Story metadata
+              premise: m.premise || '',
+              premiseSource: m.premise_source || '',
+              genre: m.genre || '',
               createdAt: m.created_at,
               updatedAt: m.updated_at,
             };
@@ -97,6 +105,10 @@ export const useManuscriptStore = create<ManuscriptStore>()(
           title: data.title,
           content: '',
           wordCount: data.word_count || 0,
+          // Story metadata
+          premise: data.premise || '',
+          premiseSource: data.premise_source || '',
+          genre: data.genre || '',
           createdAt: data.created_at,
           updatedAt: data.updated_at,
         };

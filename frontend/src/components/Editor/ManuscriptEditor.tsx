@@ -24,6 +24,7 @@ import { SceneBreakNode } from './nodes/SceneBreakNode';
 import { EntityMentionNode } from './nodes/EntityMentionNode';
 import AutoSavePlugin from './plugins/AutoSavePlugin';
 import EntityMentionsPlugin from './plugins/EntityMentionsPlugin';
+import EntityHighlightPlugin from './plugins/EntityHighlightPlugin';
 import RealtimeNLPPlugin from './plugins/RealtimeNLPPlugin';
 import FastCoachPlugin from './plugins/FastCoachPlugin';
 import SceneDetectionPlugin from './plugins/SceneDetectionPlugin';
@@ -306,6 +307,9 @@ export default function ManuscriptEditor({
 
             {/* Entity mentions plugin - @mention autocomplete */}
             {manuscriptId && <EntityMentionsPlugin manuscriptId={manuscriptId} />}
+
+            {/* Entity highlight plugin - highlights entity names in plain text */}
+            {manuscriptId && <EntityHighlightPlugin manuscriptId={manuscriptId} enabled={true} />}
 
             {/* Realtime NLP plugin - live entity detection via WebSocket */}
             {manuscriptId && <RealtimeNLPPlugin manuscriptId={manuscriptId} />}

@@ -9,6 +9,7 @@ import type { ConflictGenerationRequest } from '@/types/brainstorm';
 
 import { brainstormingApi } from '@/lib/api';
 import { useBrainstormStore } from '@/stores/brainstormStore';
+import { AIGenerationProgress } from '@/components/Common';
 
 type ConflictType = 'internal' | 'interpersonal' | 'external' | 'societal' | 'any';
 
@@ -368,6 +369,13 @@ export default function ConflictBrainstorm() {
           <li><strong>Resolution Paths:</strong> Different ways the conflict could resolve</li>
         </ul>
       </div>
+
+      {/* AI Generation Progress Overlay */}
+      <AIGenerationProgress
+        isGenerating={isGenerating}
+        message="Generating Conflicts"
+        estimatedSeconds={numIdeas * 4}
+      />
     </div>
   );
 }

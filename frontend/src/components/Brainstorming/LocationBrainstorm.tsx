@@ -9,6 +9,7 @@ import type { LocationGenerationRequest } from '@/types/brainstorm';
 
 import { brainstormingApi } from '@/lib/api';
 import { useBrainstormStore } from '@/stores/brainstormStore';
+import { AIGenerationProgress } from '@/components/Common';
 
 export default function LocationBrainstorm() {
   const {
@@ -314,6 +315,13 @@ export default function LocationBrainstorm() {
           <li><strong>Secrets:</strong> Hidden elements that add narrative depth</li>
         </ul>
       </div>
+
+      {/* AI Generation Progress Overlay */}
+      <AIGenerationProgress
+        isGenerating={isGenerating}
+        message="Generating Locations"
+        estimatedSeconds={numIdeas * 5}
+      />
     </div>
   );
 }

@@ -10,6 +10,7 @@ export { default as OutlineSettingsModal } from './OutlineSettingsModal';
 export { default as OutlineCompletionDonut } from './OutlineCompletionDonut';
 export { default as TimelineView } from './TimelineView';
 export { default as ProgressDashboard } from './ProgressDashboard';
+export { default as OutlineGanttView } from './OutlineGanttView';
 export { default as BeatSuggestionCard } from './BeatSuggestionCard';
 export { default as SeriesOutlineView } from './SeriesOutlineView';
 export { default as OutlineMainView } from './OutlineMainView';

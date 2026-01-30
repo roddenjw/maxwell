@@ -9,6 +9,7 @@ import type { SceneGenerationRequest } from '@/types/brainstorm';
 
 import { brainstormingApi } from '@/lib/api';
 import { useBrainstormStore } from '@/stores/brainstormStore';
+import { AIGenerationProgress } from '@/components/Common';
 
 type ScenePurpose = 'introduction' | 'conflict' | 'revelation' | 'climax' | 'resolution' | 'any';
 
@@ -410,6 +411,13 @@ export default function SceneBrainstorm() {
           <li><strong>Sensory Details:</strong> Immersive details to include</li>
         </ul>
       </div>
+
+      {/* AI Generation Progress Overlay */}
+      <AIGenerationProgress
+        isGenerating={isGenerating}
+        message="Generating Scenes"
+        estimatedSeconds={numIdeas * 6}
+      />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import type { CharacterGenerationRequest } from '@/types/brainstorm';
 
 import { brainstormingApi } from '@/lib/api';
 import { useBrainstormStore } from '@/stores/brainstormStore';
+import { AIGenerationProgress } from '@/components/Common';
 
 export default function CharacterBrainstorm() {
   const {
@@ -26,6 +27,7 @@ export default function CharacterBrainstorm() {
   const [error, setError] = useState<string | null>(null);
   const [storedApiKey, setStoredApiKey] = useState<string | null>(null);
   const [useCustomContext, setUseCustomContext] = useState(false);
+  const [isGeneratingPremise, setIsGeneratingPremise] = useState(false);
 
   const estimatedCost = numIdeas * 0.015; // ~$0.015 per character idea
 
@@ -54,6 +56,40 @@ export default function CharacterBrainstorm() {
       // Restore manuscript context
       setGenre(manuscriptContext.outline.genre || '');
       setPremise(manuscriptContext.outline.premise || '');
+    }
+  };
+
+  const handleGeneratePremise = async () => {
+    if (!currentSession) {
+      setError('No active session');
+      return;
+    }
+
+    if (!storedApiKey) {
+      setError('Please set your OpenRouter API key in Settings');
+      return;
+    }
+
+    try {
+      setError(null);
+      setIsGeneratingPremise(true);
+
+      const result = await brainstormingApi.generatePremise({
+        api_key: storedApiKey,
+        manuscript_id: currentSession.manuscript_id,
+      });
+
+      if (result.success) {
+        setPremise(result.premise);
+        if (result.genre && !genre) {
+          setGenre(result.genre);
+        }
+      }
+    } catch (err) {
+      console.error('Premise generation error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to generate premise');
+    } finally {
+      setIsGeneratingPremise(false);
     }
   };
 
@@ -163,9 +199,34 @@ export default function CharacterBrainstorm() {
 
         {/* Story Premise */}
         <div>
-          <label htmlFor="premise" className="block text-sm font-medium text-gray-700 mb-1">
-            Story Premise *
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label htmlFor="premise" className="block text-sm font-medium text-gray-700">
+              Story Premise *
+            </label>
+            <button
+              type="button"
+              onClick={handleGeneratePremise}
+              disabled={isGenerating || isGeneratingPremise}
+              className="text-sm text-purple-600 hover:text-purple-800 flex items-center gap-1 disabled:opacity-50"
+            >
+              {isGeneratingPremise ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Auto-generate from manuscript
+                </>
+              )}
+            </button>
+          </div>
           <textarea
             id="premise"
             value={premise}
@@ -173,8 +234,13 @@ export default function CharacterBrainstorm() {
             placeholder="Describe your story's core concept, setting, and central conflict..."
             rows={4}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isGenerating}
+            disabled={isGenerating || isGeneratingPremise}
           />
+          {manuscriptContext?.outline?.premise_source && (
+            <p className="text-xs text-gray-500 mt-1">
+              Source: {manuscriptContext.outline.premise_source === 'ai_generated' ? 'AI Generated' : 'Manual'}
+            </p>
+          )}
         </div>
 
         {/* Character Ideas (Optional) */}
@@ -333,6 +399,13 @@ export default function CharacterBrainstorm() {
           <li><strong>ARC:</strong> Journey from WANT to NEED realization</li>
         </ul>
       </div>
+
+      {/* AI Generation Progress Overlay */}
+      <AIGenerationProgress
+        isGenerating={isGenerating}
+        message="Generating Characters"
+        estimatedSeconds={numIdeas * 5} // ~5 seconds per character
+      />
     </div>
   );
 }
