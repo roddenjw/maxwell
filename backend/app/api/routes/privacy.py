@@ -29,15 +29,8 @@ router = APIRouter(prefix="/api/privacy", tags=["privacy"])
 # Request/Response models
 class PrivacyPreferencesUpdate(BaseModel):
     """Request model for updating privacy preferences"""
-    allow_ai_assistance: Optional[bool] = None
-    allow_training_data: Optional[bool] = None
-    allow_style_analysis: Optional[bool] = None
-    allow_plot_suggestions: Optional[bool] = None
-    allow_character_development: Optional[bool] = None
-    allow_grammar_check: Optional[bool] = None
-    allow_continuity_check: Optional[bool] = None
-    content_sharing_level: Optional[str] = None
-    ai_context_retention_days: Optional[int] = None
+    allow_ai_assistance: Optional[bool] = None  # Disable AI completely (paranoid mode)
+    allow_training_data: Optional[bool] = None  # Allow content for training (default: False)
 
 
 class ConsentUpdate(BaseModel):
@@ -71,7 +64,6 @@ async def get_privacy_preferences(
                 manuscript_id=manuscript_id,
                 allow_ai_assistance=True,  # AI helps you write
                 allow_training_data=False,  # Your content is NEVER used to train AI
-                content_sharing_level=ContentSharingLevel.ASSIST_NO_TRAINING.value,
             )
             db.add(preferences)
             db.commit()
@@ -84,16 +76,11 @@ async def get_privacy_preferences(
                 "manuscript_id": preferences.manuscript_id,
                 "allow_ai_assistance": preferences.allow_ai_assistance,
                 "allow_training_data": preferences.allow_training_data,
-                "allow_style_analysis": preferences.allow_style_analysis,
-                "allow_plot_suggestions": preferences.allow_plot_suggestions,
-                "allow_character_development": preferences.allow_character_development,
-                "allow_grammar_check": preferences.allow_grammar_check,
-                "allow_continuity_check": preferences.allow_continuity_check,
-                "content_sharing_level": preferences.content_sharing_level,
-                "ai_context_retention_days": preferences.ai_context_retention_days,
+                "training_blocked": not preferences.allow_training_data,  # Friendly name
                 "created_at": preferences.created_at.isoformat() if preferences.created_at else None,
                 "updated_at": preferences.updated_at.isoformat() if preferences.updated_at else None,
-            }
+            },
+            "message": "AI assistance is enabled. Your content is NOT used to train AI models." if not preferences.allow_training_data else "Warning: Training is enabled for this manuscript."
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get preferences: {str(e)}")
@@ -159,16 +146,10 @@ async def update_privacy_preferences(
                 "manuscript_id": preferences.manuscript_id,
                 "allow_ai_assistance": preferences.allow_ai_assistance,
                 "allow_training_data": preferences.allow_training_data,
-                "allow_style_analysis": preferences.allow_style_analysis,
-                "allow_plot_suggestions": preferences.allow_plot_suggestions,
-                "allow_character_development": preferences.allow_character_development,
-                "allow_grammar_check": preferences.allow_grammar_check,
-                "allow_continuity_check": preferences.allow_continuity_check,
-                "content_sharing_level": preferences.content_sharing_level,
-                "ai_context_retention_days": preferences.ai_context_retention_days,
+                "training_blocked": not preferences.allow_training_data,
                 "updated_at": preferences.updated_at.isoformat() if preferences.updated_at else None,
             },
-            "message": "Privacy preferences updated successfully"
+            "message": "Privacy preferences updated. Training is " + ("BLOCKED" if not preferences.allow_training_data else "ENABLED") + "."
         }
     except Exception as e:
         db.rollback()

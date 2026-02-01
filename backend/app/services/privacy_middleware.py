@@ -1,28 +1,25 @@
 """
 Privacy Middleware for AI Operations
 
-This module provides middleware that enforces user privacy settings
-before any AI operation. It integrates with the ContentGateway to:
-
-1. Check author privacy preferences before AI calls
-2. Block requests when AI assistance is disabled
-3. Block specific features (style analysis, plot suggestions, etc.)
-4. Log all AI interactions for audit
-5. Track carbon emissions
+Simple middleware that ensures:
+1. User content is NEVER used to train AI models (default)
+2. AI assistance can be completely disabled if user wants (opt-in paranoid mode)
+3. All AI interactions are logged for audit (without storing content)
+4. Carbon emissions are tracked
 
 Usage:
-    from app.services.privacy_middleware import privacy_check, PrivacyMiddleware
+    from app.services.privacy_middleware import PrivacyMiddleware, check_ai_allowed
 
-    # As a decorator
-    @privacy_check
-    async def analyze_text(manuscript_id, content, ...):
-        ...
+    # Quick check
+    result = await check_ai_allowed(db, manuscript_id)
+    if result.allowed:
+        # AI assistance is enabled, training is blocked
+        response = await ai_call(...)
 
-    # As context manager
+    # With audit logging
     async with PrivacyMiddleware(db, manuscript_id) as pm:
-        if pm.allows_feature("style_analysis"):
-            result = await ai_call(...)
-            await pm.log_interaction(...)
+        response = await ai_call(...)
+        await pm.log_interaction("analysis", "anthropic", "claude-3", tokens)
 """
 
 from typing import Optional, Dict, Any, Callable
@@ -61,39 +58,23 @@ class PrivacyCheckResult:
 
 class PrivacyMiddleware:
     """
-    Middleware for enforcing privacy settings on AI operations.
+    Simple middleware for privacy-respecting AI operations.
 
-    Usage as context manager:
-        async with PrivacyMiddleware(db, manuscript_id) as pm:
-            if pm.is_allowed:
-                result = await ai_operation()
-                await pm.log_interaction("analysis", "anthropic", "claude-3", tokens)
+    Default behavior:
+    - AI assistance is ENABLED (helps you write)
+    - Training is DISABLED (your content is never used to train AI)
+
+    Users can optionally disable AI completely (paranoid mode).
     """
-
-    # Map operation types to preference fields
-    FEATURE_MAP = {
-        "style_analysis": "allow_style_analysis",
-        "style_suggestion": "allow_style_analysis",
-        "plot_analysis": "allow_plot_suggestions",
-        "plot_suggestion": "allow_plot_suggestions",
-        "character_analysis": "allow_character_development",
-        "character_suggestion": "allow_character_development",
-        "grammar_check": "allow_grammar_check",
-        "spell_check": "allow_grammar_check",
-        "continuity_check": "allow_continuity_check",
-        "timeline_check": "allow_continuity_check",
-    }
 
     def __init__(
         self,
         db: Session,
         manuscript_id: str,
-        feature: Optional[str] = None,
         region: str = "unknown"
     ):
         self.db = db
         self.manuscript_id = manuscript_id
-        self.feature = feature
         self.region = region
         self._preferences: Optional[AuthorPrivacyPreferences] = None
         self._check_result: Optional[PrivacyCheckResult] = None
@@ -125,68 +106,40 @@ class PrivacyMiddleware:
         """Get the loaded preferences"""
         return self._preferences
 
-    async def check_privacy(self, feature: Optional[str] = None) -> PrivacyCheckResult:
+    async def check_privacy(self) -> PrivacyCheckResult:
         """
-        Check if an AI operation is allowed based on user preferences.
+        Check if AI assistance is allowed for this manuscript.
 
-        Args:
-            feature: Optional specific feature to check
+        Returns allowed=True if:
+        - AI assistance is enabled (default)
 
-        Returns:
-            PrivacyCheckResult with allowed status and reason
+        Returns allowed=False if:
+        - User has explicitly disabled AI assistance (paranoid mode)
         """
-        feature = feature or self.feature
-
         # Load preferences
         self._preferences = await self._get_or_create_preferences()
 
-        # Check if AI assistance is globally disabled
+        # Check if AI assistance is disabled (paranoid mode)
         if not self._preferences.allow_ai_assistance:
             return PrivacyCheckResult(
                 allowed=False,
-                reason="AI assistance is disabled for this manuscript",
+                reason="AI assistance is disabled for this manuscript (you can re-enable it in privacy settings)",
                 preferences=self._preferences
             )
 
-        # Check content sharing level - only block if explicitly set to NO_AI (paranoid mode)
-        # ASSIST_NO_TRAINING (default) allows AI to help but blocks training
-        if self._preferences.content_sharing_level in ["no_ai", ContentSharingLevel.NO_AI.value]:
-            return PrivacyCheckResult(
-                allowed=False,
-                reason="Content sharing is set to 'no AI' mode - all AI features disabled",
-                preferences=self._preferences
-            )
-
-        # Check specific feature if provided
-        if feature:
-            pref_field = self.FEATURE_MAP.get(feature)
-            if pref_field:
-                if not getattr(self._preferences, pref_field, True):
-                    return PrivacyCheckResult(
-                        allowed=False,
-                        reason=f"Feature '{feature}' is disabled",
-                        feature_disabled=feature,
-                        preferences=self._preferences
-                    )
-
+        # AI assistance is allowed
+        # Note: Training is blocked by default via allow_training_data=False
         return PrivacyCheckResult(
             allowed=True,
             preferences=self._preferences
         )
 
-    def allows_feature(self, feature: str) -> bool:
-        """Quick check if a specific feature is allowed"""
+    @property
+    def training_blocked(self) -> bool:
+        """Check if training is blocked (should always be True by default)"""
         if not self._preferences:
-            return False
-
-        if not self._preferences.allow_ai_assistance:
-            return False
-
-        pref_field = self.FEATURE_MAP.get(feature)
-        if pref_field:
-            return getattr(self._preferences, pref_field, True)
-
-        return True
+            return True  # Default to blocking training
+        return not self._preferences.allow_training_data
 
     async def log_interaction(
         self,
@@ -246,7 +199,6 @@ class PrivacyMiddleware:
                 manuscript_id=self.manuscript_id,
                 allow_ai_assistance=True,  # AI can help you write
                 allow_training_data=False,  # CRITICAL: your content is NEVER used to train AI
-                content_sharing_level=ContentSharingLevel.ASSIST_NO_TRAINING.value,  # AI helps, no training
             )
             self.db.add(preferences)
             self.db.commit()
@@ -255,74 +207,71 @@ class PrivacyMiddleware:
         return preferences
 
 
-def privacy_check(feature: Optional[str] = None):
+def privacy_check(func: Callable):
     """
     Decorator to enforce privacy checks on async functions.
 
-    The decorated function must have 'db' and 'manuscript_id' as parameters
-    (either positional or keyword).
+    The decorated function must have 'db' and 'manuscript_id' as parameters.
 
     Usage:
-        @privacy_check(feature="style_analysis")
-        async def analyze_style(db: Session, manuscript_id: str, content: str):
+        @privacy_check
+        async def analyze_text(db: Session, manuscript_id: str, content: str):
             ...
 
     Raises:
-        PrivacyBlockedException: If the operation is not allowed
+        PrivacyBlockedException: If AI assistance is disabled
     """
-    def decorator(func: Callable):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # Extract db and manuscript_id from args/kwargs
-            db = kwargs.get('db')
-            manuscript_id = kwargs.get('manuscript_id')
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        # Extract db and manuscript_id from args/kwargs
+        db = kwargs.get('db')
+        manuscript_id = kwargs.get('manuscript_id')
 
-            # Try to get from positional args if not in kwargs
-            if db is None and len(args) > 0:
-                # Assume first arg might be self, second might be db
-                for arg in args:
-                    if isinstance(arg, Session):
-                        db = arg
-                        break
+        # Try to get from positional args if not in kwargs
+        if db is None:
+            for arg in args:
+                if isinstance(arg, Session):
+                    db = arg
+                    break
 
-            if manuscript_id is None:
-                for key in ['manuscript_id', 'ms_id', 'id']:
-                    if key in kwargs:
-                        manuscript_id = kwargs[key]
-                        break
+        if manuscript_id is None:
+            for key in ['manuscript_id', 'ms_id', 'id']:
+                if key in kwargs:
+                    manuscript_id = kwargs[key]
+                    break
 
-            # If we can't find required params, skip the check
-            if db is None or manuscript_id is None:
-                return await func(*args, **kwargs)
-
-            # Perform privacy check
-            middleware = PrivacyMiddleware(db, manuscript_id, feature)
-            result = await middleware.check_privacy()
-
-            if not result.allowed:
-                raise PrivacyBlockedException(result.reason, result.feature_disabled)
-
+        # If we can't find required params, skip the check
+        if db is None or manuscript_id is None:
             return await func(*args, **kwargs)
 
-        return wrapper
-    return decorator
+        # Perform privacy check
+        middleware = PrivacyMiddleware(db, manuscript_id)
+        result = await middleware.check_privacy()
+
+        if not result.allowed:
+            raise PrivacyBlockedException(result.reason)
+
+        return await func(*args, **kwargs)
+
+    return wrapper
 
 
 async def check_ai_allowed(
     db: Session,
     manuscript_id: str,
-    feature: Optional[str] = None
 ) -> PrivacyCheckResult:
     """
-    Standalone function to check if AI is allowed for a manuscript.
+    Check if AI assistance is allowed for a manuscript.
 
     Args:
         db: Database session
         manuscript_id: Manuscript ID
-        feature: Optional specific feature to check
 
     Returns:
         PrivacyCheckResult with allowed status
+
+    Note: Training is ALWAYS blocked by default (allow_training_data=False).
+    This check only verifies if AI assistance itself is enabled.
     """
-    middleware = PrivacyMiddleware(db, manuscript_id, feature)
+    middleware = PrivacyMiddleware(db, manuscript_id)
     return await middleware.check_privacy()

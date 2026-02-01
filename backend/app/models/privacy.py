@@ -54,19 +54,11 @@ class AuthorPrivacyPreferences(Base):
     # In a multi-user system, this would link to a user_id instead
     manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=False, unique=True)
 
-    # Global AI settings - defaults protect the author
-    allow_ai_assistance = Column(Boolean, default=True, nullable=False)
+    # Core privacy setting - NEVER train on user content by default
     allow_training_data = Column(Boolean, default=False, nullable=False)  # CRITICAL: default FALSE
 
-    # Granular AI feature controls
-    allow_style_analysis = Column(Boolean, default=True)
-    allow_plot_suggestions = Column(Boolean, default=True)
-    allow_character_development = Column(Boolean, default=True)
-    allow_grammar_check = Column(Boolean, default=True)
-    allow_continuity_check = Column(Boolean, default=True)
-
-    # Content sharing level - DEFAULT allows AI assistance but blocks training
-    content_sharing_level = Column(String, default=ContentSharingLevel.ASSIST_NO_TRAINING.value)
+    # Optional: completely disable AI (paranoid mode) - defaults to enabled
+    allow_ai_assistance = Column(Boolean, default=True, nullable=False)
 
     # Data retention preferences
     ai_context_retention_days = Column(Integer, default=0)  # 0 = no retention
@@ -80,20 +72,6 @@ class AuthorPrivacyPreferences(Base):
 
     def __repr__(self):
         return f"<AuthorPrivacyPreferences(manuscript_id={self.manuscript_id}, training={self.allow_training_data})>"
-
-    def allows_feature(self, feature: str) -> bool:
-        """Check if a specific AI feature is allowed"""
-        if not self.allow_ai_assistance:
-            return False
-
-        feature_map = {
-            "style_analysis": self.allow_style_analysis,
-            "plot_suggestions": self.allow_plot_suggestions,
-            "character_development": self.allow_character_development,
-            "grammar_check": self.allow_grammar_check,
-            "continuity_check": self.allow_continuity_check,
-        }
-        return feature_map.get(feature, True)
 
 
 class ConsentRecord(Base):

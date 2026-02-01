@@ -128,18 +128,6 @@ class BaseMaxwellAgent(ABC):
             return self._tools
         return self._get_tools()
 
-    def _get_feature_name(self) -> Optional[str]:
-        """Map agent type to privacy feature name for preference checking"""
-        feature_map = {
-            AgentType.STYLE: "style_analysis",
-            AgentType.CONTINUITY: "continuity_check",
-            AgentType.STRUCTURE: "plot_suggestions",
-            AgentType.VOICE: "style_analysis",
-            AgentType.RESEARCH: None,  # General - no specific restriction
-            AgentType.CONSISTENCY: "continuity_check",
-        }
-        return feature_map.get(self.agent_type)
-
     def _build_llm_config(self) -> LLMConfig:
         """Build LLM configuration from agent config"""
         model_config = self.config.model_config
@@ -256,11 +244,11 @@ Respond with valid JSON matching this schema:
         start_time = datetime.utcnow()
 
         try:
-            # Check privacy settings before any AI operation
+            # Check if AI assistance is enabled for this manuscript
+            # (Training is always blocked by default - this just checks if AI can help at all)
             db = next(get_db())
             try:
-                feature = self._get_feature_name()
-                privacy_result = await check_ai_allowed(db, manuscript_id, feature)
+                privacy_result = await check_ai_allowed(db, manuscript_id)
 
                 if not privacy_result.allowed:
                     execution_time = int(
@@ -270,9 +258,9 @@ Respond with valid JSON matching this schema:
                         agent_type=self.agent_type,
                         success=False,
                         issues=[{
-                            "type": "privacy_blocked",
+                            "type": "ai_disabled",
                             "severity": "info",
-                            "description": privacy_result.reason or "AI operation blocked by privacy settings"
+                            "description": privacy_result.reason or "AI assistance is disabled for this manuscript"
                         }],
                         execution_time_ms=execution_time
                     )
