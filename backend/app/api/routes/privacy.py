@@ -64,12 +64,14 @@ async def get_privacy_preferences(
         ).first()
 
         if not preferences:
-            # Create default preferences with maximum protection
+            # Create default preferences:
+            # - AI can help you write (assistance enabled)
+            # - Your content is NEVER used to train AI models (training disabled)
             preferences = AuthorPrivacyPreferences(
                 manuscript_id=manuscript_id,
-                allow_ai_assistance=True,
-                allow_training_data=False,  # CRITICAL: default to FALSE
-                content_sharing_level=ContentSharingLevel.AI_ASSIST_ONLY.value,
+                allow_ai_assistance=True,  # AI helps you write
+                allow_training_data=False,  # Your content is NEVER used to train AI
+                content_sharing_level=ContentSharingLevel.ASSIST_NO_TRAINING.value,
             )
             db.add(preferences)
             db.commit()

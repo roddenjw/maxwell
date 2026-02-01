@@ -148,11 +148,12 @@ class PrivacyMiddleware:
                 preferences=self._preferences
             )
 
-        # Check content sharing level
-        if self._preferences.content_sharing_level == ContentSharingLevel.PRIVATE.value:
+        # Check content sharing level - only block if explicitly set to NO_AI (paranoid mode)
+        # ASSIST_NO_TRAINING (default) allows AI to help but blocks training
+        if self._preferences.content_sharing_level in ["no_ai", ContentSharingLevel.NO_AI.value]:
             return PrivacyCheckResult(
                 allowed=False,
-                reason="Content sharing is set to private - no AI access",
+                reason="Content sharing is set to 'no AI' mode - all AI features disabled",
                 preferences=self._preferences
             )
 
@@ -238,12 +239,14 @@ class PrivacyMiddleware:
         ).first()
 
         if not preferences:
-            # Create default preferences (maximum protection)
+            # Create default preferences:
+            # - AI assistance enabled (helps you write)
+            # - Training data disabled (your content is never used to train AI)
             preferences = AuthorPrivacyPreferences(
                 manuscript_id=self.manuscript_id,
-                allow_ai_assistance=True,
-                allow_training_data=False,  # CRITICAL: default to FALSE
-                content_sharing_level=ContentSharingLevel.AI_ASSIST_ONLY.value,
+                allow_ai_assistance=True,  # AI can help you write
+                allow_training_data=False,  # CRITICAL: your content is NEVER used to train AI
+                content_sharing_level=ContentSharingLevel.ASSIST_NO_TRAINING.value,  # AI helps, no training
             )
             self.db.add(preferences)
             self.db.commit()

@@ -16,10 +16,20 @@ from app.database import Base
 
 
 class ContentSharingLevel(str, enum.Enum):
-    """How content can be shared with AI services"""
-    PRIVATE = "private"  # No AI access at all
-    AI_ASSIST_ONLY = "ai_assist_only"  # AI can assist but not train
-    FULL = "full"  # Content can be used for training (opt-in)
+    """
+    How content can be shared with AI services.
+
+    DEFAULT is ASSIST_NO_TRAINING - AI helps you write, but your content
+    is never used to train AI models.
+    """
+    NO_AI = "no_ai"  # Paranoid mode: No AI access at all (fully offline)
+    ASSIST_NO_TRAINING = "assist_no_training"  # DEFAULT: AI helps, but NO training
+    ASSIST_WITH_TRAINING = "assist_with_training"  # Opt-in: AI helps AND can train
+
+    # Aliases for backwards compatibility
+    PRIVATE = "no_ai"
+    AI_ASSIST_ONLY = "assist_no_training"
+    FULL = "assist_with_training"
 
 
 class ConsentType(str, enum.Enum):
@@ -55,8 +65,8 @@ class AuthorPrivacyPreferences(Base):
     allow_grammar_check = Column(Boolean, default=True)
     allow_continuity_check = Column(Boolean, default=True)
 
-    # Content sharing level
-    content_sharing_level = Column(String, default=ContentSharingLevel.AI_ASSIST_ONLY.value)
+    # Content sharing level - DEFAULT allows AI assistance but blocks training
+    content_sharing_level = Column(String, default=ContentSharingLevel.ASSIST_NO_TRAINING.value)
 
     # Data retention preferences
     ai_context_retention_days = Column(Integer, default=0)  # 0 = no retention
