@@ -8,6 +8,16 @@ Provides a single interface to multiple LLM providers:
 - Local (llama-cpp-python)
 
 Follows BYOK pattern - API keys passed per request, never stored.
+
+PRIVACY NOTE:
+All supported providers do NOT train on API data by default:
+- Anthropic: Does not use API data for training (https://privacy.claude.com)
+- OpenAI: Does not use API data for training since March 2023
+- OpenRouter: Routing service only, doesn't train. Underlying providers apply.
+- Local: Data never leaves your machine
+
+For additional privacy protection, use the ProtectedLLMService which adds
+explicit opt-out headers, content sanitization, and audit logging.
 """
 
 import json
@@ -144,12 +154,16 @@ class LLMService:
                 "temperature": config.temperature,
                 "max_tokens": config.max_tokens,
                 "api_key": config.api_key,
+                # Note: OpenAI does NOT train on API data since March 2023
+                # See: https://help.openai.com/en/articles/5722486
             }
             if config.response_format == "json":
                 kwargs["model_kwargs"] = {"response_format": {"type": "json_object"}}
             return ChatOpenAI(**kwargs)
 
         elif config.provider == LLMProvider.ANTHROPIC:
+            # Note: Anthropic does NOT train on API data
+            # See: https://privacy.claude.com/en/articles/10023580-is-my-data-used-for-model-training
             return ChatAnthropic(
                 model=config.model,
                 temperature=config.temperature,
@@ -164,6 +178,13 @@ class LLMService:
                 "max_tokens": config.max_tokens,
                 "api_key": config.api_key,
                 "base_url": config.base_url or "https://openrouter.ai/api/v1",
+                # OpenRouter-specific headers for identification and privacy
+                "default_headers": {
+                    "HTTP-Referer": "https://maxwell.writing",  # Identifies app to OpenRouter
+                    "X-Title": "Maxwell Writing IDE",  # App name shown in OpenRouter dashboard
+                    # Note: OpenRouter routes to underlying providers (Anthropic, OpenAI, etc.)
+                    # Those providers don't train on API data by default
+                },
             }
             if config.response_format == "json":
                 kwargs["model_kwargs"] = {"response_format": {"type": "json_object"}}

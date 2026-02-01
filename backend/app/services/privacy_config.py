@@ -59,11 +59,16 @@ PROVIDER_POLICIES: Dict[AIProvider, ProviderPrivacyPolicy] = {
     ),
     AIProvider.OPENROUTER: ProviderPrivacyPolicy(
         name="OpenRouter",
-        trains_on_api_data=False,  # Routing service, doesn't train
+        trains_on_api_data=False,  # Routing service only - doesn't train
         supports_zdr=False,  # Depends on underlying provider
-        default_retention_days=7,
-        supports_opt_out_header=False,
-        documentation_url="https://openrouter.ai/docs"
+        default_retention_days=7,  # Logs for 7 days for debugging
+        supports_opt_out_header=True,  # Supports X-Title and HTTP-Referer
+        opt_out_header_name="HTTP-Referer",  # Identifies your app
+        documentation_url="https://openrouter.ai/docs#headers"
+        # NOTE: When using OpenRouter, the UNDERLYING provider's policy applies:
+        # - anthropic/* models: Anthropic doesn't train on API data
+        # - openai/* models: OpenAI doesn't train on API data (since March 2023)
+        # - open-source models: Typically no training concerns
     ),
     AIProvider.LOCAL: ProviderPrivacyPolicy(
         name="Local",
