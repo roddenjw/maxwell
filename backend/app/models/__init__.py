@@ -15,6 +15,8 @@ from app.models.foreshadowing import ForeshadowingPair, ForeshadowingType
 from app.models.achievement import Achievement, AchievementProgress, AchievementType, ACHIEVEMENT_METADATA
 from app.models.shareable_recap import ShareableRecap
 from app.models.agent import AgentAnalysis, CoachSession, CoachMessage, AuthorLearning, SuggestionFeedback
+from app.models.privacy import AuthorPrivacyPreferences, ConsentRecord, AIInteractionAudit, ContentSharingLevel, ConsentType
+from app.models.carbon import CarbonMetric, CarbonReport, CarbonBudget, ENERGY_ESTIMATES_MICRO_KWH, CARBON_INTENSITY_BY_REGION
 
 __all__ = [
     # World/Series hierarchy
@@ -67,4 +69,16 @@ __all__ = [
     "CoachMessage",
     "AuthorLearning",
     "SuggestionFeedback",
+    # Privacy
+    "AuthorPrivacyPreferences",
+    "ConsentRecord",
+    "AIInteractionAudit",
+    "ContentSharingLevel",
+    "ConsentType",
+    # Carbon Tracking
+    "CarbonMetric",
+    "CarbonReport",
+    "CarbonBudget",
+    "ENERGY_ESTIMATES_MICRO_KWH",
+    "CARBON_INTENSITY_BY_REGION",
 ]

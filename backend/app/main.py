@@ -23,7 +23,7 @@ from app.services import (
     GRAPH_AVAILABLE
 )
 from app.services.nlp_service import nlp_service
-from app.api.routes import versioning, manuscripts, codex, timeline, chapters, stats, realtime, fast_coach, recap, export, onboarding, outlines, brainstorming, worlds, entity_states, foreshadowing, import_routes, share, agents
+from app.api.routes import versioning, manuscripts, codex, timeline, chapters, stats, realtime, fast_coach, recap, export, onboarding, outlines, brainstorming, worlds, entity_states, foreshadowing, import_routes, share, agents, privacy, carbon
 
 
 @asynccontextmanager
@@ -51,6 +51,9 @@ async def lifespan(app: FastAPI):
         print("🕸️  KuzuDB available")
     else:
         print("⚠️  KuzuDB not available (requires Python < 3.13)")
+
+    print("🔒 Privacy protection enabled (AI training opt-out by default)")
+    print("🌱 Carbon tracking enabled (SCI methodology)")
 
     print("✅ Backend ready!")
 
@@ -97,6 +100,8 @@ app.include_router(foreshadowing.router)
 app.include_router(import_routes.router)
 app.include_router(share.router)
 app.include_router(agents.router)
+app.include_router(privacy.router)
+app.include_router(carbon.router)
 
 
 @app.get("/")
@@ -129,7 +134,9 @@ async def api_status():
             "codex": True,  # ✅ Entity CRUD ready
             "timeline": True,  # ✅ Timeline orchestrator ready
             "ai_generation": True,  # LangChain agents ready
-            "analysis": nlp_service.is_available()  # ✅ spaCy NLP
+            "analysis": nlp_service.is_available(),  # ✅ spaCy NLP
+            "privacy_protection": True,  # ✅ AI training opt-out
+            "carbon_tracking": True,  # ✅ SCI methodology
         },
         "services": {
             "database": True,  # SQLite + Alembic initialized

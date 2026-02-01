@@ -1,0 +1,158 @@
+"""
+Privacy and AI Training Consent models
+
+These models track author preferences for AI data usage and ensure
+manuscripts are protected from being used for AI training while still
+allowing AI assistance features.
+"""
+
+from sqlalchemy import Column, String, Text, DateTime, Integer, Boolean, ForeignKey, JSON, Enum
+from sqlalchemy.orm import relationship
+from datetime import datetime
+import uuid
+import enum
+
+from app.database import Base
+
+
+class ContentSharingLevel(str, enum.Enum):
+    """How content can be shared with AI services"""
+    PRIVATE = "private"  # No AI access at all
+    AI_ASSIST_ONLY = "ai_assist_only"  # AI can assist but not train
+    FULL = "full"  # Content can be used for training (opt-in)
+
+
+class ConsentType(str, enum.Enum):
+    """Types of consent that can be granted"""
+    AI_ASSISTANCE = "ai_assistance"
+    TRAINING_DATA = "training_data"
+    ANALYTICS = "analytics"
+
+
+class AuthorPrivacyPreferences(Base):
+    """
+    Author-level privacy preferences for AI interactions.
+
+    This tracks what AI features an author allows and whether they
+    consent to any training data usage (default: NO).
+    """
+    __tablename__ = "author_privacy_preferences"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    # Link to manuscript (author is implicit from manuscript ownership)
+    # In a multi-user system, this would link to a user_id instead
+    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=False, unique=True)
+
+    # Global AI settings - defaults protect the author
+    allow_ai_assistance = Column(Boolean, default=True, nullable=False)
+    allow_training_data = Column(Boolean, default=False, nullable=False)  # CRITICAL: default FALSE
+
+    # Granular AI feature controls
+    allow_style_analysis = Column(Boolean, default=True)
+    allow_plot_suggestions = Column(Boolean, default=True)
+    allow_character_development = Column(Boolean, default=True)
+    allow_grammar_check = Column(Boolean, default=True)
+    allow_continuity_check = Column(Boolean, default=True)
+
+    # Content sharing level
+    content_sharing_level = Column(String, default=ContentSharingLevel.AI_ASSIST_ONLY.value)
+
+    # Data retention preferences
+    ai_context_retention_days = Column(Integer, default=0)  # 0 = no retention
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship
+    manuscript = relationship("Manuscript", backref="privacy_preferences")
+
+    def __repr__(self):
+        return f"<AuthorPrivacyPreferences(manuscript_id={self.manuscript_id}, training={self.allow_training_data})>"
+
+    def allows_feature(self, feature: str) -> bool:
+        """Check if a specific AI feature is allowed"""
+        if not self.allow_ai_assistance:
+            return False
+
+        feature_map = {
+            "style_analysis": self.allow_style_analysis,
+            "plot_suggestions": self.allow_plot_suggestions,
+            "character_development": self.allow_character_development,
+            "grammar_check": self.allow_grammar_check,
+            "continuity_check": self.allow_continuity_check,
+        }
+        return feature_map.get(feature, True)
+
+
+class ConsentRecord(Base):
+    """
+    Audit log of consent changes for compliance (GDPR, CCPA, etc.)
+
+    Every time an author changes their privacy preferences, we record it here.
+    """
+    __tablename__ = "consent_records"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=False)
+
+    # What consent was given/revoked
+    consent_type = Column(String, nullable=False)  # ConsentType value
+    granted = Column(Boolean, nullable=False)
+
+    # Consent metadata
+    version = Column(String, default="1.0.0")  # Consent form version
+    ip_address = Column(String, nullable=True)  # For audit trail
+    user_agent = Column(String, nullable=True)
+
+    # Timestamp
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationship
+    manuscript = relationship("Manuscript", backref="consent_records")
+
+    def __repr__(self):
+        return f"<ConsentRecord(type={self.consent_type}, granted={self.granted})>"
+
+
+class AIInteractionAudit(Base):
+    """
+    Audit log for AI interactions - tracks what was sent to AI providers.
+
+    IMPORTANT: This does NOT store the actual content, only metadata
+    about the interaction for auditing purposes.
+    """
+    __tablename__ = "ai_interaction_audit"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=False)
+    chapter_id = Column(String, ForeignKey("chapters.id"), nullable=True)
+
+    # Interaction details (no raw content!)
+    interaction_type = Column(String, nullable=False)  # 'edit_suggestion', 'summary', etc.
+    provider = Column(String, nullable=False)  # 'anthropic', 'openai', etc.
+    model = Column(String, nullable=False)
+
+    # Token counts (for carbon tracking too)
+    tokens_sent = Column(Integer, default=0)
+    tokens_received = Column(Integer, default=0)
+
+    # Privacy verification flags
+    training_opted_out = Column(Boolean, default=True, nullable=False)
+    zero_data_retention = Column(Boolean, default=False)
+
+    # Content hash for verification (not the content itself)
+    content_hash = Column(String(64), nullable=True)
+
+    # Cost tracking
+    estimated_cost_usd = Column(Integer, default=0)  # In microdollars (1M = $1)
+
+    # Timestamp
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationship
+    manuscript = relationship("Manuscript", backref="ai_interactions")
+
+    def __repr__(self):
+        return f"<AIInteractionAudit(type={self.interaction_type}, tokens={self.tokens_sent + self.tokens_received})>"
