@@ -25,6 +25,8 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.agents.base.agent_config import AgentConfig, AgentType, ModelProvider
 from app.agents.base.context_loader import ContextLoader, AgentContext
 from app.services.llm_service import llm_service, LLMConfig, LLMResponse, LLMProvider
+from app.services.privacy_middleware import PrivacyMiddleware, PrivacyBlockedException, check_ai_allowed
+from app.database import get_db
 
 
 @dataclass
@@ -242,6 +244,29 @@ Respond with valid JSON matching this schema:
         start_time = datetime.utcnow()
 
         try:
+            # Check if AI assistance is enabled for this manuscript
+            # (Training is always blocked by default - this just checks if AI can help at all)
+            db = next(get_db())
+            try:
+                privacy_result = await check_ai_allowed(db, manuscript_id)
+
+                if not privacy_result.allowed:
+                    execution_time = int(
+                        (datetime.utcnow() - start_time).total_seconds() * 1000
+                    )
+                    return AgentResult(
+                        agent_type=self.agent_type,
+                        success=False,
+                        issues=[{
+                            "type": "ai_disabled",
+                            "severity": "info",
+                            "description": privacy_result.reason or "AI assistance is disabled for this manuscript"
+                        }],
+                        execution_time_ms=execution_time
+                    )
+            finally:
+                db.close()
+
             # Load context
             context = await self.load_context(
                 user_id=user_id,
