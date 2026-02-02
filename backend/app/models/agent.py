@@ -206,3 +206,139 @@ class SuggestionFeedback(Base):
 
     def __repr__(self):
         return f"<SuggestionFeedback(id={self.id}, action={self.action})>"
+
+
+class MaxwellConversation(Base):
+    """
+    Persistent Maxwell conversation history.
+
+    Unlike CoachSession (which is session-based), this stores ALL Maxwell
+    interactions to provide context awareness across sessions. Maxwell can
+    reference previous feedback: "You mentioned before..."
+    """
+    __tablename__ = "maxwell_conversations"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=True, index=True)
+    chapter_id = Column(String, ForeignKey("chapters.id"), nullable=True)
+
+    # Interaction type: chat, analysis, quick_check, explain
+    interaction_type = Column(String, nullable=False, index=True)
+
+    # User's input
+    user_message = Column(Text, nullable=True)  # Chat message or query
+    analyzed_text = Column(Text, nullable=True)  # Text that was analyzed (if any)
+
+    # Maxwell's response
+    maxwell_response = Column(Text, nullable=False)
+    response_type = Column(String, nullable=False)  # chat, analysis, quick_check, explanation
+
+    # Synthesized feedback (if analysis was performed)
+    feedback_data = Column(JSON, default=dict)
+    # Structure: {
+    #   "narrative": "...",
+    #   "highlights": [{aspect, text}],
+    #   "priorities": [{severity, text, why_it_matters, suggestion}],
+    #   "teaching_moments": ["..."]
+    # }
+
+    # Which agents were consulted
+    agents_consulted = Column(JSON, default=list)  # ["style", "continuity", "structure"]
+
+    # Focus area (for quick checks)
+    focus_area = Column(String, nullable=True)  # style, dialogue, continuity, etc.
+
+    # Cost tracking
+    cost = Column(Float, default=0.0)
+    tokens = Column(Integer, default=0)
+    execution_time_ms = Column(Integer, default=0)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    manuscript = relationship("Manuscript", foreign_keys=[manuscript_id])
+    chapter = relationship("Chapter", foreign_keys=[chapter_id])
+
+    def __repr__(self):
+        return f"<MaxwellConversation(id={self.id}, type={self.interaction_type})>"
+
+
+class MaxwellInsight(Base):
+    """
+    Extracted insights from Maxwell conversations.
+
+    When Maxwell gives feedback, key insights are extracted and stored
+    for quick retrieval. Enables "You mentioned before..." references.
+    """
+    __tablename__ = "maxwell_insights"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=True, index=True)
+    conversation_id = Column(String, ForeignKey("maxwell_conversations.id"), nullable=False)
+
+    # Insight categorization
+    category = Column(String, nullable=False, index=True)
+    # Categories: character, plot, style, pacing, dialogue, worldbuilding, theme, technique
+
+    # The insight itself
+    insight_text = Column(Text, nullable=False)
+
+    # What it relates to (e.g., character name, location, plot point)
+    subject = Column(String, nullable=True, index=True)
+
+    # Sentiment: positive, negative, neutral, suggestion
+    sentiment = Column(String, default="neutral")
+
+    # Importance score (0.0 to 1.0) - higher = more likely to reference
+    importance = Column(Float, default=0.5)
+
+    # Whether this insight has been addressed/resolved
+    resolved = Column(String, default="pending")  # pending, addressed, dismissed
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    conversation = relationship("MaxwellConversation", backref="insights")
+
+    def __repr__(self):
+        return f"<MaxwellInsight(id={self.id}, category={self.category})>"
+
+
+class MaxwellPreferences(Base):
+    """
+    User preferences for Maxwell's behavior.
+
+    Stores tone, feedback depth, and other personalization settings.
+    """
+    __tablename__ = "maxwell_preferences"
+
+    user_id = Column(String, primary_key=True)
+
+    # Tone preference: encouraging, direct, teaching, formal, casual
+    preferred_tone = Column(String, default="encouraging")
+
+    # Feedback depth: brief, standard, comprehensive
+    feedback_depth = Column(String, default="standard")
+
+    # Teaching mode: whether Maxwell explains craft concepts
+    teaching_mode = Column(String, default="on")  # on, off, auto
+
+    # What to prioritize: plot, character, prose, pacing, all
+    priority_focus = Column(String, default="all")
+
+    # Proactive suggestions: on, off
+    proactive_suggestions = Column(String, default="off")
+
+    # Additional preferences as JSON
+    extra_preferences = Column(JSON, default=dict)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<MaxwellPreferences(user={self.user_id}, tone={self.preferred_tone})>"

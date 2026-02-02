@@ -18,7 +18,11 @@ from app.agents.coach.smart_coach_agent import SmartCoachAgent, create_smart_coa
 from app.agents.base.agent_config import AgentType, ModelConfig, ModelProvider
 from app.services.author_learning_service import author_learning_service
 from app.database import SessionLocal
-from app.models.agent import AgentAnalysis, SuggestionFeedback, CoachSession
+from app.models.agent import (
+    AgentAnalysis, SuggestionFeedback, CoachSession,
+    MaxwellConversation, MaxwellInsight, MaxwellPreferences
+)
+from app.services.maxwell_memory_service import create_maxwell_memory_service
 
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
@@ -1035,7 +1039,7 @@ class MaxwellExplainRequest(BaseModel):
 
 
 @router.post("/maxwell/chat")
-async def maxwell_chat(request: MaxwellChatRequest):
+async def maxwell_chat(request: MaxwellChatRequest, background_tasks: BackgroundTasks):
     """
     Chat with Maxwell - the unified writing coach.
 
@@ -1046,6 +1050,8 @@ async def maxwell_chat(request: MaxwellChatRequest):
 
     This is the PRIMARY entry point for interacting with Maxwell.
     Users talk to ONE entity who internally delegates to specialists.
+
+    Conversations are automatically persisted for context awareness.
     """
     try:
         from app.agents.orchestrator.maxwell_unified import create_maxwell
@@ -1068,6 +1074,22 @@ async def maxwell_chat(request: MaxwellChatRequest):
             manuscript_id=request.manuscript_id,
             context=request.context,
             auto_analyze=request.auto_analyze
+        )
+
+        # Save conversation in background
+        background_tasks.add_task(
+            _save_maxwell_conversation,
+            user_id=request.user_id,
+            maxwell_response=response.content,
+            response_type=response.response_type,
+            interaction_type="chat",
+            manuscript_id=request.manuscript_id,
+            user_message=request.message,
+            feedback_data=response.feedback.to_dict() if response.feedback else None,
+            agents_consulted=response.agents_consulted,
+            cost=response.cost,
+            tokens=response.tokens,
+            execution_time_ms=response.execution_time_ms,
         )
 
         return {
@@ -1295,5 +1317,302 @@ async def _store_analysis(
 
     except Exception as e:
         print(f"Failed to store analysis: {e}")
+    finally:
+        db.close()
+
+
+async def _save_maxwell_conversation(
+    user_id: str,
+    maxwell_response: str,
+    response_type: str,
+    interaction_type: str,
+    manuscript_id: Optional[str] = None,
+    chapter_id: Optional[str] = None,
+    user_message: Optional[str] = None,
+    analyzed_text: Optional[str] = None,
+    feedback_data: Optional[Dict[str, Any]] = None,
+    agents_consulted: Optional[List[str]] = None,
+    focus_area: Optional[str] = None,
+    cost: float = 0.0,
+    tokens: int = 0,
+    execution_time_ms: int = 0,
+):
+    """Save Maxwell conversation to database and extract insights."""
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+
+        # Save the conversation
+        conversation = memory_service.save_conversation(
+            user_id=user_id,
+            maxwell_response=maxwell_response,
+            response_type=response_type,
+            interaction_type=interaction_type,
+            manuscript_id=manuscript_id,
+            chapter_id=chapter_id,
+            user_message=user_message,
+            analyzed_text=analyzed_text,
+            feedback_data=feedback_data,
+            agents_consulted=agents_consulted,
+            focus_area=focus_area,
+            cost=cost,
+            tokens=tokens,
+            execution_time_ms=execution_time_ms,
+        )
+
+        # Extract and save insights if feedback was given
+        if feedback_data:
+            memory_service.extract_and_save_insights(conversation)
+
+    except Exception as e:
+        print(f"Failed to save Maxwell conversation: {e}")
+    finally:
+        db.close()
+
+
+# ============================================================================
+# Maxwell History and Preferences Endpoints
+# ============================================================================
+
+class MaxwellPreferencesRequest(BaseModel):
+    """Request to update Maxwell preferences"""
+    user_id: str
+    preferred_tone: Optional[str] = None
+    feedback_depth: Optional[str] = None
+    teaching_mode: Optional[str] = None
+    priority_focus: Optional[str] = None
+    proactive_suggestions: Optional[str] = None
+
+
+@router.get("/maxwell/history/{user_id}")
+async def get_maxwell_history(
+    user_id: str,
+    manuscript_id: Optional[str] = None,
+    limit: int = 20,
+    interaction_type: Optional[str] = None,
+):
+    """
+    Get Maxwell conversation history for a user.
+
+    Returns recent conversations, newest first.
+    Useful for displaying chat history in the UI.
+    """
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+
+        conversations = memory_service.get_recent_conversations(
+            user_id=user_id,
+            manuscript_id=manuscript_id,
+            limit=limit,
+            interaction_type=interaction_type,
+        )
+
+        return {
+            "success": True,
+            "data": [
+                {
+                    "id": c.id,
+                    "interaction_type": c.interaction_type,
+                    "user_message": c.user_message,
+                    "maxwell_response": c.maxwell_response[:500] + "..." if len(c.maxwell_response) > 500 else c.maxwell_response,
+                    "response_type": c.response_type,
+                    "agents_consulted": c.agents_consulted,
+                    "focus_area": c.focus_area,
+                    "cost": c.cost,
+                    "created_at": c.created_at.isoformat(),
+                }
+                for c in conversations
+            ]
+        }
+
+    finally:
+        db.close()
+
+
+@router.get("/maxwell/context/{user_id}")
+async def get_maxwell_context(
+    user_id: str,
+    manuscript_id: Optional[str] = None,
+    lookback_days: int = 30,
+    max_conversations: int = 10,
+):
+    """
+    Get conversation context for Maxwell to reference.
+
+    Returns a summary of recent feedback that Maxwell can use
+    for "You mentioned before..." references.
+    """
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+
+        context = memory_service.get_conversation_context(
+            user_id=user_id,
+            manuscript_id=manuscript_id,
+            lookback_days=lookback_days,
+            max_conversations=max_conversations,
+        )
+
+        return {
+            "success": True,
+            "data": context
+        }
+
+    finally:
+        db.close()
+
+
+@router.get("/maxwell/insights/{user_id}")
+async def get_maxwell_insights(
+    user_id: str,
+    manuscript_id: Optional[str] = None,
+    category: Optional[str] = None,
+    subject: Optional[str] = None,
+    include_resolved: bool = False,
+    limit: int = 10,
+):
+    """
+    Get relevant insights from previous Maxwell feedback.
+
+    Insights are extracted from conversations to enable
+    context-aware responses and pattern detection.
+    """
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+
+        insights = memory_service.get_relevant_insights(
+            user_id=user_id,
+            manuscript_id=manuscript_id,
+            category=category,
+            subject=subject,
+            include_resolved=include_resolved,
+            limit=limit,
+        )
+
+        return {
+            "success": True,
+            "data": [
+                {
+                    "id": i.id,
+                    "category": i.category,
+                    "insight_text": i.insight_text,
+                    "subject": i.subject,
+                    "sentiment": i.sentiment,
+                    "importance": i.importance,
+                    "resolved": i.resolved,
+                    "created_at": i.created_at.isoformat(),
+                }
+                for i in insights
+            ]
+        }
+
+    finally:
+        db.close()
+
+
+@router.put("/maxwell/insights/{insight_id}/resolve")
+async def resolve_maxwell_insight(
+    insight_id: str,
+    resolution: str = "addressed",
+):
+    """
+    Mark an insight as resolved.
+
+    Resolution options: addressed, dismissed
+    """
+    if resolution not in ["addressed", "dismissed"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Resolution must be 'addressed' or 'dismissed'"
+        )
+
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+
+        insight = memory_service.mark_insight_resolved(insight_id, resolution)
+
+        if not insight:
+            raise HTTPException(status_code=404, detail="Insight not found")
+
+        return {
+            "success": True,
+            "message": f"Insight marked as {resolution}"
+        }
+
+    finally:
+        db.close()
+
+
+@router.get("/maxwell/preferences/{user_id}")
+async def get_maxwell_preferences(user_id: str):
+    """
+    Get user's Maxwell preferences.
+
+    Returns customization settings for Maxwell's behavior.
+    """
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+
+        prefs = memory_service.get_preferences(user_id)
+
+        return {
+            "success": True,
+            "data": {
+                "user_id": prefs.user_id,
+                "preferred_tone": prefs.preferred_tone,
+                "feedback_depth": prefs.feedback_depth,
+                "teaching_mode": prefs.teaching_mode,
+                "priority_focus": prefs.priority_focus,
+                "proactive_suggestions": prefs.proactive_suggestions,
+                "extra_preferences": prefs.extra_preferences,
+            }
+        }
+
+    finally:
+        db.close()
+
+
+@router.put("/maxwell/preferences")
+async def update_maxwell_preferences(request: MaxwellPreferencesRequest):
+    """
+    Update user's Maxwell preferences.
+
+    Customizes how Maxwell behaves:
+    - preferred_tone: encouraging, direct, teaching, formal, casual
+    - feedback_depth: brief, standard, comprehensive
+    - teaching_mode: on, off, auto
+    - priority_focus: plot, character, prose, pacing, all
+    - proactive_suggestions: on, off
+    """
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+
+        prefs = memory_service.update_preferences(
+            user_id=request.user_id,
+            preferred_tone=request.preferred_tone,
+            feedback_depth=request.feedback_depth,
+            teaching_mode=request.teaching_mode,
+            priority_focus=request.priority_focus,
+            proactive_suggestions=request.proactive_suggestions,
+        )
+
+        return {
+            "success": True,
+            "data": {
+                "user_id": prefs.user_id,
+                "preferred_tone": prefs.preferred_tone,
+                "feedback_depth": prefs.feedback_depth,
+                "teaching_mode": prefs.teaching_mode,
+                "priority_focus": prefs.priority_focus,
+                "proactive_suggestions": prefs.proactive_suggestions,
+            },
+            "message": "Preferences updated"
+        }
+
     finally:
         db.close()

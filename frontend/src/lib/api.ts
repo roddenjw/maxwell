@@ -3541,6 +3541,212 @@ export const agentApi = {
 
     return response.json();
   },
+
+  // ============================================================================
+  // Maxwell History and Preferences
+  // ============================================================================
+
+  /**
+   * Get Maxwell conversation history for a user.
+   * Returns recent conversations, newest first.
+   */
+  async getMaxwellHistory(
+    userId: string,
+    manuscriptId?: string,
+    limit: number = 20,
+    interactionType?: string
+  ): Promise<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      interaction_type: string;
+      user_message: string | null;
+      maxwell_response: string;
+      response_type: string;
+      agents_consulted: string[];
+      focus_area: string | null;
+      cost: number;
+      created_at: string;
+    }>;
+  }> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+    params.append('limit', limit.toString());
+    if (interactionType) params.append('interaction_type', interactionType);
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/history/${userId}?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get Maxwell history');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get conversation context for Maxwell to reference.
+   * Returns a summary of recent feedback for "You mentioned before..." references.
+   */
+  async getMaxwellContext(
+    userId: string,
+    manuscriptId?: string,
+    lookbackDays: number = 30,
+    maxConversations: number = 10
+  ): Promise<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      type: string;
+      date: string;
+      focus: string | null;
+      agents: string[];
+      key_issues?: string[];
+      strengths?: string[];
+    }>;
+  }> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+    params.append('lookback_days', lookbackDays.toString());
+    params.append('max_conversations', maxConversations.toString());
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/context/${userId}?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get Maxwell context');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get relevant insights from previous Maxwell feedback.
+   * Insights enable context-aware responses and pattern detection.
+   */
+  async getMaxwellInsights(
+    userId: string,
+    manuscriptId?: string,
+    category?: string,
+    subject?: string,
+    includeResolved: boolean = false,
+    limit: number = 10
+  ): Promise<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      category: string;
+      insight_text: string;
+      subject: string | null;
+      sentiment: string;
+      importance: number;
+      resolved: string;
+      created_at: string;
+    }>;
+  }> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+    if (category) params.append('category', category);
+    if (subject) params.append('subject', subject);
+    params.append('include_resolved', includeResolved.toString());
+    params.append('limit', limit.toString());
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/insights/${userId}?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get Maxwell insights');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Mark a Maxwell insight as resolved.
+   */
+  async resolveMaxwellInsight(
+    insightId: string,
+    resolution: 'addressed' | 'dismissed' = 'addressed'
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/insights/${insightId}/resolve?resolution=${resolution}`,
+      { method: 'PUT' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to resolve insight');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get user's Maxwell preferences.
+   */
+  async getMaxwellPreferences(userId: string): Promise<{
+    success: boolean;
+    data: {
+      user_id: string;
+      preferred_tone: string;
+      feedback_depth: string;
+      teaching_mode: string;
+      priority_focus: string;
+      proactive_suggestions: string;
+      extra_preferences: Record<string, unknown>;
+    };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/preferences/${userId}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get Maxwell preferences');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Update user's Maxwell preferences.
+   */
+  async updateMaxwellPreferences(data: {
+    user_id: string;
+    preferred_tone?: string;
+    feedback_depth?: string;
+    teaching_mode?: string;
+    priority_focus?: string;
+    proactive_suggestions?: string;
+  }): Promise<{
+    success: boolean;
+    data: {
+      user_id: string;
+      preferred_tone: string;
+      feedback_depth: string;
+      teaching_mode: string;
+      priority_focus: string;
+      proactive_suggestions: string;
+    };
+    message: string;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/preferences`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update Maxwell preferences');
+    }
+
+    return response.json();
+  },
 };
 
 /**

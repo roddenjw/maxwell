@@ -302,14 +302,24 @@
     - Selected text detection for context-aware analysis
     - Quick action buttons: Full Analysis, Style, Dialogue, Continuity
     - FeedbackView displays synthesized priorities, highlights, and teaching moments
+  - **Phase B: Conversation Memory:**
+    - `MaxwellConversation` model - stores all interactions
+    - `MaxwellInsight` model - extracts key insights
+    - `MaxwellPreferences` model - user customization
+    - `MaxwellMemoryService` - persistence and insight extraction
+    - New API endpoints: history, context, insights, preferences
+    - Frontend API client methods
+    - Auto-save conversations after every response
   - **Files Created:**
     - `backend/app/agents/orchestrator/maxwell_unified.py`
     - `backend/app/agents/orchestrator/supervisor_agent.py`
     - `backend/app/agents/orchestrator/maxwell_synthesizer.py`
+    - `backend/app/services/maxwell_memory_service.py`
+    - `backend/migrations/versions/maxwell_conversation_history.py`
     - `frontend/src/components/Maxwell/MaxwellPanel.tsx`
     - `frontend/src/components/Maxwell/index.ts`
     - `frontend/src/hooks/useMaxwell.ts`
-    - Updated: `smart_coach_agent.py`, `agents.py`, `api.ts`, `agentStore.ts`, `App.tsx`, `EditorToolbar.tsx`
+    - Updated: `smart_coach_agent.py`, `agents.py`, `api.ts`, `agentStore.ts`, `App.tsx`, `EditorToolbar.tsx`, `agent.py` (models)
 
 ### January 25, 2026 (Night - Later)
 - **LangChain Agent Framework - All Phases Complete (1-5)**

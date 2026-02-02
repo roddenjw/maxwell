@@ -611,12 +611,16 @@ Based on user feedback in FEEDBACK.md, these UX improvements are prioritized:
 - Quick action buttons: Full Analysis, Style, Dialogue, Continuity
 - FeedbackView displays priorities, highlights, teaching moments
 
-### Remaining Work ⏳
+#### Phase B: Conversation Memory ✅
+- `MaxwellConversation` model - stores all interactions with full context
+- `MaxwellInsight` model - extracts key insights for quick retrieval
+- `MaxwellPreferences` model - user customization settings
+- `MaxwellMemoryService` - handles persistence and insight extraction
+- API endpoints: history, context, insights, preferences
+- Frontend API methods for all new endpoints
+- Conversations auto-saved after every Maxwell response
 
-#### Phase B: Conversation Memory (Priority: Medium)
-- [ ] Persistent Maxwell conversation history (separate from Coach sessions)
-- [ ] Context awareness across sessions (remembers previous feedback)
-- [ ] "You mentioned before..." references to prior conversations
+### Remaining Work ⏳
 
 #### Phase C: Cross-Agent Reasoning (Priority: Medium)
 - [ ] When agents disagree, Maxwell mediates
