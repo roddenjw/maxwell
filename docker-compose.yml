@@ -1,0 +1,78 @@
+# Maxwell - Local-First Fiction Writing IDE
+# Docker Compose configuration for self-hosted deployment
+#
+# Quick Start:
+#   docker-compose up -d
+#   open http://localhost:3000
+#
+# Data is persisted in the 'maxwell_data' volume.
+# To backup: docker cp maxwell_backend:/app/data ./backup
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # Backend API Server (FastAPI + SQLite + spaCy)
+  # ==========================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: maxwell_backend
+    restart: unless-stopped
+    volumes:
+      # Persist all data (SQLite database + Git repositories)
+      - maxwell_data:/app/data
+    environment:
+      - DATA_DIR=/app/data
+      - HOST=0.0.0.0
+      - PORT=8000
+      # Optional: Set your OpenRouter API key for AI features
+      # - OPENROUTER_API_KEY=your-key-here
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - maxwell_network
+
+  # ==========================================================================
+  # Frontend Web Server (React + nginx)
+  # ==========================================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: maxwell_frontend
+    restart: unless-stopped
+    ports:
+      # Expose on port 3000 (change if needed)
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - maxwell_network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  maxwell_data:
+    driver: local
+    name: maxwell_data
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  maxwell_network:
+    driver: bridge
+    name: maxwell_network

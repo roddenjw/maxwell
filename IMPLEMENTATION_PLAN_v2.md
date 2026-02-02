@@ -13,8 +13,11 @@ This plan integrates the full development roadmap from MVP launch to PLG growth 
 - **Phases 4-6:** Story Structure, Brainstorming, Timeline Orchestrator (COMPLETE)
 - **Phase 7:** PLG Features and Viral Mechanics (PLANNED)
 - **Phase 8:** Library & World Management (COMPLETE)
+- **Phase 10:** Desktop Distribution & Packaging (IN PROGRESS)
 
 **Key Principle:** Each phase must ship a feature that drives the next phase's growth.
+
+**Distribution Strategy:** Maxwell is a local-first desktop application. See [DESKTOP_DEPLOYMENT.md](./DESKTOP_DEPLOYMENT.md) for full strategy.
 
 **Current Status:** See [PROGRESS.md](./PROGRESS.md) for detailed progress tracking, metrics, and active work.
 
@@ -486,6 +489,12 @@ Based on user feedback in FEEDBACK.md, these UX improvements are prioritized:
 - ✅ Entity scoping across manuscripts
 - ✅ Shared Codex for series
 
+### February 2026: Desktop Distribution (IN PROGRESS)
+- 🚧 Docker self-hosted deployment (Week 1)
+- ⏳ Electron desktop app (Weeks 2-4)
+- ⏳ Distribution infrastructure (Weeks 5-6)
+- ⏳ Beta launch to 500+ desktop users
+
 ### Q1 2027 (Months 13-15): PLG Mechanics & UX Polish
 - ⏳ Aesthetic Recap Engine (viral sharing)
 - ⏳ Real-time entity extraction
@@ -557,6 +566,128 @@ Based on user feedback in FEEDBACK.md, these UX improvements are prioritized:
 
 ---
 
+## Phase 10: Desktop Distribution & Packaging
+**Timeline:** February 2026
+**Status:** 🚧 In Progress
+**Goal:** Ship Maxwell as a true desktop application for privacy-conscious writers
+
+### Background
+
+Maxwell was designed as a **local-first fiction writing IDE** with privacy as a core principle. The architecture supports this vision (SQLite, local Git, BYOK AI), but distribution has been web-only. Phase 10 addresses this gap.
+
+### Deployment Phases
+
+#### Phase D1: Self-Hosted Beta (Week 1) - IN PROGRESS
+**Target:** Privacy-conscious early adopters who can run Docker
+
+**Deliverables:**
+- ✅ Docker Compose configuration (`docker-compose.yml`)
+- ✅ Backend Dockerfile with multi-stage build
+- ✅ Frontend Dockerfile with nginx proxy
+- ✅ Installation scripts (Unix + Windows)
+- ✅ Desktop deployment documentation
+
+**Usage:**
+```bash
+# One-command installation
+curl -fsSL https://raw.githubusercontent.com/your-repo/maxwell/main/scripts/install.sh | bash
+
+# Or manual
+git clone https://github.com/your-repo/maxwell.git
+cd maxwell && docker-compose up -d
+# Open http://localhost:3000
+```
+
+#### Phase D2: Electron Desktop App (Weeks 2-4)
+**Target:** General users who want a native experience
+
+**Deliverables:**
+- [ ] Electron main process with window management
+- [ ] Backend manager (PyInstaller bundle)
+- [ ] Auto-start/stop backend with app lifecycle
+- [ ] Native file dialogs for manuscript export
+- [ ] System tray integration
+- [ ] Platform-specific installers (DMG, NSIS, AppImage)
+
+**Technical Approach:**
+- Electron for cross-platform desktop shell
+- PyInstaller to bundle Python backend as single executable
+- IPC for frontend-backend communication (fallback to HTTP)
+- electron-builder for packaging all platforms
+
+#### Phase D3: Distribution Infrastructure (Weeks 5-6)
+**Target:** Sustainable distribution and updates
+
+**Deliverables:**
+- [ ] GitHub Releases workflow for automated builds
+- [ ] Auto-update mechanism (electron-updater)
+- [ ] macOS code signing + notarization
+- [ ] Windows code signing (EV certificate)
+- [ ] Crash reporting (opt-in, privacy-respecting)
+- [ ] Download page on website
+
+### Architecture Decisions
+
+**ADR-D01: Electron over Tauri**
+- Electron chosen for faster time-to-market (3-4 weeks vs 5-6)
+- Team familiar with JavaScript/TypeScript
+- Mature ecosystem (electron-builder, auto-updater)
+- Bundle size (~150MB) acceptable for desktop
+
+**ADR-D02: PyInstaller for Backend**
+- Bundles Python + dependencies + spaCy models
+- One-file mode for simple distribution
+- Works on Windows, macOS, Linux
+- Well-documented for FastAPI applications
+
+**ADR-D03: Docker for Self-Hosted**
+- Provides consistent environment across platforms
+- Easy updates via `docker-compose pull`
+- Data persistence via Docker volumes
+- Familiar to technical early adopters
+
+### Success Criteria
+
+**Phase D1 (Docker):**
+- [ ] 50+ beta users running self-hosted
+- [ ] <5 minute setup time
+- [ ] Zero data loss incidents
+
+**Phase D2 (Electron):**
+- [ ] Download size <200MB
+- [ ] Cold start <10 seconds
+- [ ] Works completely offline
+- [ ] Auto-update works reliably
+
+**Phase D3 (Distribution):**
+- [ ] 500+ downloads in first month
+- [ ] <2% crash rate
+- [ ] 80% retention after 30 days
+
+### Files Created
+
+```
+maxwell/
+├── docker/
+│   ├── Dockerfile.backend      # Python backend image
+│   ├── Dockerfile.frontend     # React + nginx image
+│   └── nginx.conf              # Frontend proxy config
+├── docker-compose.yml          # Orchestration
+├── scripts/
+│   ├── install.sh              # Unix installation
+│   └── install.ps1             # Windows installation
+├── DESKTOP_DEPLOYMENT.md       # Full strategy document
+└── electron/                   # (Phase D2 - planned)
+    ├── main/
+    ├── preload/
+    └── resources/
+```
+
+### Related Documentation
+- [DESKTOP_DEPLOYMENT.md](./DESKTOP_DEPLOYMENT.md) - Full desktop strategy and technical details
+
+---
+
 ## Success Metrics by Phase
 
 | Phase | Users | Revenue | Retention (6mo) | NPS | Key Metric | Status |
@@ -568,6 +699,7 @@ Based on user feedback in FEEDBACK.md, these UX improvements are prioritized:
 | **Phase 8** | - | - | - | - | World/Series usage | ✅ Complete |
 | **Phase 9** | - | - | - | - | Agent framework | ✅ Complete |
 | **Phase 7** | 15,000 | $750,000 | 85% | 75 | Viral coefficient | ⏳ Planned |
+| **Phase 10** | 500 | - | 80% | 70 | Desktop downloads | 🚧 In Progress |
 
 **Target by End of 2027:**
 - 15,000+ active users
