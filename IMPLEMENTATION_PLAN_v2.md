@@ -557,6 +557,84 @@ Based on user feedback in FEEDBACK.md, these UX improvements are prioritized:
 
 ---
 
+## Phase 9.5: Maxwell Unified Architecture
+**Timeline:** February 2026
+**Status:** ✅ Core Complete | ⏳ Polish Remaining
+**Goal:** Maxwell presents as ONE cohesive entity, not a collection of disconnected tools
+
+### Completed ✅
+
+#### Maxwell Unified Entry Point
+- `MaxwellUnified` class as primary interface for all AI interactions
+- Single `chat()` method that auto-routes to specialists when needed
+- `analyze()` for full multi-agent analysis with synthesis
+- `quick_check()` for focused single-agent checks
+- `explain()` for writing concept explanations
+
+#### Supervisor Agent (Intelligent Routing)
+- `SupervisorAgent` determines which specialists to invoke
+- Fast keyword-based routing for common patterns (no LLM needed)
+- LLM fallback for complex/ambiguous queries
+- `RouteDecision` with agents, intent, reasoning, confidence
+
+#### Maxwell Synthesizer (Unified Voice)
+- `MaxwellSynthesizer` transforms multi-agent output into Maxwell's voice
+- "I noticed..." not "The Style Agent found..."
+- Prioritizes by impact (plot > continuity > style)
+- Celebrates strengths before critiquing
+- Tone options: encouraging, direct, teaching, celebratory
+
+#### Smart Coach Integration
+- `SmartCoachAgent` now routes to specialized agents automatically
+- When user asks "Is this working?" with selected text → agents consulted
+- Session-based memory preserved while adding agent analysis
+- Responses synthesized into natural Maxwell voice
+
+#### API Endpoints (4 new)
+- `POST /api/agents/maxwell/chat` - Primary chat interface (auto-routes)
+- `POST /api/agents/maxwell/analyze` - Full synthesized analysis
+- `POST /api/agents/maxwell/quick-check` - Single-agent focused check
+- `POST /api/agents/maxwell/explain` - Writing concept explanations
+
+#### Frontend Updates
+- Maxwell types in `api.ts` (MaxwellResponse, SynthesizedFeedback)
+- Agent store with Maxwell state management
+- API methods for all Maxwell endpoints
+
+#### Phase A: UI Integration ✅
+- `MaxwellPanel.tsx` - Unified panel with Chat and Feedback tabs
+- `useMaxwell` hook - Easy integration for any component
+- App.tsx integration with overlay panel
+- EditorToolbar "✨ Maxwell" button
+- Keyboard shortcut (Cmd/Ctrl+M) to toggle panel
+- Selected text detection for context-aware analysis
+- Quick action buttons: Full Analysis, Style, Dialogue, Continuity
+- FeedbackView displays priorities, highlights, teaching moments
+
+### Remaining Work ⏳
+
+#### Phase B: Conversation Memory (Priority: Medium)
+- [ ] Persistent Maxwell conversation history (separate from Coach sessions)
+- [ ] Context awareness across sessions (remembers previous feedback)
+- [ ] "You mentioned before..." references to prior conversations
+
+#### Phase C: Cross-Agent Reasoning (Priority: Medium)
+- [ ] When agents disagree, Maxwell mediates
+- [ ] "This action feels out of character, but serves your plot. Here's how to bridge..."
+- [ ] Unified "story health" assessment combining all agent perspectives
+
+#### Phase D: Proactive Suggestions (Priority: Low)
+- [ ] Background analysis while writing (opt-in)
+- [ ] Gentle nudges: "I noticed 3 potential issues in Chapter 5..."
+- [ ] Weekly writing insights email
+
+#### Phase E: Voice Customization (Priority: Low)
+- [ ] User preference for Maxwell's tone (formal/casual/encouraging/direct)
+- [ ] Adjust feedback depth (brief/standard/comprehensive)
+- [ ] "Teaching mode" toggle for educational explanations
+
+---
+
 ## Success Metrics by Phase
 
 | Phase | Users | Revenue | Retention (6mo) | NPS | Key Metric | Status |

@@ -274,7 +274,7 @@ backend/app/agents/
 │   ├── agent_base.py           # BaseMaxwellAgent class
 │   ├── agent_config.py         # Configuration management
 │   └── context_loader.py       # Hierarchical context loading
-├── tools/                       # LangChain Tools (14 total)
+├── tools/                       # LangChain Tools (17 total)
 │   ├── codex_tools.py          # Entity queries
 │   ├── timeline_tools.py       # Timeline queries
 │   ├── outline_tools.py        # Beat/structure queries
@@ -286,12 +286,67 @@ backend/app/agents/
 │   ├── continuity_agent.py     # Character facts, timeline
 │   ├── style_agent.py          # Prose quality
 │   ├── structure_agent.py      # Story beats
-│   └── voice_agent.py          # Dialogue consistency
+│   ├── voice_agent.py          # Dialogue consistency
+│   ├── consistency_agent.py    # Full consistency checking
+│   └── research_agent.py       # Worldbuilding research
 ├── orchestrator/
-│   └── writing_assistant.py    # Multi-agent coordinator
+│   ├── maxwell_unified.py      # PRIMARY ENTRY POINT - unified Maxwell persona
+│   ├── supervisor_agent.py     # Intelligent query routing
+│   ├── maxwell_synthesizer.py  # Unified voice synthesis
+│   └── writing_assistant.py    # Multi-agent parallel execution
 └── coach/
-    └── smart_coach_agent.py    # Conversational coach
+    └── smart_coach_agent.py    # Conversational coach (integrated with agents)
 ```
+
+### Maxwell Unified Architecture
+
+Maxwell presents as a **single cohesive entity** while internally delegating to specialized agents:
+
+```
+User Question: "Is this dialogue working?"
+         │
+         ▼
+┌──────────────────────────────────────────────────────┐
+│              MaxwellUnified                          │
+│  (Single entry point for all interactions)          │
+└──────────────────────────────────────────────────────┘
+         │
+         ▼
+┌──────────────────────────────────────────────────────┐
+│              SupervisorAgent                         │
+│  - Analyzes user intent                              │
+│  - Routes to appropriate specialists                 │
+│  - Fast routing for common patterns                  │
+│  Returns: [VOICE, STYLE, CONTINUITY]                │
+└──────────────────────────────────────────────────────┘
+         │
+         ▼
+┌──────────────────────────────────────────────────────┐
+│          WritingAssistantOrchestrator               │
+│  - Runs selected agents in parallel                  │
+│  - Deduplicates findings                            │
+│  - Aggregates costs                                  │
+└──────────────────────────────────────────────────────┘
+         │
+         ▼
+┌──────────────────────────────────────────────────────┐
+│             MaxwellSynthesizer                       │
+│  - Transforms raw agent output into Maxwell's voice  │
+│  - "I noticed..." not "The Style Agent found..."    │
+│  - Prioritizes by impact, celebrates strengths      │
+│  - Teaching-focused explanations                    │
+└──────────────────────────────────────────────────────┘
+         │
+         ▼
+┌──────────────────────────────────────────────────────┐
+│                 User Response                        │
+│  "Your dialogue here is sharp - the rhythm feels    │
+│  natural. I noticed one continuity issue though:    │
+│  Sarah mentioned her blue eyes in Chapter 2, but..."│
+└──────────────────────────────────────────────────────┘
+```
+
+**Key Principle**: Users interact with ONE entity (Maxwell) who speaks with a unified voice, while specialized expertise is applied behind the scenes.
 
 ### Context Hierarchy
 
