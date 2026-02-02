@@ -104,6 +104,34 @@ export interface AuthorInsights {
   };
 }
 
+// Maxwell Unified Interface Types
+export interface MaxwellFeedback {
+  narrative: string;
+  highlights: Array<{ aspect: string; text: string }>;
+  priorities: Array<{
+    type: string;
+    severity: 'high' | 'medium' | 'low';
+    text: string;
+    why_it_matters?: string;
+    suggestion?: string;
+  }>;
+  teaching_moments: string[];
+  summary: string;
+  total_issues: number;
+  total_praise: number;
+}
+
+export interface MaxwellResponse {
+  content: string;
+  response_type: 'conversation' | 'analysis' | 'quick_check' | 'explanation';
+  feedback?: MaxwellFeedback;
+  agents_consulted: string[];
+  routing_reasoning: string;
+  cost: number;
+  tokens: number;
+  execution_time_ms: number;
+}
+
 // ========================================
 // Store State
 // ========================================
@@ -120,6 +148,12 @@ interface AgentStore {
   analysisResult: AgentAnalysisResult | null;
   isAnalyzing: boolean;
   analysisError: string | null;
+
+  // Maxwell Unified State
+  maxwellResponse: MaxwellResponse | null;
+  isMaxwellLoading: boolean;
+  maxwellError: string | null;
+  maxwellConversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
 
   // Author Insights
   authorInsights: AuthorInsights | null;
@@ -147,6 +181,13 @@ interface AgentStore {
   setAnalysisError: (error: string | null) => void;
   clearAnalysis: () => void;
 
+  // Maxwell Actions
+  setMaxwellResponse: (response: MaxwellResponse | null) => void;
+  setIsMaxwellLoading: (loading: boolean) => void;
+  setMaxwellError: (error: string | null) => void;
+  addMaxwellMessage: (role: 'user' | 'assistant', content: string) => void;
+  clearMaxwellHistory: () => void;
+
   // Insights Actions
   setAuthorInsights: (insights: AuthorInsights | null) => void;
   setIsLoadingInsights: (loading: boolean) => void;
@@ -157,6 +198,7 @@ interface AgentStore {
 
   // Reset
   resetCoachState: () => void;
+  resetMaxwellState: () => void;
 }
 
 // ========================================
@@ -174,6 +216,12 @@ export const useAgentStore = create<AgentStore>((set) => ({
   analysisResult: null,
   isAnalyzing: false,
   analysisError: null,
+
+  // Maxwell Unified State
+  maxwellResponse: null,
+  isMaxwellLoading: false,
+  maxwellError: null,
+  maxwellConversationHistory: [],
 
   authorInsights: null,
   isLoadingInsights: false,
@@ -216,6 +264,23 @@ export const useAgentStore = create<AgentStore>((set) => ({
       analysisError: null,
     }),
 
+  // Maxwell Actions
+  setMaxwellResponse: (response) => set({ maxwellResponse: response }),
+
+  setIsMaxwellLoading: (loading) => set({ isMaxwellLoading: loading }),
+
+  setMaxwellError: (error) => set({ maxwellError: error }),
+
+  addMaxwellMessage: (role, content) =>
+    set((state) => ({
+      maxwellConversationHistory: [
+        ...state.maxwellConversationHistory,
+        { role, content },
+      ],
+    })),
+
+  clearMaxwellHistory: () => set({ maxwellConversationHistory: [] }),
+
   // Insights Actions
   setAuthorInsights: (insights) => set({ authorInsights: insights }),
 
@@ -235,6 +300,14 @@ export const useAgentStore = create<AgentStore>((set) => ({
       currentSession: null,
       currentMessages: [],
       isCoachLoading: false,
+    }),
+
+  resetMaxwellState: () =>
+    set({
+      maxwellResponse: null,
+      maxwellError: null,
+      maxwellConversationHistory: [],
+      isMaxwellLoading: false,
     }),
 }));
 

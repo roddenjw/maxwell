@@ -977,6 +977,288 @@ async def get_worldbuilding_categories():
     }
 
 
+# ============================================================================
+# Unified Maxwell Endpoints
+# ============================================================================
+
+class MaxwellChatRequest(BaseModel):
+    """Request for unified Maxwell chat"""
+    api_key: str
+    user_id: str
+    message: str
+    manuscript_id: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None  # selected_text, chapter_id, etc.
+    auto_analyze: bool = True  # Whether to auto-invoke agents when needed
+
+    # Optional model selection
+    model_provider: Optional[str] = "anthropic"
+    model_name: Optional[str] = "claude-3-haiku-20240307"
+
+
+class MaxwellAnalyzeRequest(BaseModel):
+    """Request for unified Maxwell analysis"""
+    api_key: str
+    user_id: str
+    text: str
+    manuscript_id: str
+    chapter_id: Optional[str] = None
+    tone: Optional[str] = "encouraging"  # encouraging, direct, teaching, celebratory
+
+    # Optional model selection
+    model_provider: Optional[str] = "anthropic"
+    model_name: Optional[str] = "claude-3-haiku-20240307"
+
+
+class MaxwellQuickCheckRequest(BaseModel):
+    """Request for Maxwell quick check"""
+    api_key: str
+    user_id: str
+    text: str
+    focus: str  # style, continuity, structure, voice, dialogue, pacing
+    manuscript_id: Optional[str] = None
+
+    # Optional model selection
+    model_provider: Optional[str] = "anthropic"
+    model_name: Optional[str] = "claude-3-haiku-20240307"
+
+
+class MaxwellExplainRequest(BaseModel):
+    """Request for Maxwell to explain a writing concept"""
+    api_key: str
+    user_id: str
+    topic: str  # e.g., "show vs tell", "pacing", "dialogue tags"
+    context: Optional[str] = None  # Optional manuscript excerpt for relevance
+
+    # Optional model selection
+    model_provider: Optional[str] = "anthropic"
+    model_name: Optional[str] = "claude-3-haiku-20240307"
+
+
+@router.post("/maxwell/chat")
+async def maxwell_chat(request: MaxwellChatRequest):
+    """
+    Chat with Maxwell - the unified writing coach.
+
+    Maxwell automatically determines whether to:
+    - Respond conversationally
+    - Invoke specialized agents for analysis
+    - Combine both for comprehensive feedback
+
+    This is the PRIMARY entry point for interacting with Maxwell.
+    Users talk to ONE entity who internally delegates to specialists.
+    """
+    try:
+        from app.agents.orchestrator.maxwell_unified import create_maxwell
+
+        model_config = ModelConfig(
+            provider=ModelProvider(request.model_provider),
+            model_name=request.model_name,
+            temperature=0.7,
+            max_tokens=2048
+        )
+
+        maxwell = create_maxwell(
+            api_key=request.api_key,
+            user_id=request.user_id,
+            model_config=model_config
+        )
+
+        response = await maxwell.chat(
+            message=request.message,
+            manuscript_id=request.manuscript_id,
+            context=request.context,
+            auto_analyze=request.auto_analyze
+        )
+
+        return {
+            "success": True,
+            "data": response.to_dict(),
+            "cost": {
+                "total": response.cost,
+                "formatted": f"${response.cost:.4f}"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/maxwell/analyze")
+async def maxwell_analyze(
+    request: MaxwellAnalyzeRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    Request a full analysis from Maxwell.
+
+    Runs all specialized agents (Style, Continuity, Structure, Voice)
+    and synthesizes their feedback into Maxwell's unified voice.
+
+    Returns conversational feedback that feels like talking to one expert,
+    plus structured data for UI display.
+    """
+    try:
+        from app.agents.orchestrator.maxwell_unified import create_maxwell
+        from app.agents.orchestrator.maxwell_synthesizer import SynthesisTone
+
+        model_config = ModelConfig(
+            provider=ModelProvider(request.model_provider),
+            model_name=request.model_name,
+            temperature=0.7,
+            max_tokens=4096
+        )
+
+        # Map tone string to enum
+        tone_map = {
+            "encouraging": SynthesisTone.ENCOURAGING,
+            "direct": SynthesisTone.DIRECT,
+            "teaching": SynthesisTone.TEACHING,
+            "celebratory": SynthesisTone.CELEBRATORY
+        }
+        tone = tone_map.get(request.tone, SynthesisTone.ENCOURAGING)
+
+        maxwell = create_maxwell(
+            api_key=request.api_key,
+            user_id=request.user_id,
+            model_config=model_config
+        )
+
+        response = await maxwell.analyze(
+            text=request.text,
+            manuscript_id=request.manuscript_id,
+            chapter_id=request.chapter_id,
+            tone=tone
+        )
+
+        # Store analysis in background
+        background_tasks.add_task(
+            _store_analysis,
+            user_id=request.user_id,
+            manuscript_id=request.manuscript_id,
+            chapter_id=request.chapter_id,
+            input_text=request.text,
+            result={
+                "recommendations": response.feedback.priorities if response.feedback else [],
+                "praise": response.feedback.highlights if response.feedback else [],
+                "teaching_points": response.feedback.teaching_moments if response.feedback else [],
+                "agent_results": {"unified": True},
+                "total_cost": response.cost,
+                "total_tokens": response.tokens,
+                "execution_time_ms": response.execution_time_ms
+            }
+        )
+
+        return {
+            "success": True,
+            "data": response.to_dict(),
+            "cost": {
+                "total": response.cost,
+                "formatted": f"${response.cost:.4f}"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/maxwell/quick-check")
+async def maxwell_quick_check(request: MaxwellQuickCheckRequest):
+    """
+    Quick focused check from Maxwell.
+
+    Uses a single specialized agent based on focus area for fast feedback.
+    Ideal for real-time checking while writing.
+
+    Focus areas:
+    - style/prose/pacing: Style agent
+    - continuity/consistency: Continuity agent
+    - structure/plot: Structure agent
+    - voice/dialogue: Voice agent
+    """
+    try:
+        from app.agents.orchestrator.maxwell_unified import create_maxwell
+
+        model_config = ModelConfig(
+            provider=ModelProvider(request.model_provider),
+            model_name=request.model_name,
+            temperature=0.7,
+            max_tokens=2048
+        )
+
+        maxwell = create_maxwell(
+            api_key=request.api_key,
+            user_id=request.user_id,
+            model_config=model_config
+        )
+
+        response = await maxwell.quick_check(
+            text=request.text,
+            focus=request.focus,
+            manuscript_id=request.manuscript_id
+        )
+
+        return {
+            "success": True,
+            "data": response.to_dict(),
+            "cost": {
+                "total": response.cost,
+                "formatted": f"${response.cost:.4f}"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/maxwell/explain")
+async def maxwell_explain(request: MaxwellExplainRequest):
+    """
+    Get Maxwell's explanation of a writing concept.
+
+    Maxwell explains craft principles in a warm, educational way,
+    with examples and practical application.
+
+    Good for topics like:
+    - "show vs tell"
+    - "pacing"
+    - "dialogue tags"
+    - "active voice"
+    - "character arc"
+    """
+    try:
+        from app.agents.orchestrator.maxwell_unified import create_maxwell
+
+        model_config = ModelConfig(
+            provider=ModelProvider(request.model_provider),
+            model_name=request.model_name,
+            temperature=0.7,
+            max_tokens=1024
+        )
+
+        maxwell = create_maxwell(
+            api_key=request.api_key,
+            user_id=request.user_id,
+            model_config=model_config
+        )
+
+        response = await maxwell.explain(
+            topic=request.topic,
+            context=request.context
+        )
+
+        return {
+            "success": True,
+            "data": response.to_dict(),
+            "cost": {
+                "total": response.cost,
+                "formatted": f"${response.cost:.4f}"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Background task helpers
 
 async def _store_analysis(

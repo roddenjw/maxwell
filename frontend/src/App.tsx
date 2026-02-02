@@ -8,6 +8,7 @@ import { CodexMainView } from './components/Codex'
 import TimelineSidebar from './components/Timeline/TimelineSidebar'
 import DocumentNavigator from './components/Document/DocumentNavigator'
 import FastCoachSidebar from './components/FastCoach/FastCoachSidebar'
+import { MaxwellPanel } from './components/Maxwell'
 import UnifiedSidebar from './components/Navigation/UnifiedSidebar'
 import ToastContainer from './components/Common/ToastContainer'
 import KeyboardShortcutsModal from './components/Common/KeyboardShortcutsModal'
@@ -24,6 +25,7 @@ import { useChapterCacheStore } from './stores/chapterCacheStore'
 import { useFastCoachStore } from './stores/fastCoachStore'
 import { useOutlineStore } from './stores/outlineStore'
 import { useAchievementStore } from './stores/achievementStore'
+import { useAgentStore } from './stores/agentStore'
 import { chaptersApi } from './lib/api'
 import { useKeyboardShortcuts, type KeyboardShortcut } from './hooks/useKeyboardShortcuts'
 import { toast } from './stores/toastStore'
@@ -52,6 +54,7 @@ function App() {
   const { isTimelineOpen, setTimelineOpen } = useTimelineStore()
   const { setCurrentChapter, currentChapterId } = useChapterStore()
   const { isSidebarOpen: isCoachOpen, toggleSidebar: toggleCoach } = useFastCoachStore()
+  const { isCoachPanelOpen, setCoachPanelOpen } = useAgentStore()
   const { clearOutline } = useOutlineStore()
   const { loadAchievements, showDashboard: showAchievements, setShowDashboard: setShowAchievements, earnAchievement } = useAchievementStore()
   const [activeView, setActiveView] = useState<'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export' | 'outline'>('chapters')
@@ -61,6 +64,11 @@ function App() {
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+
+  // Maxwell panel state
+  const [apiKey, setApiKey] = useState<string>('')
+  const [userId, setUserId] = useState<string>('')
+  const [selectedText, setSelectedText] = useState<string>('')
 
   // Ref to track and abort in-flight chapter load requests (prevents race conditions)
   const chapterLoadAbortRef = useRef<AbortController | null>(null)
@@ -595,6 +603,44 @@ function App() {
     return () => window.removeEventListener('openSettings', handleOpenSettings);
   }, []);
 
+  // Load API key and userId from localStorage
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('openrouter_api_key') || '';
+    setApiKey(savedApiKey);
+
+    // Generate or retrieve a persistent userId for this device
+    let savedUserId = localStorage.getItem('maxwell_user_id');
+    if (!savedUserId) {
+      savedUserId = `user_${crypto.randomUUID()}`;
+      localStorage.setItem('maxwell_user_id', savedUserId);
+    }
+    setUserId(savedUserId);
+
+    // Listen for localStorage changes (e.g., when settings are saved)
+    const handleStorageChange = () => {
+      const newApiKey = localStorage.getItem('openrouter_api_key') || '';
+      setApiKey(newApiKey);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    // Also listen for custom event when settings modal saves
+    window.addEventListener('settingsSaved', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('settingsSaved', handleStorageChange);
+    };
+  }, []);
+
+  // Listen for text selection events from editor
+  useEffect(() => {
+    const handleTextSelection = (e: CustomEvent<{ text: string }>) => {
+      setSelectedText(e.detail.text);
+    };
+
+    window.addEventListener('editorTextSelected', handleTextSelection as EventListener);
+    return () => window.removeEventListener('editorTextSelected', handleTextSelection as EventListener);
+  }, []);
+
   // Define keyboard shortcuts
   const shortcuts: KeyboardShortcut[] = [
     {
@@ -634,6 +680,12 @@ function App() {
         setActiveView('chapters');
         setShowKeyboardShortcuts(false);
       },
+    },
+    {
+      key: 'm',
+      ctrl: true,
+      description: 'Toggle Maxwell coach panel',
+      handler: () => setCoachPanelOpen(!isCoachPanelOpen),
     },
   ];
 
@@ -905,6 +957,17 @@ function App() {
 
         {/* Toast Notifications */}
         <ToastContainer />
+
+        {/* Maxwell AI Writing Coach Panel */}
+        <MaxwellPanel
+          manuscriptId={currentManuscriptId || undefined}
+          chapterId={currentChapterId || undefined}
+          chapterTitle={currentChapterData?.title}
+          selectedText={selectedText}
+          userId={userId}
+          apiKey={apiKey}
+          onClose={() => setCoachPanelOpen(false)}
+        />
 
         {/* Achievement Dashboard */}
         <AchievementDashboard

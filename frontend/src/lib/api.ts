@@ -3041,6 +3041,83 @@ export interface CoachChatRequest {
   model_name?: string;
 }
 
+// Maxwell Unified Interface Types
+export interface MaxwellChatRequest {
+  api_key: string;
+  user_id: string;
+  message: string;
+  manuscript_id?: string;
+  context?: Record<string, any>;
+  auto_analyze?: boolean;
+  model_provider?: string;
+  model_name?: string;
+}
+
+export interface MaxwellAnalyzeRequest {
+  api_key: string;
+  user_id: string;
+  text: string;
+  manuscript_id: string;
+  chapter_id?: string;
+  tone?: 'encouraging' | 'direct' | 'teaching' | 'celebratory';
+  model_provider?: string;
+  model_name?: string;
+}
+
+export interface MaxwellQuickCheckRequest {
+  api_key: string;
+  user_id: string;
+  text: string;
+  focus: string;
+  manuscript_id?: string;
+  model_provider?: string;
+  model_name?: string;
+}
+
+export interface MaxwellExplainRequest {
+  api_key: string;
+  user_id: string;
+  topic: string;
+  context?: string;
+  model_provider?: string;
+  model_name?: string;
+}
+
+export interface SynthesizedFeedback {
+  narrative: string;
+  highlights: Array<{ aspect: string; text: string }>;
+  priorities: Array<{
+    type: string;
+    severity: 'high' | 'medium' | 'low';
+    text: string;
+    why_it_matters?: string;
+    suggestion?: string;
+  }>;
+  teaching_moments: string[];
+  summary: string;
+  total_issues: number;
+  total_praise: number;
+  cost: number;
+  tokens: number;
+}
+
+export interface MaxwellResponseData {
+  content: string;
+  response_type: 'conversation' | 'analysis' | 'quick_check' | 'explanation';
+  feedback?: SynthesizedFeedback;
+  agents_consulted: string[];
+  routing_reasoning: string;
+  cost: number;
+  tokens: number;
+  execution_time_ms: number;
+}
+
+export interface MaxwellResponse {
+  success: boolean;
+  data: MaxwellResponseData;
+  cost: { total: number; formatted: string };
+}
+
 export const agentApi = {
   // ========================
   // Writing Assistant
@@ -3379,6 +3456,87 @@ export const agentApi = {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || 'Failed to update title');
+    }
+
+    return response.json();
+  },
+
+  // ========================
+  // Maxwell Unified Interface
+  // ========================
+
+  /**
+   * Chat with Maxwell - the unified writing coach.
+   * Maxwell automatically routes to specialized agents when needed.
+   * This is the PRIMARY entry point for interacting with Maxwell.
+   */
+  async maxwellChat(data: MaxwellChatRequest): Promise<MaxwellResponse> {
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Chat failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Request full analysis from Maxwell with synthesized feedback.
+   * Runs all specialized agents and synthesizes into unified voice.
+   */
+  async maxwellAnalyze(data: MaxwellAnalyzeRequest): Promise<MaxwellResponse> {
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Analysis failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Quick focused check from Maxwell using a single agent.
+   * Focus areas: style, continuity, structure, voice, dialogue, pacing
+   */
+  async maxwellQuickCheck(data: MaxwellQuickCheckRequest): Promise<MaxwellResponse> {
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/quick-check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Quick check failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get Maxwell's explanation of a writing concept.
+   * Good for topics like "show vs tell", "pacing", "dialogue tags"
+   */
+  async maxwellExplain(data: MaxwellExplainRequest): Promise<MaxwellResponse> {
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/explain`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Explanation failed');
     }
 
     return response.json();
