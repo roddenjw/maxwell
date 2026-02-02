@@ -27,7 +27,7 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 import json
 
-from app.agents.base.agent_config import ModelConfig, ModelProvider
+from app.agents.base.agent_config import ModelConfig, ModelProvider, AgentType
 from app.agents.base.context_loader import ContextLoader
 from app.agents.tools import ALL_TOOLS
 from app.services.llm_service import llm_service, LLMConfig, LLMProvider
@@ -45,6 +45,11 @@ class CoachResponse:
     tokens: int = 0
     session_id: str = ""
 
+    # New fields for agent integration
+    agents_consulted: List[str] = field(default_factory=list)
+    analysis_performed: bool = False
+    synthesized_feedback: Optional[Dict[str, Any]] = None
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "content": self.content,
@@ -52,7 +57,10 @@ class CoachResponse:
             "tool_results": self.tool_results,
             "cost": self.cost,
             "tokens": self.tokens,
-            "session_id": self.session_id
+            "session_id": self.session_id,
+            "agents_consulted": self.agents_consulted,
+            "analysis_performed": self.analysis_performed,
+            "synthesized_feedback": self.synthesized_feedback
         }
 
 
@@ -92,13 +100,18 @@ class SmartCoachAgent:
     Conversational writing coach with memory and tool access.
 
     Maintains session-based conversations with persistent history.
+
+    Now integrated with Maxwell's specialized agents - automatically
+    routes analysis requests to Style, Continuity, Structure, and
+    Voice agents, then synthesizes results into a unified response.
     """
 
     def __init__(
         self,
         api_key: str,
         user_id: str,
-        model_config: Optional[ModelConfig] = None
+        model_config: Optional[ModelConfig] = None,
+        enable_agent_routing: bool = True
     ):
         """
         Initialize the Smart Coach.
@@ -107,6 +120,7 @@ class SmartCoachAgent:
             api_key: API key for LLM provider
             user_id: User ID for context and tracking
             model_config: Optional model configuration
+            enable_agent_routing: Whether to route analysis requests to specialized agents
         """
         self.api_key = api_key
         self.user_id = user_id
@@ -118,6 +132,62 @@ class SmartCoachAgent:
         )
         self._context_loader = ContextLoader()
         self._tools = ALL_TOOLS
+        self._enable_agent_routing = enable_agent_routing
+
+        # Lazy-loaded agent components (avoid circular imports)
+        self._supervisor = None
+        self._synthesizer = None
+        self._orchestrator = None
+
+    def _get_supervisor(self):
+        """Lazy load the supervisor agent."""
+        if self._supervisor is None:
+            from app.agents.orchestrator.supervisor_agent import SupervisorAgent
+            self._supervisor = SupervisorAgent(self.api_key, self.model_config)
+        return self._supervisor
+
+    def _get_synthesizer(self):
+        """Lazy load the synthesizer."""
+        if self._synthesizer is None:
+            from app.agents.orchestrator.maxwell_synthesizer import MaxwellSynthesizer
+            self._synthesizer = MaxwellSynthesizer(self.api_key, self.model_config)
+        return self._synthesizer
+
+    def _get_orchestrator(self, enabled_agents: Optional[List[AgentType]] = None):
+        """Lazy load the orchestrator."""
+        from app.agents.orchestrator.writing_assistant import WritingAssistantOrchestrator
+        return WritingAssistantOrchestrator(
+            self.api_key,
+            self.model_config,
+            enabled_agents=enabled_agents
+        )
+
+    def _should_invoke_agents(self, message: str, context: Optional[Dict[str, Any]]) -> bool:
+        """
+        Determine if this message should trigger specialized agent analysis.
+
+        Returns True if:
+        - There's selected text to analyze, AND
+        - The message asks for feedback/analysis
+        """
+        if not self._enable_agent_routing:
+            return False
+
+        # Need selected text to analyze
+        if not context or not context.get("selected_text"):
+            return False
+
+        message_lower = message.lower()
+
+        # Analysis trigger keywords
+        analysis_triggers = [
+            "analyze", "check", "review", "look at", "is this",
+            "does this", "how is", "how's", "working", "consistent",
+            "makes sense", "feel right", "sounds right", "believable",
+            "authentic", "feedback", "what do you think", "critique"
+        ]
+
+        return any(trigger in message_lower for trigger in analysis_triggers)
 
     async def start_session(
         self,
@@ -196,6 +266,10 @@ class SmartCoachAgent:
         """
         Send a message to the coach and get a response.
 
+        Now with intelligent routing: if the message requests analysis
+        of selected text, Maxwell automatically consults specialized
+        agents and synthesizes their feedback into a unified response.
+
         Args:
             session_id: ID of the coaching session
             message: User's message
@@ -226,62 +300,150 @@ class SmartCoachAgent:
             db.add(user_message)
             db.commit()
 
-            # Build conversation history
-            messages = await self._build_messages(db, session, message, context)
-
-            # Get tools info for context
-            tool_descriptions = self._get_tool_descriptions()
-
-            # Generate response
-            llm_config = self._build_llm_config()
-            response = await llm_service.generate(llm_config, messages)
-
-            # Parse tool usage from response (simplified - actual tool calling would be more complex)
-            tools_used, tool_results = self._extract_tool_usage(response.content)
-
-            # If we identified a tool request, execute it and enhance response
-            if tools_used:
-                enhanced_content = await self._enhance_with_tool_results(
-                    response.content,
-                    tools_used,
-                    session.manuscript_id,
-                    context
+            # Check if this should route to specialized agents
+            if self._should_invoke_agents(message, context):
+                response = await self._chat_with_agent_analysis(
+                    db, session, message, context
                 )
-                response_content = enhanced_content
             else:
-                response_content = response.content
+                response = await self._chat_conversational(
+                    db, session, message, context
+                )
 
-            # Save assistant message
-            assistant_message = CoachMessage(
-                session_id=session_id,
-                role="assistant",
-                content=response_content,
-                tools_used=tools_used,
-                tool_results=tool_results,
-                cost=response.cost,
-                tokens=response.usage.get("total_tokens", 0)
-            )
-            db.add(assistant_message)
-
-            # Update session stats
-            session.message_count += 2  # user + assistant
-            session.total_cost += response.cost
-            session.total_tokens += response.usage.get("total_tokens", 0)
-            session.last_message_at = datetime.utcnow()
-
-            db.commit()
-
-            return CoachResponse(
-                content=response_content,
-                tools_used=tools_used,
-                tool_results=tool_results,
-                cost=response.cost,
-                tokens=response.usage.get("total_tokens", 0),
-                session_id=session_id
-            )
+            # Update session with response
+            response.session_id = session_id
+            return response
 
         finally:
             db.close()
+
+    async def _chat_with_agent_analysis(
+        self,
+        db,
+        session: CoachSession,
+        message: str,
+        context: Dict[str, Any]
+    ) -> CoachResponse:
+        """
+        Handle chat that requires specialized agent analysis.
+
+        Routes to appropriate agents, runs analysis, synthesizes result.
+        """
+        selected_text = context.get("selected_text", "")
+
+        # Route the query to determine which agents to use
+        supervisor = self._get_supervisor()
+        route = await supervisor.route_query(message, selected_text[:500])
+
+        # Run targeted analysis with selected agents
+        orchestrator = self._get_orchestrator(enabled_agents=route.agents)
+        result = await orchestrator.analyze(
+            text=selected_text,
+            user_id=self.user_id,
+            manuscript_id=session.manuscript_id or "",
+            include_author_insights=True
+        )
+
+        # Synthesize into Maxwell's unified voice
+        synthesizer = self._get_synthesizer()
+        from app.agents.orchestrator.maxwell_synthesizer import SynthesisTone
+        feedback = await synthesizer.synthesize(
+            result.to_dict(),
+            tone=SynthesisTone.ENCOURAGING,
+            author_context=result.author_insights
+        )
+
+        # Save assistant message
+        assistant_message = CoachMessage(
+            session_id=str(session.id),
+            role="assistant",
+            content=feedback.narrative,
+            tools_used=[a.value for a in route.agents],
+            tool_results={"synthesis": feedback.to_dict()},
+            cost=feedback.cost,
+            tokens=feedback.tokens
+        )
+        db.add(assistant_message)
+
+        # Update session stats
+        session.message_count += 2
+        session.total_cost += feedback.cost
+        session.total_tokens += feedback.tokens
+        session.last_message_at = datetime.utcnow()
+        db.commit()
+
+        return CoachResponse(
+            content=feedback.narrative,
+            tools_used=[a.value for a in route.agents],
+            tool_results={},
+            cost=feedback.cost,
+            tokens=feedback.tokens,
+            agents_consulted=[a.value for a in route.agents],
+            analysis_performed=True,
+            synthesized_feedback=feedback.to_dict()
+        )
+
+    async def _chat_conversational(
+        self,
+        db,
+        session: CoachSession,
+        message: str,
+        context: Optional[Dict[str, Any]]
+    ) -> CoachResponse:
+        """Handle pure conversational chat without agent analysis."""
+        # Build conversation history
+        messages = await self._build_messages(db, session, message, context)
+
+        # Get tools info for context
+        tool_descriptions = self._get_tool_descriptions()
+
+        # Generate response
+        llm_config = self._build_llm_config()
+        response = await llm_service.generate(llm_config, messages)
+
+        # Parse tool usage from response (simplified)
+        tools_used, tool_results = self._extract_tool_usage(response.content)
+
+        # If we identified a tool request, execute it and enhance response
+        if tools_used:
+            enhanced_content = await self._enhance_with_tool_results(
+                response.content,
+                tools_used,
+                session.manuscript_id,
+                context
+            )
+            response_content = enhanced_content
+        else:
+            response_content = response.content
+
+        # Save assistant message
+        assistant_message = CoachMessage(
+            session_id=str(session.id),
+            role="assistant",
+            content=response_content,
+            tools_used=tools_used,
+            tool_results=tool_results,
+            cost=response.cost,
+            tokens=response.usage.get("total_tokens", 0)
+        )
+        db.add(assistant_message)
+
+        # Update session stats
+        session.message_count += 2
+        session.total_cost += response.cost
+        session.total_tokens += response.usage.get("total_tokens", 0)
+        session.last_message_at = datetime.utcnow()
+        db.commit()
+
+        return CoachResponse(
+            content=response_content,
+            tools_used=tools_used,
+            tool_results=tool_results,
+            cost=response.cost,
+            tokens=response.usage.get("total_tokens", 0),
+            agents_consulted=[],
+            analysis_performed=False
+        )
 
     async def _build_messages(
         self,
