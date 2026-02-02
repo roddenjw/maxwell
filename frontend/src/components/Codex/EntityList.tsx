@@ -39,6 +39,7 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
   const [creating, setCreating] = useState(false);
   const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set());
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [singleMergeEntity, setSingleMergeEntity] = useState<Entity | null>(null);
 
   // Create form state (for quick create)
   const [newEntityName, setNewEntityName] = useState('');
@@ -215,63 +216,39 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
     setShowMergeModal(true);
   };
 
-  const handleConfirmMerge = async (primaryEntityId: string) => {
-    const selectedEntities = entities.filter(e => selectedEntityIds.has(e.id));
-    const primaryEntity = selectedEntities.find(e => e.id === primaryEntityId);
-    const otherEntities = selectedEntities.filter(e => e.id !== primaryEntityId);
-
-    if (!primaryEntity) {
-      alert('Primary entity not found');
-      return;
-    }
-
+  const handleConfirmMerge = async (primaryEntityId: string, secondaryEntityIds: string[]) => {
     try {
-      // Merge aliases and attributes
-      const mergedAliases = new Set([
-        ...primaryEntity.aliases,
-        ...otherEntities.flatMap(e => [e.name, ...e.aliases])
-      ]);
-
-      const mergedAttributes = {
-        ...primaryEntity.attributes,
-        appearance: [
-          ...(primaryEntity.attributes?.appearance || []),
-          ...otherEntities.flatMap(e => e.attributes?.appearance || [])
-        ],
-        personality: [
-          ...(primaryEntity.attributes?.personality || []),
-          ...otherEntities.flatMap(e => e.attributes?.personality || [])
-        ],
-        background: [
-          ...(primaryEntity.attributes?.background || []),
-          ...otherEntities.flatMap(e => e.attributes?.background || [])
-        ],
-        actions: [
-          ...(primaryEntity.attributes?.actions || []),
-          ...otherEntities.flatMap(e => e.attributes?.actions || [])
-        ],
-      };
-
-      // Update primary entity with merged data
-      await handleUpdateEntity(primaryEntity.id, {
-        aliases: Array.from(mergedAliases).filter(a => a !== primaryEntity.name),
-        attributes: mergedAttributes
+      // Use the backend merge API
+      const mergedEntity = await codexApi.mergeEntities({
+        primary_entity_id: primaryEntityId,
+        secondary_entity_ids: secondaryEntityIds,
       });
 
-      // Delete other entities
-      await Promise.all(
-        otherEntities.map(e => codexApi.deleteEntity(e.id))
-      );
+      // Update the store: replace primary entity and remove secondaries
+      updateEntity(primaryEntityId, mergedEntity);
+      secondaryEntityIds.forEach(id => removeEntity(id));
 
-      // Remove from store
-      otherEntities.forEach(e => removeEntity(e.id));
+      // Clear selection state
       setSelectedEntityIds(new Set());
+      setSingleMergeEntity(null);
       setShowMergeModal(false);
 
-      alert(`✓ Successfully merged ${selectedEntities.length} entities into "${primaryEntity.name}"`);
+      // Show success message
+      const toast = await import('@/stores/toastStore').then(m => m.toast);
+      toast.success(`Successfully merged ${secondaryEntityIds.length + 1} entities into "${mergedEntity.name}"`);
     } catch (err) {
-      alert('Failed to merge entities: ' + (err instanceof Error ? err.message : 'Unknown error'));
-      throw err; // Re-throw to let modal handle it
+      const toast = await import('@/stores/toastStore').then(m => m.toast);
+      toast.error('Failed to merge entities: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      throw err;
+    }
+  };
+
+  // Handle single-entity merge from EntityDetail
+  const handleSingleMerge = (entityId: string) => {
+    const entity = entities.find(e => e.id === entityId);
+    if (entity) {
+      setSingleMergeEntity(entity);
+      setShowMergeModal(true);
     }
   };
 
@@ -308,12 +285,27 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
   // If entity is selected, show detail view
   if (selectedEntity) {
     return (
-      <EntityDetail
-        entity={selectedEntity}
-        onUpdate={(updates) => handleUpdateEntity(selectedEntity.id, updates)}
-        onDelete={handleDeleteEntity}
-        onClose={() => setSelectedEntity(null)}
-      />
+      <>
+        <EntityDetail
+          entity={selectedEntity}
+          onUpdate={(updates) => handleUpdateEntity(selectedEntity.id, updates)}
+          onDelete={handleDeleteEntity}
+          onClose={() => setSelectedEntity(null)}
+          onMerge={handleSingleMerge}
+        />
+        {/* Single-entity merge modal */}
+        {showMergeModal && singleMergeEntity && (
+          <MergeEntitiesModal
+            sourceEntity={singleMergeEntity}
+            availableEntities={entities.filter(e => e.id !== singleMergeEntity.id)}
+            onConfirm={handleConfirmMerge}
+            onCancel={() => {
+              setShowMergeModal(false);
+              setSingleMergeEntity(null);
+            }}
+          />
+        )}
+      </>
     );
   }
 
@@ -411,6 +403,9 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
                 <option value={EntityType.LOCATION}>Location</option>
                 <option value={EntityType.ITEM}>Item</option>
                 <option value={EntityType.LORE}>Lore</option>
+                <option value={EntityType.CULTURE}>Culture</option>
+                <option value={EntityType.CREATURE}>Creature</option>
+                <option value={EntityType.RACE}>Race</option>
               </select>
             </div>
 
@@ -572,8 +567,8 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
         )}
       </div>
 
-      {/* Merge Entities Modal */}
-      {showMergeModal && (
+      {/* Merge Entities Modal (bulk multi-select mode) */}
+      {showMergeModal && !singleMergeEntity && selectedEntityIds.size >= 2 && (
         <MergeEntitiesModal
           entities={entities.filter(e => selectedEntityIds.has(e.id))}
           onConfirm={handleConfirmMerge}

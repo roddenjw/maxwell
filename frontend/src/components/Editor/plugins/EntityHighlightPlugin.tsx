@@ -22,7 +22,7 @@ interface HoverState {
 }
 
 export default function EntityHighlightPlugin({
-  manuscriptId,
+  manuscriptId: _manuscriptId,
   enabled = true,
 }: EntityHighlightPluginProps) {
   const [editor] = useLexicalComposerContext();

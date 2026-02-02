@@ -274,7 +274,7 @@ const TEMPLATE_CONFIGS: Record<SupportedTemplateType, TemplateConfig> = {
   [TemplateType.CREATURE]: {
     label: 'Creature',
     icon: '🐉',
-    entityType: EntityType.LORE,
+    entityType: EntityType.CREATURE,
     description: 'Create a creature with biology, behavior, and lore',
     steps: [
       {
@@ -364,6 +364,143 @@ const TEMPLATE_CONFIGS: Record<SupportedTemplateType, TemplateConfig> = {
           { key: 'allies', label: 'Allies', type: 'textarea', placeholder: 'Who are their friends?' },
           { key: 'enemies', label: 'Enemies', type: 'textarea', placeholder: 'Who opposes them?' },
           { key: 'secrets', label: 'Secrets', type: 'textarea', placeholder: 'Hidden agendas, secret activities' },
+        ],
+      },
+    ],
+  },
+  [TemplateType.CULTURE]: {
+    label: 'Culture',
+    icon: '🏛️',
+    entityType: EntityType.CULTURE,
+    description: 'Create a culture with values, traditions, and social structure',
+    steps: [
+      {
+        id: 'basics',
+        title: 'The Basics',
+        description: 'What is this culture?',
+        fields: [
+          { key: 'name', label: 'Name', type: 'text', placeholder: 'Culture name', required: true },
+          { key: 'origin', label: 'Origin', type: 'textarea', placeholder: 'Where did this culture originate?' },
+          { key: 'aliases', label: 'Other Names', type: 'text', placeholder: 'Alternative names, historical names' },
+        ],
+      },
+      {
+        id: 'values',
+        title: 'Values & Beliefs',
+        description: 'What does this culture believe in?',
+        fields: [
+          { key: 'values.core_beliefs', label: 'Core Beliefs', type: 'textarea', placeholder: 'Fundamental worldview and guiding principles' },
+          { key: 'values.taboos', label: 'Taboos', type: 'textarea', placeholder: 'What is forbidden or shameful?' },
+          { key: 'values.ideals', label: 'Ideals', type: 'textarea', placeholder: 'What virtues do they aspire to?' },
+        ],
+      },
+      {
+        id: 'society',
+        title: 'Social Structure',
+        description: 'How is society organized?',
+        fields: [
+          { key: 'society.structure', label: 'Structure', type: 'textarea', placeholder: 'Hierarchical, egalitarian, clan-based, etc.' },
+          { key: 'society.roles', label: 'Roles', type: 'textarea', placeholder: 'How are roles assigned? Gender roles? Classes?' },
+          { key: 'society.family_structure', label: 'Family Structure', type: 'textarea', placeholder: 'Nuclear, extended, communal? Marriage customs?' },
+        ],
+      },
+      {
+        id: 'traditions',
+        title: 'Traditions',
+        description: 'What customs define this culture?',
+        fields: [
+          { key: 'traditions.rituals', label: 'Rituals', type: 'textarea', placeholder: 'Daily, weekly, or seasonal rituals' },
+          { key: 'traditions.celebrations', label: 'Celebrations', type: 'textarea', placeholder: 'Festivals, holidays, commemorations' },
+          { key: 'traditions.rites_of_passage', label: 'Rites of Passage', type: 'textarea', placeholder: 'Coming of age, marriage, death customs' },
+        ],
+      },
+      {
+        id: 'expression',
+        title: 'Arts & Expression',
+        description: 'How does this culture express itself?',
+        fields: [
+          { key: 'arts.music', label: 'Music', type: 'textarea', placeholder: 'Musical traditions, instruments, styles' },
+          { key: 'arts.visual_arts', label: 'Visual Arts', type: 'textarea', placeholder: 'Art styles, crafts, architecture' },
+          { key: 'arts.storytelling', label: 'Storytelling', type: 'textarea', placeholder: 'Oral traditions, literature, myths' },
+          { key: 'language', label: 'Language', type: 'textarea', placeholder: 'Language characteristics, idioms, accents' },
+        ],
+      },
+      {
+        id: 'context',
+        title: 'Context & Conflicts',
+        description: 'How does this culture fit in the world?',
+        fields: [
+          { key: 'religion', label: 'Religion', type: 'textarea', placeholder: 'Religious beliefs, practices, deities' },
+          { key: 'conflicts', label: 'Conflicts', type: 'textarea', placeholder: 'Internal divisions, external tensions' },
+          { key: 'notable_figures', label: 'Notable Figures', type: 'textarea', placeholder: 'Famous historical or mythical figures' },
+        ],
+      },
+    ],
+  },
+  [TemplateType.RACE]: {
+    label: 'Race/Species',
+    icon: '👥',
+    entityType: EntityType.RACE,
+    description: 'Create a race or species with biology, abilities, and society',
+    steps: [
+      {
+        id: 'basics',
+        title: 'The Basics',
+        description: 'What is this race or species?',
+        fields: [
+          { key: 'name', label: 'Name', type: 'text', placeholder: 'Race/species name', required: true },
+          { key: 'origin.homeworld', label: 'Homeland', type: 'text', placeholder: 'Where do they come from?' },
+          { key: 'aliases', label: 'Other Names', type: 'text', placeholder: 'Alternative names, slurs, nicknames' },
+        ],
+      },
+      {
+        id: 'origin',
+        title: 'Origins',
+        description: 'Where did this race come from?',
+        fields: [
+          { key: 'origin.creation_myth', label: 'Creation Myth', type: 'textarea', placeholder: 'How do they believe they came to be?' },
+          { key: 'origin.evolution', label: 'Actual Origin', type: 'textarea', placeholder: 'The true history (if different from myth)' },
+        ],
+      },
+      {
+        id: 'physical',
+        title: 'Physical Traits',
+        description: 'What do they look like?',
+        fields: [
+          { key: 'physical.appearance', label: 'Appearance', type: 'textarea', placeholder: 'General appearance, skin, hair, eyes' },
+          { key: 'physical.lifespan', label: 'Lifespan', type: 'text', placeholder: 'How long do they live?' },
+          { key: 'physical.size_range', label: 'Size Range', type: 'text', placeholder: 'Height and build variations' },
+          { key: 'physical.distinguishing_features', label: 'Distinguishing Features', type: 'textarea', placeholder: 'Unique physical traits (ears, tails, wings, etc.)' },
+        ],
+      },
+      {
+        id: 'abilities',
+        title: 'Abilities & Weaknesses',
+        description: 'What can they do?',
+        fields: [
+          { key: 'abilities.innate_powers', label: 'Innate Abilities', type: 'textarea', placeholder: 'Natural powers or talents' },
+          { key: 'abilities.special_senses', label: 'Special Senses', type: 'textarea', placeholder: 'Enhanced senses, magical perception' },
+          { key: 'abilities.weaknesses', label: 'Weaknesses', type: 'textarea', placeholder: 'Vulnerabilities, limitations' },
+        ],
+      },
+      {
+        id: 'society',
+        title: 'Society',
+        description: 'How do they live together?',
+        fields: [
+          { key: 'society.typical_culture', label: 'Typical Culture', type: 'textarea', placeholder: 'Common cultural traits across the race' },
+          { key: 'society.government', label: 'Government', type: 'textarea', placeholder: 'How are they typically governed?' },
+          { key: 'society.relations_with_others', label: 'Relations with Others', type: 'textarea', placeholder: 'How do they interact with other races?' },
+        ],
+      },
+      {
+        id: 'details',
+        title: 'Additional Details',
+        description: 'Other important information',
+        fields: [
+          { key: 'reproduction', label: 'Reproduction', type: 'textarea', placeholder: 'How do they reproduce? Family units?' },
+          { key: 'notable_individuals', label: 'Notable Individuals', type: 'textarea', placeholder: 'Famous members of this race' },
+          { key: 'stereotypes', label: 'Stereotypes', type: 'textarea', placeholder: 'Common misconceptions or generalizations' },
         ],
       },
     ],

@@ -13,7 +13,6 @@ import {
   CHARACTER_TROPES,
   getRoleById,
   getTropeById,
-  formatArchetypesForAI,
 } from '@/lib/characterArchetypes';
 
 interface EntityDetailProps {
@@ -239,10 +238,11 @@ export default function EntityDetail({
       });
 
       // Update local state to reflect changes
-      setEditedAttributes({
+      setEditedAttributes(prev => ({
+        ...prev,
         description: result.description || '',
         notes: entity.attributes?.notes || '',
-      });
+      }));
       setEditedAliases(newAliases.join(', '));
 
       toast.success('AI filled entity from appearances');
@@ -284,6 +284,9 @@ export default function EntityDetail({
                 <option value={EntityType.LOCATION}>Location</option>
                 <option value={EntityType.ITEM}>Item</option>
                 <option value={EntityType.LORE}>Lore</option>
+                <option value={EntityType.CULTURE}>Culture</option>
+                <option value={EntityType.CREATURE}>Creature</option>
+                <option value={EntityType.RACE}>Race</option>
               </select>
             ) : (
               <span

@@ -13,11 +13,6 @@ interface InconsistencyListProps {
   onNavigateToChapter?: (chapterId: string) => void;
 }
 
-interface ResolutionNote {
-  inconsistencyId: string;
-  note: string;
-}
-
 type ViewMode = 'list' | 'grouped';
 
 export default function InconsistencyList({ manuscriptId, onNavigateToChapter }: InconsistencyListProps) {

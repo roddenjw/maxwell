@@ -114,7 +114,7 @@ export default function EntityMentionsPlugin({ manuscriptId }: EntityMentionsPlu
         try {
           // Prompt for entity type
           const typeChoice = prompt(
-            `Create new entity "${selectedOption.entity.name}".\n\nSelect type (1-4):\n1. CHARACTER (person)\n2. LOCATION (place)\n3. ITEM (object)\n4. LORE (concept)`,
+            `Create new entity "${selectedOption.entity.name}".\n\nSelect type (1-7):\n1. CHARACTER (person)\n2. LOCATION (place)\n3. ITEM (object)\n4. LORE (concept)\n5. CULTURE (society/customs)\n6. CREATURE (species/monster)\n7. RACE (people/species)`,
             '1'
           );
 
@@ -129,6 +129,9 @@ export default function EntityMentionsPlugin({ manuscriptId }: EntityMentionsPlu
             '2': EntityType.LOCATION,
             '3': EntityType.ITEM,
             '4': EntityType.LORE,
+            '5': EntityType.CULTURE,
+            '6': EntityType.CREATURE,
+            '7': EntityType.RACE,
           };
 
           const entityType = typeMap[typeChoice] || EntityType.CHARACTER;
@@ -242,6 +245,12 @@ function EntityMentionsTypeaheadMenu({
         return '🔮';
       case 'LORE':
         return '📜';
+      case 'CULTURE':
+        return '🏛️';
+      case 'CREATURE':
+        return '🐉';
+      case 'RACE':
+        return '👥';
       default:
         return '•';
     }
@@ -257,6 +266,12 @@ function EntityMentionsTypeaheadMenu({
         return 'text-yellow-700';
       case 'LORE':
         return 'text-purple-600';
+      case 'CULTURE':
+        return 'text-amber-600';
+      case 'CREATURE':
+        return 'text-red-500';
+      case 'RACE':
+        return 'text-pink-500';
       default:
         return 'text-faded-ink';
     }

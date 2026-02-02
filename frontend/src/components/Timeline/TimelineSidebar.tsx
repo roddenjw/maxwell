@@ -29,16 +29,16 @@ export default function TimelineSidebar({
 }: TimelineSidebarProps) {
   const { activeTab, setActiveTab } = useTimelineStore();
 
-  const tabs = [
-    { id: 'visual' as const, label: 'Visual', icon: '📜' },
-    { id: 'events' as const, label: 'Events', icon: '🎬' },
-    { id: 'orchestrator' as const, label: 'Orchestrator', icon: '🎭' },
-    { id: 'locations' as const, label: 'Locations', icon: '🗺️' },
-    { id: 'conflicts' as const, label: 'Conflicts', icon: '⚔️' },
-    { id: 'foreshadow' as const, label: 'Foreshadow', icon: '🔮' },
-    { id: 'heatmap' as const, label: 'Heatmap', icon: '🔥' },
-    { id: 'network' as const, label: 'Network', icon: '🕸️' },
-    { id: 'emotion' as const, label: 'Emotion', icon: '💭' },
+  const tabs: Array<{ id: typeof activeTab; label: string; icon: string; badge?: number }> = [
+    { id: 'visual', label: 'Visual', icon: '📜' },
+    { id: 'events', label: 'Events', icon: '🎬' },
+    { id: 'orchestrator', label: 'Orchestrator', icon: '🎭' },
+    { id: 'locations', label: 'Locations', icon: '🗺️' },
+    { id: 'conflicts', label: 'Conflicts', icon: '⚔️' },
+    { id: 'foreshadow', label: 'Foreshadow', icon: '🔮' },
+    { id: 'heatmap', label: 'Heatmap', icon: '🔥' },
+    { id: 'network', label: 'Network', icon: '🕸️' },
+    { id: 'emotion', label: 'Emotion', icon: '💭' },
   ];
 
   if (!isOpen) {
