@@ -1,0 +1,134 @@
+{
+  "version": "1.0.0",
+  "description": "Multi-agent code review system for Maxwell project",
+
+  "agents": {
+    "architect": {
+      "name": "Architect",
+      "description": "Makes design decisions, ensures architectural consistency",
+      "prompt_file": ".claude/prompts/architect.md",
+      "subagent_type": "Plan",
+      "model": "sonnet",
+      "triggers": [
+        "new_feature",
+        "new_subsystem",
+        "database_schema_change",
+        "api_design",
+        "cross_cutting_concern"
+      ],
+      "outputs": [
+        "design_decision",
+        "architecture_guidance",
+        "pattern_recommendation"
+      ]
+    },
+    "developer": {
+      "name": "Developer",
+      "description": "Implements features and fixes according to specifications",
+      "prompt_file": ".claude/prompts/developer.md",
+      "subagent_type": "general-purpose",
+      "model": "sonnet",
+      "can_escalate_to": ["architect"],
+      "outputs": [
+        "code_implementation",
+        "tests",
+        "documentation_updates"
+      ]
+    },
+    "reviewer": {
+      "name": "Reviewer",
+      "description": "Reviews code for quality, security, and adherence to patterns",
+      "prompt_file": ".claude/prompts/reviewer.md",
+      "subagent_type": "general-purpose",
+      "model": "sonnet",
+      "can_escalate_to": ["architect"],
+      "review_criteria": [
+        "code_quality",
+        "security",
+        "performance",
+        "pattern_adherence",
+        "test_coverage",
+        "documentation"
+      ],
+      "outputs": [
+        "review_feedback",
+        "improvement_suggestions",
+        "approved_or_changes_requested"
+      ]
+    }
+  },
+
+  "workflow": {
+    "simple_task": {
+      "description": "Bug fixes, small changes, documentation",
+      "criteria": [
+        "single_file_change",
+        "no_new_patterns",
+        "no_api_changes"
+      ],
+      "agents": ["developer"],
+      "max_cycles": 1
+    },
+    "standard_task": {
+      "description": "Feature additions, refactors, multi-file changes",
+      "criteria": [
+        "multi_file_change",
+        "existing_patterns",
+        "minor_api_changes"
+      ],
+      "agents": ["developer", "reviewer"],
+      "max_cycles": 2
+    },
+    "complex_task": {
+      "description": "New features, architecture changes, new subsystems",
+      "criteria": [
+        "new_subsystem",
+        "new_patterns",
+        "database_changes",
+        "significant_api_changes"
+      ],
+      "agents": ["architect", "developer", "reviewer"],
+      "max_cycles": 3
+    }
+  },
+
+  "handoff_protocol": {
+    "architect_to_developer": {
+      "required_fields": [
+        "design_decision",
+        "files_to_create_or_modify",
+        "patterns_to_follow",
+        "constraints"
+      ]
+    },
+    "developer_to_reviewer": {
+      "required_fields": [
+        "files_changed",
+        "summary_of_changes",
+        "test_results",
+        "areas_of_uncertainty"
+      ]
+    },
+    "reviewer_to_developer": {
+      "required_fields": [
+        "approval_status",
+        "issues_found",
+        "required_changes",
+        "suggestions"
+      ]
+    }
+  },
+
+  "termination_conditions": {
+    "success": [
+      "reviewer_approved",
+      "all_tests_pass",
+      "no_critical_issues"
+    ],
+    "failure": [
+      "max_cycles_exceeded",
+      "unresolvable_conflict",
+      "blocking_issue_found"
+    ]
+  }
+}
