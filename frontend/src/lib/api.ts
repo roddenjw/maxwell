@@ -3747,6 +3747,66 @@ export const agentApi = {
 
     return response.json();
   },
+
+  // ============================================================================
+  // Story Health Assessment
+  // ============================================================================
+
+  /**
+   * Get a unified story health assessment.
+   * Runs all agents and detects conflicts between their feedback.
+   */
+  async getStoryHealth(data: {
+    api_key: string;
+    user_id: string;
+    text: string;
+    manuscript_id: string;
+    chapter_id?: string;
+    model_provider?: string;
+    model_name?: string;
+  }): Promise<{
+    success: boolean;
+    data: {
+      overall_score: number;
+      overall_status: 'healthy' | 'needs_attention' | 'concerning';
+      health_scores: {
+        character: number;
+        plot: number;
+        prose: number;
+        pacing: number;
+        consistency: number;
+      };
+      top_strengths: string[];
+      top_concerns: string[];
+      conflicts: Array<{
+        type: string;
+        severity: string;
+        agents: string[];
+        description: string;
+        bridge_suggestion: string;
+        author_question: string;
+      }>;
+      primary_focus: string;
+      unified_message: string;
+    };
+    cost: {
+      total: number;
+      formatted: string;
+    };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/story-health`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Story health assessment failed');
+    }
+
+    return response.json();
+  },
 };
 
 /**

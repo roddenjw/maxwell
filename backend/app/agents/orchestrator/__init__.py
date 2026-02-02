@@ -36,6 +36,15 @@ from app.agents.orchestrator.maxwell_synthesizer import (
     create_maxwell_synthesizer
 )
 
+from app.agents.orchestrator.cross_agent_reasoner import (
+    CrossAgentReasoner,
+    AgentConflict,
+    StoryHealthAssessment,
+    ConflictType,
+    ConflictSeverity,
+    create_cross_agent_reasoner
+)
+
 __all__ = [
     # Primary interface
     "MaxwellUnified",
@@ -54,6 +63,14 @@ __all__ = [
     "SynthesizedFeedback",
     "SynthesisTone",
     "create_maxwell_synthesizer",
+
+    # Cross-agent reasoning
+    "CrossAgentReasoner",
+    "AgentConflict",
+    "StoryHealthAssessment",
+    "ConflictType",
+    "ConflictSeverity",
+    "create_cross_agent_reasoner",
 
     # Legacy orchestrator (still available for direct access)
     "WritingAssistantOrchestrator",

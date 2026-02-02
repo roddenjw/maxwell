@@ -23,6 +23,7 @@ from app.models.agent import (
     MaxwellConversation, MaxwellInsight, MaxwellPreferences
 )
 from app.services.maxwell_memory_service import create_maxwell_memory_service
+from app.agents.orchestrator.cross_agent_reasoner import create_cross_agent_reasoner
 
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
@@ -1616,3 +1617,125 @@ async def update_maxwell_preferences(request: MaxwellPreferencesRequest):
 
     finally:
         db.close()
+
+
+# ============================================================================
+# Cross-Agent Reasoning Endpoints
+# ============================================================================
+
+class StoryHealthRequest(BaseModel):
+    """Request for story health assessment"""
+    api_key: str
+    user_id: str
+    text: str
+    manuscript_id: str
+    chapter_id: Optional[str] = None
+
+    # Optional model selection
+    model_provider: Optional[str] = "anthropic"
+    model_name: Optional[str] = "claude-3-haiku-20240307"
+
+
+@router.post("/maxwell/story-health")
+async def get_story_health(
+    request: StoryHealthRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    Get a unified story health assessment.
+
+    Runs all agents, detects conflicts between their feedback,
+    and provides a mediated unified assessment.
+
+    Returns:
+    - Overall health score (0-100)
+    - Individual health scores for character, plot, prose, pacing, consistency
+    - Top strengths and concerns
+    - Any conflicts between agent perspectives with bridge suggestions
+    - Unified message from Maxwell
+    """
+    try:
+        from app.agents.orchestrator.writing_assistant import WritingAssistantOrchestrator
+
+        model_config = ModelConfig(
+            provider=ModelProvider(request.model_provider),
+            model_name=request.model_name,
+            temperature=0.7,
+            max_tokens=4096
+        )
+
+        # Run all agents
+        orchestrator = WritingAssistantOrchestrator(
+            api_key=request.api_key,
+            model_config=model_config
+        )
+
+        result = await orchestrator.analyze(
+            text=request.text,
+            user_id=request.user_id,
+            manuscript_id=request.manuscript_id,
+            chapter_id=request.chapter_id
+        )
+
+        # Analyze with cross-agent reasoner
+        reasoner = create_cross_agent_reasoner()
+        conflicts = reasoner.analyze_conflicts(result.agent_results)
+        health = reasoner.generate_story_health(result.agent_results, conflicts)
+
+        # Save conversation in background
+        background_tasks.add_task(
+            _save_maxwell_conversation,
+            user_id=request.user_id,
+            maxwell_response=health.unified_message,
+            response_type="story_health",
+            interaction_type="analysis",
+            manuscript_id=request.manuscript_id,
+            chapter_id=request.chapter_id,
+            analyzed_text=request.text[:1000],
+            feedback_data={
+                "overall_score": health.overall_score,
+                "status": health.overall_status,
+                "conflicts": len(conflicts),
+            },
+            agents_consulted=list(result.agent_results.keys()),
+            cost=result.total_cost,
+            tokens=result.total_tokens,
+            execution_time_ms=result.execution_time_ms,
+        )
+
+        return {
+            "success": True,
+            "data": {
+                "overall_score": health.overall_score,
+                "overall_status": health.overall_status,
+                "health_scores": {
+                    "character": health.character_health,
+                    "plot": health.plot_health,
+                    "prose": health.prose_health,
+                    "pacing": health.pacing_health,
+                    "consistency": health.consistency_health,
+                },
+                "top_strengths": health.top_strengths,
+                "top_concerns": health.top_concerns,
+                "conflicts": [
+                    {
+                        "type": c.conflict_type.value,
+                        "severity": c.severity.value,
+                        "agents": [c.agent_a, c.agent_b],
+                        "description": c.conflict_description,
+                        "bridge_suggestion": c.bridge_suggestion,
+                        "author_question": c.author_question,
+                    }
+                    for c in health.conflicts
+                ],
+                "primary_focus": health.primary_focus,
+                "unified_message": health.unified_message,
+            },
+            "cost": {
+                "total": result.total_cost,
+                "formatted": f"${result.total_cost:.4f}"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
