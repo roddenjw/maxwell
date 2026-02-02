@@ -19,6 +19,7 @@ import { $createParagraphNode, $insertNodes } from 'lexical';
 import { INSERT_UNORDERED_LIST_COMMAND, INSERT_ORDERED_LIST_COMMAND } from '@lexical/list';
 import { $createSceneBreakNode } from './nodes/SceneBreakNode';
 import { useOutlineStore } from '@/stores/outlineStore';
+import { useAgentStore } from '@/stores/agentStore';
 import ChapterRecapModal from '@/components/Chapter/ChapterRecapModal';
 import AnalyzeModal from '@/components/Codex/AnalyzeModal';
 import { BalanceWidget } from '@/components/Common';
@@ -32,6 +33,7 @@ interface EditorToolbarProps {
 export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }: EditorToolbarProps = {}) {
   const [editor] = useLexicalComposerContext();
   const { outline, getCompletionPercentage, toggleOutlineReferenceSidebar, outlineReferenceSidebarOpen } = useOutlineStore();
+  const { isCoachPanelOpen, setCoachPanelOpen } = useAgentStore();
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
   const [isUnderline, setIsUnderline] = useState(false);
@@ -417,6 +419,17 @@ export default function EditorToolbar({ manuscriptId, chapterId, chapterTitle }:
       {/* AI Balance Widget */}
       <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2 ml-auto">
         <BalanceWidget onOpenSettings={() => window.dispatchEvent(new CustomEvent('openSettings'))} />
+      </div>
+
+      {/* Maxwell AI Coach Button */}
+      <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
+        <ToolbarButton
+          onClick={() => setCoachPanelOpen(!isCoachPanelOpen)}
+          active={isCoachPanelOpen}
+          title="Open Maxwell AI writing coach (Ctrl+M / Cmd+M)"
+        >
+          ✨ Maxwell
+        </ToolbarButton>
       </div>
 
       {/* Focus Mode Toggle */}
