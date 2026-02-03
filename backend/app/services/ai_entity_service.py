@@ -443,9 +443,9 @@ Extract all available information about this entity from the context."""
         Args:
             api_key: OpenRouter API key
             entity_name: Name of the entity
-            entity_type: Type (CHARACTER, LOCATION, ITEM, LORE)
+            entity_type: Type (CHARACTER, LOCATION, ITEM, LORE, CULTURE, CREATURE, RACE)
             appearance_contexts: List of {chapter_title, summary, context_text}
-            existing_data: Already filled template fields
+            existing_data: Dict with "attributes" and "template_data" keys
 
         Returns:
             Dict with generated description and attributes
@@ -460,13 +460,32 @@ Extract all available information about this entity from the context."""
             for ctx in appearance_contexts[:20]  # Limit to 20 to avoid token limits
         ])
 
+        # Extract attributes and template_data from existing_data
+        attributes = existing_data.get("attributes", {}) if isinstance(existing_data, dict) else existing_data
+        template_data = existing_data.get("template_data", {}) if isinstance(existing_data, dict) else {}
+
+        # Build template context for AI if template_data exists
+        template_context = ""
+        if template_data:
+            template_parts = []
+            for key, value in self._flatten_dict(template_data):
+                if value and key not in ('name',):
+                    if isinstance(value, list):
+                        template_parts.append(f"- {key}: {', '.join(str(v) for v in value)}")
+                    else:
+                        template_parts.append(f"- {key}: {value}")
+            if template_parts:
+                template_context = "\n\nESTABLISHED TEMPLATE DATA:\n" + "\n".join(template_parts)
+
         system_prompt = f"""You are an expert at analyzing fiction text to extract and synthesize information about story entities.
 
 Given all the appearances of a {entity_type.lower()} named "{entity_name}" throughout a story, generate comprehensive details about them.
 
+{"Consider the established template data when generating the description - incorporate relevant details like physical characteristics, abilities, culture, and origin into the description." if template_data else ""}
+
 Respond with a JSON object containing:
 {{
-  "description": "A comprehensive description synthesized from all appearances (2-3 paragraphs)",
+  "description": "A comprehensive description synthesized from all appearances (2-3 paragraphs). Include relevant details from template data if available.",
   "attributes": {{
     "appearance": "Physical description details found in the text",
     "personality": "Personality traits and behaviors observed",
@@ -485,9 +504,9 @@ Only include attributes where you found evidence in the text. Use null for field
 APPEARANCES:
 {appearances_text}
 
-{f"EXISTING DATA: {json.dumps(existing_data)}" if existing_data else ""}
+{f"EXISTING ATTRIBUTES: {json.dumps(attributes)}" if attributes else ""}{template_context}
 
-Generate comprehensive details based on these appearances."""
+Generate comprehensive details based on these appearances{" and incorporate the established template data" if template_data else ""}."""
 
         # Call OpenRouter
         openrouter = OpenRouterService(api_key)

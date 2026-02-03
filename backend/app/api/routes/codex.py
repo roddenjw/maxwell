@@ -589,7 +589,10 @@ async def ai_fill_entity(request: AIEntityFillRequest):
             entity_name=entity.name,
             entity_type=entity.type,
             appearance_contexts=contexts,
-            existing_data=entity.attributes or {}
+            existing_data={
+                "attributes": entity.attributes or {},
+                "template_data": entity.template_data or {}
+            }
         )
 
         if not result.get("success"):
