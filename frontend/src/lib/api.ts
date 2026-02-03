@@ -3583,6 +3583,244 @@ export const agentApi = {
   },
 };
 
+// ========================================
+// Writing Feedback API
+// ========================================
+
+import type {
+  WritingIssue,
+  FeedbackResponse,
+  FeedbackSettings,
+  FeedbackStats,
+} from '@/types/writingFeedback';
+
+export const writingFeedbackApi = {
+  /**
+   * Real-time analysis for typing feedback.
+   * Fast analysis (<500ms) that only checks spelling and basic grammar.
+   */
+  async analyzeRealtime(
+    text: string,
+    manuscriptId?: string,
+    settings?: Partial<FeedbackSettings>
+  ): Promise<FeedbackResponse> {
+    const response = await fetch(`${API_BASE_URL}/writing-feedback/realtime`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        manuscript_id: manuscriptId,
+        settings,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Analysis failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Paragraph-level analysis.
+   * More thorough analysis (<2s) including style checks.
+   */
+  async analyzeParagraph(
+    text: string,
+    manuscriptId?: string,
+    settings?: Partial<FeedbackSettings>
+  ): Promise<FeedbackResponse> {
+    const response = await fetch(`${API_BASE_URL}/writing-feedback/paragraph`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        manuscript_id: manuscriptId,
+        settings,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Analysis failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Full chapter analysis.
+   * Complete analysis (<10s) including dialogue checks.
+   */
+  async analyzeChapter(
+    chapterId: string,
+    settings?: Partial<FeedbackSettings>
+  ): Promise<FeedbackResponse> {
+    const response = await fetch(
+      `${API_BASE_URL}/writing-feedback/chapter/${chapterId}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Analysis failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Full manuscript analysis.
+   * Analyzes all chapters. May take longer for large manuscripts.
+   */
+  async analyzeManuscript(
+    manuscriptId: string,
+    settings?: Partial<FeedbackSettings>
+  ): Promise<FeedbackResponse & { chapters_analyzed: number }> {
+    const response = await fetch(
+      `${API_BASE_URL}/writing-feedback/manuscript/${manuscriptId}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Analysis failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Add a word to the manuscript's custom dictionary.
+   */
+  async addToDictionary(manuscriptId: string, word: string): Promise<{ status: string; word: string }> {
+    const response = await fetch(
+      `${API_BASE_URL}/writing-feedback/add-to-dictionary/${manuscriptId}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ word }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to add to dictionary');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Remove a word from the custom dictionary.
+   */
+  async removeFromDictionary(
+    manuscriptId: string,
+    word: string
+  ): Promise<{ status: string; word: string }> {
+    const response = await fetch(
+      `${API_BASE_URL}/writing-feedback/dictionary/${manuscriptId}/${encodeURIComponent(word)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to remove from dictionary');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Add a rule to the ignore list for this manuscript.
+   */
+  async ignoreRule(manuscriptId: string, ruleId: string): Promise<{ status: string; rule_id: string }> {
+    const response = await fetch(
+      `${API_BASE_URL}/writing-feedback/ignore-rule/${manuscriptId}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rule_id: ruleId }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to ignore rule');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get feedback settings for a manuscript.
+   */
+  async getSettings(manuscriptId: string): Promise<FeedbackSettings> {
+    const response = await fetch(
+      `${API_BASE_URL}/writing-feedback/settings/${manuscriptId}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get settings');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Update feedback settings for a manuscript.
+   */
+  async updateSettings(
+    manuscriptId: string,
+    settings: Partial<FeedbackSettings>
+  ): Promise<{ status: string; settings: FeedbackSettings }> {
+    const response = await fetch(
+      `${API_BASE_URL}/writing-feedback/settings/${manuscriptId}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update settings');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Check if writing feedback services are available.
+   */
+  async getStatus(): Promise<{
+    languagetool_available: boolean;
+    supported_languages: string[];
+  }> {
+    const response = await fetch(`${API_BASE_URL}/writing-feedback/status`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get status');
+    }
+
+    return response.json();
+  },
+};
+
 /**
  * Health check
  */
@@ -3610,5 +3848,6 @@ export default {
   import: importApi,
   share: shareApi,
   agent: agentApi,
+  writingFeedback: writingFeedbackApi,
   healthCheck,
 };

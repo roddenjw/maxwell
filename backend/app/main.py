@@ -23,7 +23,7 @@ from app.services import (
     GRAPH_AVAILABLE
 )
 from app.services.nlp_service import nlp_service
-from app.api.routes import versioning, manuscripts, codex, timeline, chapters, stats, realtime, fast_coach, recap, export, onboarding, outlines, brainstorming, worlds, entity_states, foreshadowing, import_routes, share, agents, privacy, carbon
+from app.api.routes import versioning, manuscripts, codex, timeline, chapters, stats, realtime, fast_coach, recap, export, onboarding, outlines, brainstorming, worlds, entity_states, foreshadowing, import_routes, share, agents, privacy, carbon, writing_feedback
 
 
 @asynccontextmanager
@@ -102,6 +102,7 @@ app.include_router(share.router)
 app.include_router(agents.router)
 app.include_router(privacy.router)
 app.include_router(carbon.router)
+app.include_router(writing_feedback.router)
 
 
 @app.get("/")

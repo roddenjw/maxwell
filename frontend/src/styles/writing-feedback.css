@@ -1,0 +1,140 @@
+/**
+ * Writing Feedback CSS Styles
+ *
+ * Underline styles for different types of writing issues.
+ * Uses wavy underlines for errors, dotted for suggestions.
+ */
+
+/* Base style for all writing issues */
+.writing-issue {
+  position: relative;
+  cursor: pointer;
+  border-radius: 1px;
+}
+
+/* Spelling errors - red wavy underline */
+.writing-issue-spelling {
+  text-decoration: underline wavy #DC2626;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+}
+
+.writing-issue-spelling:hover {
+  background-color: rgba(220, 38, 38, 0.1);
+}
+
+/* Grammar errors - blue wavy underline */
+.writing-issue-grammar {
+  text-decoration: underline wavy #2563EB;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+}
+
+.writing-issue-grammar:hover {
+  background-color: rgba(37, 99, 235, 0.1);
+}
+
+/* Style suggestions - amber dotted underline */
+.writing-issue-style {
+  text-decoration: underline dotted #D97706;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+}
+
+.writing-issue-style:hover {
+  background-color: rgba(217, 119, 6, 0.1);
+}
+
+/* Dialogue issues - teal dashed underline */
+.writing-issue-dialogue {
+  text-decoration: underline dashed #0D9488;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+}
+
+.writing-issue-dialogue:hover {
+  background-color: rgba(13, 148, 136, 0.1);
+}
+
+/* Consistency issues - purple dashed underline */
+.writing-issue-consistency {
+  text-decoration: underline dashed #7C3AED;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+}
+
+.writing-issue-consistency:hover {
+  background-color: rgba(124, 58, 237, 0.1);
+}
+
+/* Voice issues - teal dotted underline */
+.writing-issue-voice {
+  text-decoration: underline dotted #0D9488;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+}
+
+.writing-issue-voice:hover {
+  background-color: rgba(13, 148, 136, 0.1);
+}
+
+/* Readability - gray dotted underline */
+.writing-issue-readability {
+  text-decoration: underline dotted #6B7280;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+}
+
+.writing-issue-readability:hover {
+  background-color: rgba(107, 114, 128, 0.1);
+}
+
+/* Animation for hover */
+.writing-issue {
+  transition: background-color 0.15s ease-in-out;
+}
+
+/* Focus state for keyboard navigation */
+.writing-issue:focus {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* Dark mode adjustments (if needed in future) */
+@media (prefers-color-scheme: dark) {
+  .writing-issue-spelling {
+    text-decoration-color: #F87171;
+  }
+
+  .writing-issue-grammar {
+    text-decoration-color: #60A5FA;
+  }
+
+  .writing-issue-style {
+    text-decoration-color: #FBBF24;
+  }
+
+  .writing-issue-dialogue {
+    text-decoration-color: #2DD4BF;
+  }
+
+  .writing-issue-consistency {
+    text-decoration-color: #A78BFA;
+  }
+}
+
+/* Browser fallbacks for wavy underline */
+@supports not (text-decoration-style: wavy) {
+  .writing-issue-spelling,
+  .writing-issue-grammar {
+    text-decoration-style: dotted;
+    text-decoration-thickness: 2px;
+  }
+}
