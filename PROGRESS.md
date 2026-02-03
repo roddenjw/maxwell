@@ -382,6 +382,39 @@
     - `frontend/src/hooks/useMaxwell.ts`
     - Updated: `smart_coach_agent.py`, `agents.py`, `api.ts`, `agentStore.ts`, `App.tsx`, `EditorToolbar.tsx`
 
+### February 3, 2026 (Part 2)
+- **Feature 3: Scrivener Import - Complete**
+  - **Backend ScrivenerImportService:**
+    - Parses Scrivener 3 .scriv projects from zipped folders
+    - Reads .scrivx XML manifest for binder structure
+    - Extracts RTF content using striprtf library
+    - Identifies special folders: Draft, Characters, Locations, Research
+    - Converts folder hierarchy to Maxwell chapters
+    - Creates Codex entities from character/location sheets
+  - **API Endpoints:**
+    - `POST /api/import/scrivener/preview` - Preview import before committing
+    - `POST /api/import/scrivener` - Full import with options
+    - Query params: import_characters, import_locations, import_research
+  - **Frontend ScrivenerImportModal:**
+    - Drag & drop file upload with react-dropzone
+    - Two-step flow: upload → preview → import
+    - Shows document counts and word counts before importing
+    - Checkboxes to select what to import
+    - Success screen with import statistics
+  - **Files Created:**
+    - `backend/app/services/scrivener_import_service.py` (530 lines)
+    - `frontend/src/components/Import/ScrivenerImportModal.tsx` (450 lines)
+  - **Files Modified:**
+    - `backend/app/api/routes/import_routes.py` (+235 lines)
+    - `frontend/src/components/Import/index.ts`
+  - **Import Features:**
+    - Draft folder → Maxwell chapters (preserves hierarchy)
+    - Character sheets → Codex CHARACTER entities
+    - Location documents → Codex LOCATION entities
+    - Research folder → Notes (optional)
+    - Preserves Scrivener metadata (status, labels, targets)
+  - **Impact**: Users can now migrate from Scrivener to Maxwell with one upload
+
 ### February 3, 2026
 - **Feature 2: Fast Coach Expansion - Complete**
   - **New ReadabilityAnalyzer:**
