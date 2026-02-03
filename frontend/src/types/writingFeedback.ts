@@ -59,6 +59,9 @@ export interface FeedbackStats {
   style: number;
   word_choice: number;
   dialogue: number;
+  readability: number;
+  sentence_variety: number;
+  overused_phrase: number;
   errors: number;
   warnings: number;
   info: number;

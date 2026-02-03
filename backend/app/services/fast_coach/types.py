@@ -17,6 +17,11 @@ class SuggestionType(str, Enum):
     REPETITION = "REPETITION"
     SHOW_NOT_TELL = "SHOW_NOT_TELL"
     DIALOGUE = "DIALOGUE"
+    # New types for expanded Fast Coach
+    READABILITY = "READABILITY"
+    SENTENCE_VARIETY = "SENTENCE_VARIETY"
+    OVERUSED_PHRASE = "OVERUSED_PHRASE"
+    DIALOGUE_TAGS = "DIALOGUE_TAGS"
 
 
 class SeverityLevel(str, Enum):

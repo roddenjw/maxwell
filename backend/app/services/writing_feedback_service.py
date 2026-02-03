@@ -23,6 +23,9 @@ from app.services.languagetool_service import (
 from app.services.fast_coach.style_analyzer import StyleAnalyzer
 from app.services.fast_coach.word_analyzer import WordAnalyzer
 from app.services.fast_coach.dialogue_analyzer import DialogueAnalyzer
+from app.services.fast_coach.readability_analyzer import ReadabilityAnalyzer
+from app.services.fast_coach.sentence_starter_analyzer import SentenceStarterAnalyzer
+from app.services.fast_coach.overused_phrases_analyzer import OverusedPhrasesAnalyzer
 from app.services.fast_coach.types import Suggestion, SuggestionType, SeverityLevel
 
 logger = logging.getLogger(__name__)
@@ -86,7 +89,12 @@ class FeedbackSettings:
     word_choice: bool = True
     dialogue: bool = True
     consistency: bool = False  # Requires Codex context
-    readability: bool = False  # Info-level, off by default
+    readability: bool = True  # Readability metrics
+    sentence_variety: bool = True  # Sentence starter analysis
+    overused_phrases: bool = True  # Clichés and overused phrases
+
+    # Genre for readability targets
+    genre: str = "adult_fiction"
 
     # Sensitivity
     show_info_level: bool = False
@@ -130,6 +138,9 @@ TEACHING_POINTS = {
     "cliche": "Familiar phrases slide past readers without impact. Fresh language makes your prose memorable.",
     "dialogue_tags": "'Said' is invisible to readers. Fancy tags like 'exclaimed' or 'interjected' draw unwanted attention. Use action beats for variety.",
     "repetition": "Repeated words within close proximity can feel clunky. Vary your vocabulary or restructure sentences.",
+    "readability": "Readability scores help calibrate prose complexity for your audience. Genre fiction typically targets 6th-9th grade level.",
+    "sentence_variety": "Varied sentence openings create rhythm and flow. Repetitive starters (He..., She..., The...) can feel monotonous.",
+    "overused_phrase": "Overused phrases like 'took a deep breath' or 'heart pounded' slide past readers. Fresh, specific language creates impact.",
 }
 
 
@@ -145,6 +156,9 @@ class WritingFeedbackService:
         self.style_analyzer = StyleAnalyzer()
         self.word_analyzer = WordAnalyzer()
         self.dialogue_analyzer = DialogueAnalyzer()
+        self.readability_analyzer = ReadabilityAnalyzer()
+        self.sentence_starter_analyzer = SentenceStarterAnalyzer()
+        self.overused_phrases_analyzer = OverusedPhrasesAnalyzer()
 
     def analyze_realtime(
         self,
@@ -229,6 +243,11 @@ class WritingFeedbackService:
             word_issues = self._check_word_choice(text, settings)
             issues.extend(word_issues)
 
+        # Overused phrases (quick check)
+        if settings.overused_phrases:
+            overused_issues = self._check_overused_phrases(text, settings)
+            issues.extend(overused_issues)
+
         # Filter by confidence and severity
         issues = self._filter_issues(issues, settings)
 
@@ -290,6 +309,21 @@ class WritingFeedbackService:
         if settings.dialogue:
             dialogue_issues = self._check_dialogue(text, settings)
             issues.extend(dialogue_issues)
+
+        # Readability metrics
+        if settings.readability:
+            readability_issues = self._check_readability(text, settings)
+            issues.extend(readability_issues)
+
+        # Sentence variety
+        if settings.sentence_variety:
+            variety_issues = self._check_sentence_variety(text, settings)
+            issues.extend(variety_issues)
+
+        # Overused phrases
+        if settings.overused_phrases:
+            overused_issues = self._check_overused_phrases(text, settings)
+            issues.extend(overused_issues)
 
         # Filter by confidence and severity
         issues = self._filter_issues(issues, settings)
@@ -468,6 +502,113 @@ class WritingFeedbackService:
 
         return issues
 
+    def _check_readability(
+        self,
+        text: str,
+        settings: FeedbackSettings
+    ) -> List[WritingIssue]:
+        """Check readability metrics using ReadabilityAnalyzer"""
+        issues = []
+
+        try:
+            suggestions = self.readability_analyzer.analyze(
+                text,
+                genre=settings.genre,
+                include_details=True
+            )
+
+            for s in suggestions:
+                issues.append(WritingIssue(
+                    id=str(uuid.uuid4()),
+                    type=IssueType.READABILITY.value,
+                    severity=self._map_severity(s.severity).value,
+                    start_offset=s.start_char or 0,
+                    end_offset=s.end_char or len(text),
+                    message=s.message,
+                    original_text="",  # Readability is document-level
+                    suggestions=[s.suggestion] if s.suggestion else [],
+                    teaching_point=self._get_teaching_point(s),
+                    rule_id=s.metadata.get("rule_id") if s.metadata else None,
+                    category="READABILITY",
+                    confidence=0.8
+                ))
+        except Exception as e:
+            logger.error(f"Readability analysis failed: {e}")
+
+        return issues
+
+    def _check_sentence_variety(
+        self,
+        text: str,
+        settings: FeedbackSettings
+    ) -> List[WritingIssue]:
+        """Check sentence starter variety using SentenceStarterAnalyzer"""
+        issues = []
+
+        try:
+            suggestions = self.sentence_starter_analyzer.analyze(text)
+
+            for s in suggestions:
+                # Get original text if position available
+                original = ""
+                if s.start_char is not None and s.end_char is not None:
+                    original = text[s.start_char:s.end_char] if s.end_char <= len(text) else ""
+
+                issues.append(WritingIssue(
+                    id=str(uuid.uuid4()),
+                    type=IssueType.SENTENCE_VARIETY.value,
+                    severity=self._map_severity(s.severity).value,
+                    start_offset=s.start_char or 0,
+                    end_offset=s.end_char or len(text),
+                    message=s.message,
+                    original_text=original,
+                    suggestions=[s.suggestion] if s.suggestion else [],
+                    teaching_point=self._get_teaching_point(s),
+                    rule_id=s.metadata.get("rule_id") if s.metadata else None,
+                    category="SENTENCE_VARIETY",
+                    confidence=0.7
+                ))
+        except Exception as e:
+            logger.error(f"Sentence variety analysis failed: {e}")
+
+        return issues
+
+    def _check_overused_phrases(
+        self,
+        text: str,
+        settings: FeedbackSettings
+    ) -> List[WritingIssue]:
+        """Check for overused phrases using OverusedPhrasesAnalyzer"""
+        issues = []
+
+        try:
+            suggestions = self.overused_phrases_analyzer.analyze(text)
+
+            for s in suggestions:
+                # Get original text
+                original = ""
+                if s.start_char is not None and s.end_char is not None:
+                    original = text[s.start_char:s.end_char] if s.end_char <= len(text) else ""
+
+                issues.append(WritingIssue(
+                    id=str(uuid.uuid4()),
+                    type=IssueType.OVERUSED_PHRASE.value,
+                    severity=self._map_severity(s.severity).value,
+                    start_offset=s.start_char or 0,
+                    end_offset=s.end_char or len(text),
+                    message=s.message,
+                    original_text=original,
+                    suggestions=[s.suggestion] if s.suggestion else [],
+                    teaching_point=self._get_teaching_point(s),
+                    rule_id=s.metadata.get("phrase") if s.metadata else None,
+                    category=s.metadata.get("category", "OVERUSED_PHRASE") if s.metadata else "OVERUSED_PHRASE",
+                    confidence=0.8
+                ))
+        except Exception as e:
+            logger.error(f"Overused phrases analysis failed: {e}")
+
+        return issues
+
     def _map_lt_category(self, category: str) -> IssueType:
         """Map LanguageTool category to our issue type"""
         category_map = {
@@ -489,7 +630,11 @@ class WritingFeedbackService:
             SuggestionType.STYLE: IssueType.STYLE,
             SuggestionType.WORD_CHOICE: IssueType.WORD_CHOICE,
             SuggestionType.DIALOGUE: IssueType.DIALOGUE,
+            SuggestionType.DIALOGUE_TAGS: IssueType.DIALOGUE,
             SuggestionType.CONSISTENCY: IssueType.CONSISTENCY,
+            SuggestionType.READABILITY: IssueType.READABILITY,
+            SuggestionType.SENTENCE_VARIETY: IssueType.SENTENCE_VARIETY,
+            SuggestionType.OVERUSED_PHRASE: IssueType.OVERUSED_PHRASE,
         }
         return type_map.get(stype, IssueType.STYLE)
 
@@ -517,12 +662,16 @@ class WritingFeedbackService:
             return TEACHING_POINTS.get("weak_words")
         elif "telling" in msg_lower or "felt" in msg_lower:
             return TEACHING_POINTS.get("telling_verbs")
-        elif "clich" in msg_lower:
-            return TEACHING_POINTS.get("cliche")
-        elif "dialogue" in msg_lower or "tag" in msg_lower:
+        elif "clich" in msg_lower or "overused" in msg_lower:
+            return TEACHING_POINTS.get("overused_phrase")
+        elif "dialogue" in msg_lower or "tag" in msg_lower or "said" in msg_lower:
             return TEACHING_POINTS.get("dialogue_tags")
         elif "repet" in msg_lower:
             return TEACHING_POINTS.get("repetition")
+        elif "readab" in msg_lower or "grade" in msg_lower or "flesch" in msg_lower:
+            return TEACHING_POINTS.get("readability")
+        elif "sentence" in msg_lower and ("start" in msg_lower or "variety" in msg_lower):
+            return TEACHING_POINTS.get("sentence_variety")
 
         return None
 
@@ -560,6 +709,9 @@ class WritingFeedbackService:
             "style": 0,
             "word_choice": 0,
             "dialogue": 0,
+            "readability": 0,
+            "sentence_variety": 0,
+            "overused_phrase": 0,
             "errors": 0,
             "warnings": 0,
             "info": 0
