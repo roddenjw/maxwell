@@ -2,7 +2,7 @@
 
 **Based on Competitive Analysis**
 **Date:** February 3, 2026
-**Version:** 1.0
+**Version:** 1.1
 
 ---
 
@@ -14,13 +14,23 @@ This roadmap details six priority features identified in the competitive analysi
 - **Frontend:** Component-Store-API pattern with React + Zustand
 - **API:** ApiResponse<T> pattern with standardized error handling
 
+### Key Design Decision: Inline Editor Feedback
+
+All writing feedback features will integrate with the editor using **inline highlighting** similar to how entity mentions work. See [docs/INLINE_FEEDBACK_DESIGN.md](docs/INLINE_FEEDBACK_DESIGN.md) for the full architecture.
+
+**User Experience:**
+- Real-time underlines appear as you write (spelling=red wavy, grammar=blue wavy, style=amber dotted)
+- Hover over any underline to see issue details and suggestions
+- One-click to apply fixes or add words to dictionary
+- Deeper analysis available at chapter/manuscript level for comprehensive checks
+
 ---
 
 ## Implementation Timeline
 
 ```
-Week 1-2:  LanguageTool Integration (Feature 1)
-Week 2-3:  Fast Coach Expansion (Feature 2)
+Week 1-2:  LanguageTool Integration + Inline Feedback Infrastructure (Feature 1)
+Week 2-3:  Fast Coach Expansion with Inline Highlighting (Feature 2)
 Week 3-4:  Scrivener Import (Feature 3)
 Week 5-7:  Character Voice Consistency Analyzer (Feature 4)
 Week 7-9:  Visual Timeline Enhancement (Feature 5)
@@ -33,11 +43,18 @@ Week 9-11: Foreshadowing Tracker Expansion (Feature 6)
 
 ---
 
-## Feature 1: LanguageTool Integration for Grammar/Spelling
+## Feature 1: LanguageTool Integration + Inline Feedback System
 
-**Objective:** Add grammar and spelling checking without competing with Grammarly - integrate LanguageTool as an optional, toggleable layer.
+**Objective:** Add grammar and spelling checking with real-time inline highlighting in the editor. Issues appear as colored underlines while writing, with hover cards for details and quick fixes.
 
-**Effort:** 5-7 days
+**Effort:** 7-9 days (includes inline feedback infrastructure)
+
+### Core Components
+
+1. **WritingIssueHighlightPlugin** - Lexical plugin that applies underline decorations for issues
+2. **WritingIssueHoverCard** - Popup showing issue details, suggestions, and fix buttons
+3. **writingFeedbackStore** - Zustand store managing issues and settings
+4. **WritingFeedbackService** - Backend service coordinating all analyzers
 
 ### 1.1 Backend Implementation
 
