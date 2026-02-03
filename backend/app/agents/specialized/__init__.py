@@ -8,6 +8,7 @@ Each agent focuses on a specific aspect of writing analysis:
 - VoiceAgent: Dialogue authenticity, character voice
 - ConsistencyAgent: Dedicated consistency checking (real-time and full scan)
 - ResearchAgent: Worldbuilding and research generation
+- StoryStructureGuideAgent: Outline guidance and beat mapping
 """
 
 from app.agents.specialized.continuity_agent import ContinuityAgent, create_continuity_agent
@@ -27,6 +28,11 @@ from app.agents.specialized.research_agent import (
     WorldbuildingCategory,
     ResearchResult,
     WorldbuildingElement,
+)
+from app.agents.specialized.story_structure_guide_agent import (
+    StoryStructureGuideAgent,
+    create_story_structure_guide_agent,
+    OutlineGuideMode,
 )
 
 __all__ = [
@@ -51,4 +57,8 @@ __all__ = [
     "WorldbuildingCategory",
     "ResearchResult",
     "WorldbuildingElement",
+    # Story Structure Guide agent
+    "StoryStructureGuideAgent",
+    "create_story_structure_guide_agent",
+    "OutlineGuideMode",
 ]

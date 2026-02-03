@@ -21,9 +21,10 @@ interface PlotBeatCardProps {
   onCreateChapter?: (beat: PlotBeat) => void;
   onOpenChapter?: (chapterId: string) => void;
   onGetAIIdeas?: (beatId: string) => void;
+  onAskMaxwell?: (beat: PlotBeat) => void;
 }
 
-export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOpenChapter, onGetAIIdeas }: PlotBeatCardProps) {
+export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOpenChapter, onGetAIIdeas, onAskMaxwell }: PlotBeatCardProps) {
   const { updateBeat, deleteItem, expandedBeatId, setExpandedBeat, beatSuggestions } = useOutlineStore();
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -514,6 +515,21 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
                   <span>New Chapter</span>
                 </button>
               </>
+            )}
+
+            {/* Ask Maxwell Button */}
+            {onAskMaxwell && (
+              <button
+                onClick={() => onAskMaxwell(beat)}
+                className="px-3 py-1.5 text-sm bg-bronze/10 text-bronze hover:bg-bronze/20 border border-bronze/30 font-sans font-medium transition-colors flex items-center gap-1.5"
+                style={{ borderRadius: '2px' }}
+                title="Ask Maxwell for guidance on this beat"
+              >
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z" />
+                </svg>
+                <span>Ask Maxwell</span>
+              </button>
             )}
 
             {/* Get AI Ideas Button */}

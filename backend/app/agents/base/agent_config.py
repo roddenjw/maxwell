@@ -19,6 +19,7 @@ class AgentType(str, Enum):
     CONSISTENCY = "consistency"    # Full consistency checking
     RESEARCH = "research"          # Worldbuilding and research
     COACH = "coach"                # Smart conversational coach
+    STORY_STRUCTURE_GUIDE = "story_structure_guide"  # Outline guidance and beat mapping
 
 
 class ModelProvider(str, Enum):
@@ -233,6 +234,22 @@ class AgentConfig:
                 enabled_tools=[
                     "query_entities", "query_timeline", "query_outline",
                     "query_chapters", "query_author_profile", "search_memory"
+                ],
+                **kwargs
+            )
+        elif agent_type == AgentType.STORY_STRUCTURE_GUIDE:
+            return cls(
+                agent_type=agent_type,
+                model_config=model_config,
+                author_context_weight=0.4,   # Some - to understand author's voice
+                world_context_weight=0.6,    # Medium - story needs world context
+                series_context_weight=0.8,   # High - series arc matters for structure
+                manuscript_context_weight=1.0,  # Highest - current outline is primary
+                response_format="text",      # Conversational guidance
+                enabled_tools=[
+                    "query_outline", "query_plot_beats", "query_chapters",
+                    "query_entities", "query_brainstorm", "analyze_outline_completeness",
+                    "get_beat_guidance", "suggest_scenes_between_beats"
                 ],
                 **kwargs
             )

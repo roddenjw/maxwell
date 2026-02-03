@@ -978,6 +978,135 @@ async def get_worldbuilding_categories():
 
 
 # ============================================================================
+# Story Structure Guide Endpoints
+# ============================================================================
+
+class OutlineGuideRequest(BaseModel):
+    """Request for outline guidance from Maxwell"""
+    api_key: str
+    user_id: str
+    manuscript_id: str
+
+    # Mode of operation
+    mode: str = "analyze"  # analyze, suggest_beat, suggest_scenes, chapter_feedback, next_step
+
+    # Optional parameters for specific modes
+    query: Optional[str] = None  # Free-form query
+    beat_id: Optional[str] = None
+    beat_label: Optional[str] = None
+    chapter_id: Optional[str] = None
+    from_beat: Optional[str] = None  # For suggest_scenes mode
+    to_beat: Optional[str] = None    # For suggest_scenes mode
+
+    # Response control
+    detail_level: str = "standard"  # quick, standard, detailed
+
+    # Optional model selection
+    model_provider: Optional[str] = "anthropic"
+    model_name: Optional[str] = "claude-3-haiku-20240307"
+
+
+@router.post("/maxwell/outline-guide")
+async def outline_guide(request: OutlineGuideRequest):
+    """
+    Get Maxwell's guidance on story structure and outlining.
+
+    This is a specialized endpoint for helping writers develop their outlines.
+    Unlike the general analysis endpoints (which analyze written prose),
+    this helps writers BUILD their outline from scratch.
+
+    Modes:
+    - analyze: Full outline analysis with gaps and suggestions
+    - suggest_beat: Get content suggestions for a specific beat
+    - suggest_scenes: Get scene ideas between two beats
+    - chapter_feedback: Analyze chapter against its linked beat
+    - next_step: Get recommendation for what to work on next
+
+    Detail levels:
+    - quick: 2-3 key points
+    - standard: Comprehensive but focused
+    - detailed: Full breakdown with examples and craft explanations
+    """
+    try:
+        from app.agents.specialized.story_structure_guide_agent import (
+            create_story_structure_guide_agent
+        )
+        from app.agents.base.agent_config import AgentConfig, AgentType
+
+        model_config = ModelConfig(
+            provider=ModelProvider(request.model_provider),
+            model_name=request.model_name,
+            temperature=0.7,
+            max_tokens=4096
+        )
+
+        config = AgentConfig.for_agent_type(AgentType.STORY_STRUCTURE_GUIDE)
+        config.model_config = model_config
+
+        agent = create_story_structure_guide_agent(request.api_key, config)
+
+        result = await agent.guide_outline(
+            mode=request.mode,
+            user_id=request.user_id,
+            manuscript_id=request.manuscript_id,
+            query=request.query,
+            beat_id=request.beat_id,
+            beat_label=request.beat_label,
+            chapter_id=request.chapter_id,
+            from_beat=request.from_beat,
+            to_beat=request.to_beat,
+            detail_level=request.detail_level
+        )
+
+        return {
+            "success": True,
+            "data": result.to_dict(),
+            "cost": {
+                "total": result.cost,
+                "formatted": f"${result.cost:.4f}"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/outline-guide/modes")
+async def get_outline_guide_modes():
+    """Get available outline guide modes and their descriptions"""
+    return {
+        "success": True,
+        "data": [
+            {
+                "mode": "analyze",
+                "name": "Analyze Outline",
+                "description": "Get a full analysis of your outline - what's done, what's missing, and recommended next steps"
+            },
+            {
+                "mode": "suggest_beat",
+                "name": "Suggest Beat Content",
+                "description": "Get story-specific suggestions for what should happen at a particular beat"
+            },
+            {
+                "mode": "suggest_scenes",
+                "name": "Suggest Bridge Scenes",
+                "description": "Get scene ideas to connect two beats in your story"
+            },
+            {
+                "mode": "chapter_feedback",
+                "name": "Chapter-Beat Feedback",
+                "description": "Analyze how well a chapter fulfills its linked beat's purpose"
+            },
+            {
+                "mode": "next_step",
+                "name": "What's Next?",
+                "description": "Get a recommendation for what to work on next in your outline"
+            }
+        ]
+    }
+
+
+# ============================================================================
 # Unified Maxwell Endpoints
 # ============================================================================
 

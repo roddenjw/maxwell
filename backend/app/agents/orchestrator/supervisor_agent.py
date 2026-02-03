@@ -85,13 +85,29 @@ FAST_ROUTING_RULES: Dict[str, List[AgentType]] = {
     "eye color": [AgentType.CONTINUITY],
     "character trait": [AgentType.CONTINUITY, AgentType.VOICE],
 
-    # Structure-focused keywords
+    # Structure-focused keywords (prose analysis)
     "structure": [AgentType.STRUCTURE],
     "arc": [AgentType.STRUCTURE],
-    "beat": [AgentType.STRUCTURE],
     "scene goal": [AgentType.STRUCTURE],
     "turning point": [AgentType.STRUCTURE],
     "climax": [AgentType.STRUCTURE],
+
+    # Outline guidance keywords (building/developing outline)
+    "outline": [AgentType.STORY_STRUCTURE_GUIDE],
+    "beat": [AgentType.STORY_STRUCTURE_GUIDE],
+    "fill in": [AgentType.STORY_STRUCTURE_GUIDE],
+    "what happens next": [AgentType.STORY_STRUCTURE_GUIDE],
+    "what should happen": [AgentType.STORY_STRUCTURE_GUIDE],
+    "scene between": [AgentType.STORY_STRUCTURE_GUIDE],
+    "scenes between": [AgentType.STORY_STRUCTURE_GUIDE],
+    "bridge scene": [AgentType.STORY_STRUCTURE_GUIDE],
+    "develop my outline": [AgentType.STORY_STRUCTURE_GUIDE],
+    "structure my": [AgentType.STORY_STRUCTURE_GUIDE],
+    "how should i outline": [AgentType.STORY_STRUCTURE_GUIDE],
+    "inciting incident": [AgentType.STORY_STRUCTURE_GUIDE],
+    "midpoint": [AgentType.STORY_STRUCTURE_GUIDE],
+    "plot point": [AgentType.STORY_STRUCTURE_GUIDE],
+    "work on next": [AgentType.STORY_STRUCTURE_GUIDE],
 
     # Combined queries
     "working": [AgentType.STYLE, AgentType.STRUCTURE, AgentType.VOICE],
@@ -110,20 +126,25 @@ ROUTING_SYSTEM_PROMPT = """You are Maxwell's query router. Your job is to unders
 2. **CONTINUITY** - Character consistency, timeline accuracy, world rule adherence, fact checking
 3. **STRUCTURE** - Story beats, scene goals, arc progression, narrative structure, plot alignment
 4. **VOICE** - Dialogue authenticity, character voice distinctiveness, conversational flow
+5. **STORY_STRUCTURE_GUIDE** - Outline development, beat guidance, scene mapping between beats, filling in outline gaps
 
 ## Routing Principles
 
-- Most questions need 2-3 specialists, not all 4
+- Most questions need 2-3 specialists, not all
 - "Is this working?" type questions → Style + Structure + Voice
 - "Is this consistent?" → Continuity (+ Voice if about character)
 - Dialogue questions → Voice (+ Continuity if about character consistency)
 - Pacing questions → Style + Structure
+- Outline/beat development questions → Story_Structure_Guide
+- "What should happen at this beat?" → Story_Structure_Guide
+- "What scenes between..." → Story_Structure_Guide
+- "Help me fill in my outline" → Story_Structure_Guide
 - When uncertain, include more rather than fewer
 
 ## Response Format
 Return JSON:
 {
-  "agents": ["style", "continuity", "structure", "voice"],  // Only include needed ones
+  "agents": ["style", "continuity", "structure", "voice", "story_structure_guide"],  // Only include needed ones
   "intent": "analysis|consistency|quality|specific|brainstorm|explanation",
   "reasoning": "Brief explanation of routing decision",
   "confidence": 0.0-1.0,
@@ -262,7 +283,8 @@ class SupervisorAgent:
                 "structure": AgentType.STRUCTURE,
                 "voice": AgentType.VOICE,
                 "consistency": AgentType.CONSISTENCY,
-                "research": AgentType.RESEARCH
+                "research": AgentType.RESEARCH,
+                "story_structure_guide": AgentType.STORY_STRUCTURE_GUIDE,
             }
 
             agents = [

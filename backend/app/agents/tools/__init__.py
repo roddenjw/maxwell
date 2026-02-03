@@ -66,6 +66,19 @@ from app.agents.tools.author_tools import (
     query_feedback_history,
 )
 
+from app.agents.tools.outline_guide_tools import (
+    AnalyzeOutlineCompleteness,
+    GetBeatGuidance,
+    SuggestScenesBetweenBeats,
+    AnalyzeChapterBeatAlignment,
+    GetNextOutlineStep,
+    analyze_outline_completeness,
+    get_beat_guidance,
+    suggest_scenes_between_beats,
+    analyze_chapter_beat_alignment,
+    get_next_outline_step,
+)
+
 # All tools list for easy import
 ALL_TOOLS = [
     query_entities,
@@ -85,6 +98,12 @@ ALL_TOOLS = [
     query_cross_book_entities,
     query_author_profile,
     query_feedback_history,
+    # Outline guide tools
+    analyze_outline_completeness,
+    get_beat_guidance,
+    suggest_scenes_between_beats,
+    analyze_chapter_beat_alignment,
+    get_next_outline_step,
 ]
 
 __all__ = [
@@ -129,6 +148,17 @@ __all__ = [
     "QueryFeedbackHistory",
     "query_author_profile",
     "query_feedback_history",
+    # Outline guide tools
+    "AnalyzeOutlineCompleteness",
+    "GetBeatGuidance",
+    "SuggestScenesBetweenBeats",
+    "AnalyzeChapterBeatAlignment",
+    "GetNextOutlineStep",
+    "analyze_outline_completeness",
+    "get_beat_guidance",
+    "suggest_scenes_between_beats",
+    "analyze_chapter_beat_alignment",
+    "get_next_outline_step",
     # All tools
     "ALL_TOOLS",
 ]

@@ -3083,6 +3083,22 @@ export interface MaxwellExplainRequest {
   model_name?: string;
 }
 
+export interface OutlineGuideRequest {
+  api_key: string;
+  user_id: string;
+  manuscript_id: string;
+  mode: 'analyze' | 'suggest_beat' | 'suggest_scenes' | 'chapter_feedback' | 'next_step';
+  query?: string;
+  beat_id?: string;
+  beat_label?: string;
+  chapter_id?: string;
+  from_beat?: string;
+  to_beat?: string;
+  detail_level?: 'quick' | 'standard' | 'detailed';
+  model_provider?: string;
+  model_name?: string;
+}
+
 export interface SynthesizedFeedback {
   narrative: string;
   highlights: Array<{ aspect: string; text: string }>;
@@ -3537,6 +3553,30 @@ export const agentApi = {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || 'Explanation failed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get Maxwell's outline guidance - helps writers develop their outlines.
+   * Modes:
+   * - analyze: Full outline analysis with gaps and suggestions
+   * - suggest_beat: Get content suggestions for a specific beat
+   * - suggest_scenes: Get scene ideas between two beats
+   * - chapter_feedback: Analyze chapter against its linked beat
+   * - next_step: Get recommendation for what to work on next
+   */
+  async outlineGuide(data: OutlineGuideRequest): Promise<MaxwellResponse> {
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/outline-guide`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Outline guidance failed');
     }
 
     return response.json();

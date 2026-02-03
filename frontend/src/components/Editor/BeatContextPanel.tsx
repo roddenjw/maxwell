@@ -13,6 +13,7 @@ interface BeatContextPanelProps {
   chapterId: string;
   onViewBeat?: (beatId: string) => void;
   currentSceneContext?: any; // NEW - scene metadata from SceneDetectionPlugin
+  onGetStructureFeedback?: (chapterId: string, beatId: string) => void;
 }
 
 const BeatContextPanel = React.memo(function BeatContextPanel({
@@ -20,6 +21,7 @@ const BeatContextPanel = React.memo(function BeatContextPanel({
   chapterId,
   onViewBeat,
   currentSceneContext,
+  onGetStructureFeedback,
 }: BeatContextPanelProps) {
   // Use ref to track previous completion state for this component instance
   const prevCompletedRef = useRef<boolean | undefined>(undefined);
@@ -455,6 +457,19 @@ const BeatContextPanel = React.memo(function BeatContextPanel({
                 Mark as complete
               </span>
             </label>
+
+            {/* Get Structure Feedback button */}
+            {onGetStructureFeedback && (
+              <button
+                onClick={() => onGetStructureFeedback(chapterId, beat.id)}
+                className="w-full px-3 py-2 text-sm font-sans font-medium bg-bronze/10 text-bronze border border-bronze/30 rounded hover:bg-bronze/20 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z" />
+                </svg>
+                Get Structure Feedback
+              </button>
+            )}
 
             {/* View beat button */}
             {onViewBeat && (
