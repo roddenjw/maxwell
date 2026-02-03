@@ -3807,6 +3807,129 @@ export const agentApi = {
 
     return response.json();
   },
+
+  // ============================================================================
+  // Proactive Nudges
+  // ============================================================================
+
+  /**
+   * Get proactive nudges for a user.
+   * These are contextual suggestions that Maxwell generates based on patterns.
+   */
+  async getProactiveNudges(params: {
+    user_id: string;
+    manuscript_id?: string;
+    limit?: number;
+    include_viewed?: boolean;
+  }): Promise<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      type: string;
+      priority: string;
+      title: string;
+      message: string;
+      suggestion: string;
+      context: Record<string, unknown>;
+      manuscript_id?: string;
+      chapter_id?: string;
+      expires_at?: string;
+      viewed: boolean;
+      dismissed: boolean;
+      created_at: string;
+    }>;
+  }> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('user_id', params.user_id);
+    if (params.manuscript_id) queryParams.set('manuscript_id', params.manuscript_id);
+    if (params.limit) queryParams.set('limit', params.limit.toString());
+    if (params.include_viewed) queryParams.set('include_viewed', 'true');
+
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/nudges?${queryParams}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to fetch nudges');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Dismiss a nudge (mark as not needed).
+   */
+  async dismissNudge(nudgeId: string, userId: string): Promise<{ success: boolean }> {
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/nudges/${nudgeId}/dismiss`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to dismiss nudge');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Mark a nudge as viewed.
+   */
+  async markNudgeViewed(nudgeId: string, userId: string): Promise<{ success: boolean }> {
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/nudges/${nudgeId}/view`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to mark nudge viewed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get or generate a weekly insight summary.
+   */
+  async getWeeklyInsight(params: {
+    user_id: string;
+    generate?: boolean;
+  }): Promise<{
+    success: boolean;
+    data: {
+      id: string;
+      week_start: string;
+      week_end: string;
+      summary: string;
+      top_achievements: string[];
+      common_patterns: string[];
+      growth_areas: string[];
+      encouragement: string;
+      stats: Record<string, unknown>;
+    } | null;
+  }> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('user_id', params.user_id);
+    if (params.generate) queryParams.set('generate', 'true');
+
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/weekly-insight?${queryParams}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to fetch weekly insight');
+    }
+
+    return response.json();
+  },
 };
 
 /**

@@ -33,6 +33,9 @@ from app.agents.orchestrator.maxwell_synthesizer import (
     MaxwellSynthesizer,
     SynthesizedFeedback,
     SynthesisTone,
+    FeedbackDepth,
+    TeachingMode,
+    VoicePreferences,
     create_maxwell_synthesizer
 )
 
@@ -62,6 +65,9 @@ __all__ = [
     "MaxwellSynthesizer",
     "SynthesizedFeedback",
     "SynthesisTone",
+    "FeedbackDepth",
+    "TeachingMode",
+    "VoicePreferences",
     "create_maxwell_synthesizer",
 
     # Cross-agent reasoning

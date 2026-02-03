@@ -631,15 +631,23 @@ Based on user feedback in FEEDBACK.md, these UX improvements are prioritized:
 - `/maxwell/story-health` API endpoint
 - Frontend API client for story health
 
-#### Phase D: Proactive Suggestions (Priority: Low)
-- [ ] Background analysis while writing (opt-in)
-- [ ] Gentle nudges: "I noticed 3 potential issues in Chapter 5..."
-- [ ] Weekly writing insights email
+#### Phase D: Proactive Suggestions ✅
+- `ProactiveSuggestionsService` - Intelligent nudge generation based on patterns
+- `ProactiveNudge` and `WeeklyInsight` database models
+- Nudge types: consistency_issue, pacing_concern, character_drift, style_pattern, plot_hole, dialogue_issue, worldbuilding_gap
+- Deduplication system (prevents repeat nudges within 24 hours)
+- Expiration system (nudges auto-expire after configurable time)
+- API endpoints: `/maxwell/nudges`, `/maxwell/nudges/{id}/dismiss`, `/maxwell/nudges/{id}/view`, `/maxwell/weekly-insight`
+- Frontend API methods: getProactiveNudges, dismissNudge, markNudgeViewed, getWeeklyInsight
 
-#### Phase E: Voice Customization (Priority: Low)
-- [ ] User preference for Maxwell's tone (formal/casual/encouraging/direct)
-- [ ] Adjust feedback depth (brief/standard/comprehensive)
-- [ ] "Teaching mode" toggle for educational explanations
+#### Phase E: Voice Customization ✅
+- `VoicePreferences` dataclass - Full user voice configuration
+- `FeedbackDepth` enum (BRIEF, STANDARD, COMPREHENSIVE)
+- `TeachingMode` enum (ON, OFF, AUTO)
+- New tone options: FORMAL, CASUAL (in addition to ENCOURAGING, DIRECT, TEACHING, CELEBRATORY)
+- Priority focus option (plot, character, prose, pacing, all)
+- `MaxwellSynthesizer.synthesize()` updated to accept VoicePreferences
+- DEPTH_GUIDANCE and TEACHING_GUIDANCE prompt dictionaries
 
 ---
 

@@ -24,6 +24,11 @@ from app.models.agent import (
 )
 from app.services.maxwell_memory_service import create_maxwell_memory_service
 from app.agents.orchestrator.cross_agent_reasoner import create_cross_agent_reasoner
+from app.services.proactive_suggestions_service import (
+    create_proactive_suggestions_service,
+    NudgeType,
+    NudgePriority
+)
 
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
@@ -1739,3 +1744,162 @@ async def get_story_health(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Proactive Suggestions Endpoints
+# ============================================================================
+
+@router.get("/maxwell/nudges/{user_id}")
+async def get_proactive_nudges(
+    user_id: str,
+    manuscript_id: Optional[str] = None,
+    limit: int = 10,
+    include_viewed: bool = False,
+):
+    """
+    Get pending proactive nudges for a user.
+
+    Nudges are gentle suggestions based on previous analyses,
+    writing patterns, and unaddressed issues.
+    """
+    db = SessionLocal()
+    try:
+        service = create_proactive_suggestions_service(db)
+
+        nudges = service.get_pending_nudges(
+            user_id=user_id,
+            manuscript_id=manuscript_id,
+            limit=limit,
+            include_viewed=include_viewed,
+        )
+
+        return {
+            "success": True,
+            "data": [
+                {
+                    "id": n.id,
+                    "type": n.nudge_type,
+                    "priority": n.priority,
+                    "title": n.title,
+                    "message": n.message,
+                    "manuscript_id": n.manuscript_id,
+                    "chapter_id": n.chapter_id,
+                    "details": n.details,
+                    "created_at": n.created_at.isoformat(),
+                    "viewed": n.viewed,
+                }
+                for n in nudges
+            ],
+            "count": len(nudges)
+        }
+
+    finally:
+        db.close()
+
+
+@router.put("/maxwell/nudges/{nudge_id}/dismiss")
+async def dismiss_nudge(nudge_id: str, user_id: str):
+    """Dismiss a proactive nudge."""
+    db = SessionLocal()
+    try:
+        service = create_proactive_suggestions_service(db)
+
+        success = service.dismiss_nudge(nudge_id, user_id)
+
+        if not success:
+            raise HTTPException(status_code=404, detail="Nudge not found")
+
+        return {
+            "success": True,
+            "message": "Nudge dismissed"
+        }
+
+    finally:
+        db.close()
+
+
+@router.put("/maxwell/nudges/{nudge_id}/view")
+async def mark_nudge_viewed(nudge_id: str, user_id: str):
+    """Mark a nudge as viewed (but not dismissed)."""
+    db = SessionLocal()
+    try:
+        service = create_proactive_suggestions_service(db)
+
+        success = service.mark_nudge_viewed(nudge_id, user_id)
+
+        if not success:
+            raise HTTPException(status_code=404, detail="Nudge not found")
+
+        return {
+            "success": True,
+            "message": "Nudge marked as viewed"
+        }
+
+    finally:
+        db.close()
+
+
+@router.delete("/maxwell/nudges/chapter/{chapter_id}")
+async def dismiss_chapter_nudges(chapter_id: str, user_id: str):
+    """Dismiss all nudges for a specific chapter."""
+    db = SessionLocal()
+    try:
+        service = create_proactive_suggestions_service(db)
+
+        count = service.dismiss_all_for_chapter(chapter_id, user_id)
+
+        return {
+            "success": True,
+            "message": f"Dismissed {count} nudges for chapter",
+            "dismissed_count": count
+        }
+
+    finally:
+        db.close()
+
+
+@router.get("/maxwell/weekly-insight/{user_id}")
+async def get_weekly_insight(user_id: str, generate: bool = False):
+    """
+    Get the latest weekly writing insight.
+
+    Weekly insights summarize writing activity, analyses run,
+    and progress made during the week.
+    """
+    db = SessionLocal()
+    try:
+        service = create_proactive_suggestions_service(db)
+
+        if generate:
+            insight = service.generate_weekly_insight(user_id)
+        else:
+            insight = service.get_latest_weekly_insight(user_id)
+
+        if not insight:
+            return {
+                "success": True,
+                "data": None,
+                "message": "No weekly insight available yet"
+            }
+
+        return {
+            "success": True,
+            "data": {
+                "id": insight.id,
+                "week_start": insight.week_start.isoformat(),
+                "week_end": insight.week_end.isoformat(),
+                "summary": insight.summary,
+                "highlights": insight.highlights,
+                "areas_to_improve": insight.areas_to_improve,
+                "word_count_total": insight.word_count_total,
+                "chapters_worked_on": insight.chapters_worked_on,
+                "analyses_run": insight.analyses_run,
+                "issues_found": insight.issues_found,
+                "issues_addressed": insight.issues_addressed,
+                "created_at": insight.created_at.isoformat(),
+            }
+        }
+
+    finally:
+        db.close()
