@@ -184,6 +184,45 @@
 ## Recent Completions (Last 2 Weeks)
 
 ### February 2, 2026
+- **Story Structure Guide Agent (NEW)**
+  - **Purpose:** A specialized agent for guiding writers through outlining, distinct from StructureAgent (which analyzes prose)
+  - **New Agent:** `StoryStructureGuideAgent` (~336 lines)
+    - Teaching-first approach with comprehensive beat explanations
+    - 5 operation modes: analyze_outline, suggest_beat, suggest_scenes, chapter_feedback, next_step
+    - Context weights: Heavy on manuscript/outline, light on author style
+    - Integrates with SmartCoach session system for conversational continuity
+  - **New Tools (5 LangChain tools):** `outline_guide_tools.py` (~1,009 lines)
+    - `AnalyzeOutlineCompletenessTool` - Find gaps, empty beats, missing scenes
+    - `GetBeatGuidanceTool` - Teaching explanations of what each beat needs
+    - `SuggestScenesBetweenBeatsTool` - Generate scene ideas for gaps
+    - `AnalyzeChapterBeatAlignmentTool` - Check how chapter fulfills its beat
+    - `GetNextOutlineStepTool` - Suggest what to work on next
+  - **BEAT_EXPLANATIONS dict:** Teaching content for all major beats (Three-Act, Save the Cat 15 beats, Hero's Journey 12 stages)
+  - **Supervisor Routing Updates:**
+    - Added keywords: outline, beat, fill in, what happens next, scene between, bridge scene, structure my, inciting incident, midpoint, plot point
+    - Updated ROUTING_SYSTEM_PROMPT with STORY_STRUCTURE_GUIDE agent
+  - **New API Endpoint:** `POST /api/agents/maxwell/outline-guide`
+    - Supports 5 modes via `mode` parameter
+    - Parameters: manuscript_id, outline_id, beat_id (optional), chapter_id (optional), query
+    - `GET /api/agents/outline-guide/modes` returns available modes
+  - **Frontend Integration:**
+    - "Ask Maxwell" button added to PlotBeatCard.tsx (opens Maxwell panel with beat context)
+    - "Get Structure Feedback" button added to BeatContextPanel.tsx (triggers chapter-beat alignment analysis)
+    - API client updated with `agentApi.outlineGuide()` method
+  - **Files Created:**
+    - `backend/app/agents/specialized/story_structure_guide_agent.py` (336 lines)
+    - `backend/app/agents/tools/outline_guide_tools.py` (1,009 lines)
+  - **Files Modified:**
+    - `backend/app/agents/base/agent_config.py` (added STORY_STRUCTURE_GUIDE enum + config)
+    - `backend/app/agents/orchestrator/supervisor_agent.py` (routing patterns)
+    - `backend/app/agents/specialized/__init__.py` (exports)
+    - `backend/app/agents/tools/__init__.py` (exports)
+    - `backend/app/api/routes/agents.py` (new endpoint)
+    - `frontend/src/components/Outline/PlotBeatCard.tsx` (Ask Maxwell button)
+    - `frontend/src/components/Editor/BeatContextPanel.tsx` (Get Feedback button)
+    - `frontend/src/lib/api.ts` (outlineGuide method)
+  - **Impact:** Writers can now get Maxwell's help building their outlines, not just analyzing prose
+
 - **Phase 10: Desktop Distribution Initiative (Phase D1 - Docker Self-Hosted)**
   - **Strategic Planning:**
     - Created `DESKTOP_DEPLOYMENT.md` - Comprehensive desktop deployment strategy document
@@ -1014,9 +1053,9 @@
 ## Metrics & Statistics
 
 ### Codebase Size
-- **Backend:** 49 Python files (~15,000 lines)
+- **Backend:** 51 Python files (~16,300 lines)
 - **Frontend:** 99 TypeScript files (~22,000 lines)
-- **Total:** ~37,000 lines of production code
+- **Total:** ~38,300 lines of production code
 - **Tests:** ~1,200 lines (growing - target 60% coverage)
 - **Documentation:** 5,500+ lines across 6 core docs
 
@@ -1025,15 +1064,15 @@
 - **Phase 1:** 5 core features (editor, manuscripts, versioning, export, navigation)
 - **Phase 2:** 6 codex features (entities, relationships, NLP suggestions, graph viz, analytics, merge)
 - **Phase 3:** 3 AI features (Fast Coach, OpenRouter BYOK, Recap Engine)
-- **Phase 4:** 5 outline features (templates, plot beats, progress tracking, wizard, AI beat analysis)
+- **Phase 4:** 6 outline features (templates, plot beats, progress tracking, wizard, AI beat analysis, Story Structure Guide Agent)
 - **Phase 5:** 8 brainstorming features (character/plot/location/conflict/scene generation, idea refinement, mind map, character worksheets, AI entity expansion)
 - **Phase 6:** 8 timeline features (events, validation, teaching, visualization, orchestration, character journeys, foreshadowing tracker, swimlane view)
 - **Phase 8:** 4 library features (worlds, series, entity scoping, shared codex)
 
-**Total Features Shipped:** 39 major features
+**Total Features Shipped:** 40 major features
 
 ### API Coverage
-- **Total Endpoints:** 138 REST API endpoints
+- **Total Endpoints:** 140 REST API endpoints
 - **By Module:**
   - Timeline: 19 endpoints (validation, events, orchestrator, journey)
   - Foreshadowing: 9 endpoints (pairs CRUD, link payoff, unresolved, suggestions)
@@ -1045,8 +1084,9 @@
   - Manuscripts: 6 endpoints (CRUD, stats)
   - Versioning: 8 endpoints (snapshots, diffs)
   - Fast Coach: 5 endpoints (analyze, feedback)
+  - Agents (Maxwell): 6 endpoints (chat, analyze, quick-check, explain, outline-guide, modes)
   - Export: 4 endpoints (DOCX, PDF, formats)
-  - Other: 22 endpoints (onboarding, stats, health, realtime)
+  - Other: 20 endpoints (onboarding, stats, health, realtime)
 
 ### Database Schema
 - **Tables:** 18 tables (manuscripts, chapters, entities, worlds, series, timeline, outlines, foreshadowing_pairs, etc.)
@@ -1327,7 +1367,7 @@
 
 ---
 
-**Last Updated:** 2026-01-21 by Claude Code
+**Last Updated:** 2026-02-02 by Claude Code
 **Next Scheduled Review:** 2026-01-22 (daily updates)
 **Next Milestone Review:** 2026-01-28 (Beta Launch Week)
 
