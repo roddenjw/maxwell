@@ -285,3 +285,87 @@ async def suggest_potential_payoffs(pair_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Auto-Detection Endpoints ====================
+
+@router.post("/detect/{manuscript_id}")
+async def detect_foreshadowing(
+    manuscript_id: str,
+    min_confidence: float = 0.5,
+    chapter_ids: Optional[List[str]] = None,
+):
+    """
+    Auto-detect potential foreshadowing setups and payoffs in a manuscript.
+
+    Uses pattern matching and NLP to identify:
+    - Chekhov's Guns (objects introduced with emphasis)
+    - Prophecies (predictions, dreams, visions)
+    - Symbols (recurring imagery)
+    - Hints (subtle clues)
+    - Parallels (scene echoes)
+
+    Returns detected setups, payoffs, and potential matches.
+    """
+    from app.services.foreshadowing_detector_service import ForeshadowingDetectorService
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        detector = ForeshadowingDetectorService(db)
+        results = detector.detect_foreshadowing(
+            manuscript_id=manuscript_id,
+            chapter_ids=chapter_ids,
+            min_confidence=min_confidence
+        )
+        return {
+            "success": True,
+            "data": results
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+class ConfirmDetectionRequest(BaseModel):
+    """Request to confirm an auto-detected foreshadowing pair"""
+    setup: Dict[str, Any]
+    payoff: Optional[Dict[str, Any]] = None
+
+
+@router.post("/detect/{manuscript_id}/confirm")
+async def confirm_detected_foreshadowing(
+    manuscript_id: str,
+    request: ConfirmDetectionRequest,
+):
+    """
+    Confirm an auto-detected foreshadowing pair and save it to the database.
+
+    This allows users to review auto-detected foreshadowing and
+    selectively save the ones they agree with.
+    """
+    from app.services.foreshadowing_detector_service import ForeshadowingDetectorService
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        detector = ForeshadowingDetectorService(db)
+        pair = detector.create_foreshadowing_from_detection(
+            manuscript_id=manuscript_id,
+            setup_data=request.setup,
+            payoff_data=request.payoff
+        )
+        return {
+            "success": True,
+            "data": _pair_to_response(pair),
+            "message": "Foreshadowing pair confirmed and saved"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
