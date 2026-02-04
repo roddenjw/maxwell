@@ -30,6 +30,7 @@ import FastCoachPlugin from './plugins/FastCoachPlugin';
 import SceneDetectionPlugin from './plugins/SceneDetectionPlugin';
 import SelectionToolbar from './SelectionToolbar';
 import QuickEntityModal from './QuickEntityModal';
+import ThesaurusPopup from './ThesaurusPopup';
 import { versioningApi, chaptersApi } from '@/lib/api';
 import { useOutlineStore } from '@/stores/outlineStore';
 
@@ -63,6 +64,11 @@ export default function ManuscriptEditor({
   const [showQuickEntityModal, setShowQuickEntityModal] = useState(false);
   const [selectedTextForEntity, setSelectedTextForEntity] = useState('');
   const [entityModalPosition, setEntityModalPosition] = useState({ x: 0, y: 0 });
+
+  // Thesaurus popup state
+  const [showThesaurusPopup, setShowThesaurusPopup] = useState(false);
+  const [thesaurusWord, setThesaurusWord] = useState('');
+  const [thesaurusPosition, setThesaurusPosition] = useState({ x: 0, y: 0 });
 
   const {
     getBeatByChapterId,
@@ -100,6 +106,13 @@ export default function ManuscriptEditor({
     setSelectedTextForEntity(selectedText);
     setEntityModalPosition(position);
     setShowQuickEntityModal(true);
+  }, []);
+
+  // Handle opening thesaurus popup
+  const handleOpenThesaurus = useCallback((word: string, position: { x: number; y: number }) => {
+    setThesaurusWord(word);
+    setThesaurusPosition(position);
+    setShowThesaurusPopup(true);
   }, []);
 
   // Handle scene changes from SceneDetectionPlugin
@@ -325,11 +338,12 @@ export default function ManuscriptEditor({
               />
             )}
 
-            {/* Selection Toolbar - appears when text is selected, offers "Create Entity" */}
+            {/* Selection Toolbar - appears when text is selected, offers "Create Entity" and "Thesaurus" */}
             {manuscriptId && (
               <SelectionToolbar
                 manuscriptId={manuscriptId}
                 onCreateEntity={handleCreateEntityFromSelection}
+                onOpenThesaurus={handleOpenThesaurus}
               />
             )}
 
@@ -340,6 +354,15 @@ export default function ManuscriptEditor({
                 selectedText={selectedTextForEntity}
                 position={entityModalPosition}
                 onClose={() => setShowQuickEntityModal(false)}
+              />
+            )}
+
+            {/* Thesaurus Popup - shows synonyms for selected word */}
+            {showThesaurusPopup && thesaurusWord && (
+              <ThesaurusPopup
+                word={thesaurusWord}
+                position={thesaurusPosition}
+                onClose={() => setShowThesaurusPopup(false)}
               />
             )}
           </div>

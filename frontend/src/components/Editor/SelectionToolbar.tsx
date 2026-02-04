@@ -1,7 +1,7 @@
 /**
  * SelectionToolbar Component
  * Floating toolbar that appears when text is selected in the editor.
- * Provides quick actions like creating entities from selected text.
+ * Provides quick actions like creating entities from selected text and thesaurus lookup.
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -15,9 +15,10 @@ import { Z_INDEX } from '@/lib/zIndex';
 interface SelectionToolbarProps {
   manuscriptId?: string;
   onCreateEntity: (selectedText: string, position: { x: number; y: number }) => void;
+  onOpenThesaurus?: (selectedText: string, position: { x: number; y: number }) => void;
 }
 
-export default function SelectionToolbar({ manuscriptId, onCreateEntity }: SelectionToolbarProps) {
+export default function SelectionToolbar({ manuscriptId, onCreateEntity, onOpenThesaurus }: SelectionToolbarProps) {
   const [editor] = useLexicalComposerContext();
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -120,6 +121,19 @@ export default function SelectionToolbar({ manuscriptId, onCreateEntity }: Selec
     }
   };
 
+  const handleOpenThesaurus = () => {
+    if (selectedText && onOpenThesaurus) {
+      // For thesaurus, we want to extract just the single word if possible
+      const words = selectedText.trim().split(/\s+/);
+      const wordToLookup = words.length === 1 ? words[0] : selectedText;
+      onOpenThesaurus(wordToLookup.toLowerCase().replace(/[^a-z'-]/gi, ''), position);
+      setIsVisible(false);
+    }
+  };
+
+  // Check if selection is a single word (better for thesaurus)
+  const isSingleWord = selectedText.trim().split(/\s+/).length === 1;
+
   if (!isVisible || !manuscriptId) return null;
 
   return (
@@ -133,6 +147,26 @@ export default function SelectionToolbar({ manuscriptId, onCreateEntity }: Selec
         borderRadius: '2px',
       }}
     >
+      {/* Thesaurus button - show for single words */}
+      {onOpenThesaurus && isSingleWord && (
+        <button
+          onClick={handleOpenThesaurus}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-sans font-medium text-midnight hover:bg-bronze hover:text-white transition-colors"
+          style={{ borderRadius: '2px' }}
+          title={`Find synonyms for "${selectedText}"`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+          <span>Thesaurus</span>
+        </button>
+      )}
+
+      {/* Divider between thesaurus and entity buttons */}
+      {onOpenThesaurus && isSingleWord && (
+        <div className="w-px h-6 bg-slate-ui" />
+      )}
+
       <button
         onClick={handleCreateEntity}
         className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-sans font-medium text-midnight hover:bg-bronze hover:text-white transition-colors"
