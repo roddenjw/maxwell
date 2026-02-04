@@ -88,6 +88,11 @@ import type {
   DeleteResponse,
 } from '@/types/world';
 
+import type {
+  SynonymsResponse,
+  RelatedWordsResponse,
+} from '@/types/thesaurus';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 /**
@@ -3584,6 +3589,37 @@ export const agentApi = {
 };
 
 /**
+ * Thesaurus API - Inline synonym and related word lookups
+ */
+export const thesaurusApi = {
+  /**
+   * Get synonyms for a word, organized by part of speech
+   */
+  async getSynonyms(word: string, maxResults: number = 20): Promise<SynonymsResponse> {
+    const response = await fetch(
+      `${API_BASE_URL}/thesaurus/synonyms/${encodeURIComponent(word)}?max_results=${maxResults}`
+    );
+    if (!response.ok) {
+      throw new Error('Failed to fetch synonyms');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get related words (broader/narrower terms, parts, etc.)
+   */
+  async getRelatedWords(word: string, maxResults: number = 10): Promise<RelatedWordsResponse> {
+    const response = await fetch(
+      `${API_BASE_URL}/thesaurus/related/${encodeURIComponent(word)}?max_results=${maxResults}`
+    );
+    if (!response.ok) {
+      throw new Error('Failed to fetch related words');
+    }
+    return response.json();
+  },
+};
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
@@ -3610,5 +3646,6 @@ export default {
   import: importApi,
   share: shareApi,
   agent: agentApi,
+  thesaurus: thesaurusApi,
   healthCheck,
 };
