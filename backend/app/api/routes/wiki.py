@@ -17,6 +17,7 @@ from datetime import datetime
 from app.database import get_db
 from app.services.wiki_service import WikiService, WikiConsistencyEngine
 from app.services.wiki_codex_bridge import WikiCodexBridge
+from app.services.wiki_auto_populator import WikiAutoPopulator
 from app.models.wiki import WikiEntryType, WikiEntryStatus, WikiChangeType, WikiReferenceType
 
 
@@ -479,3 +480,148 @@ def get_reference_types():
         {"value": t.value, "label": t.value.replace("_", " ").title()}
         for t in WikiReferenceType
     ]
+
+
+# ==================== Auto-Population Endpoints ====================
+
+class AnalyzeManuscriptRequest(BaseModel):
+    manuscript_id: str
+    world_id: Optional[str] = None
+
+
+class AnalyzeChapterRequest(BaseModel):
+    chapter_id: str
+    world_id: Optional[str] = None
+
+
+class AutoApproveRequest(BaseModel):
+    threshold: float = 0.95
+
+
+@router.post("/auto-populate/manuscript")
+def analyze_manuscript_for_wiki(
+    request: AnalyzeManuscriptRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Analyze a manuscript for wiki updates.
+    Creates proposed changes in the approval queue.
+    """
+    populator = WikiAutoPopulator(db)
+
+    result = populator.analyze_manuscript(
+        manuscript_id=request.manuscript_id,
+        world_id=request.world_id
+    )
+
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    return result
+
+
+@router.post("/auto-populate/chapter")
+def analyze_chapter_for_wiki(
+    request: AnalyzeChapterRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Analyze a single chapter for wiki updates.
+    Lightweight analysis for incremental updates.
+    """
+    populator = WikiAutoPopulator(db)
+
+    result = populator.analyze_chapter(
+        chapter_id=request.chapter_id,
+        world_id=request.world_id
+    )
+
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    return result
+
+
+@router.post("/worlds/{world_id}/auto-approve")
+def auto_approve_high_confidence(
+    world_id: str,
+    request: AutoApproveRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Auto-approve changes above the confidence threshold.
+    Returns count of approved changes.
+    """
+    populator = WikiAutoPopulator(db)
+
+    approved_count = populator.auto_approve_high_confidence(
+        world_id=world_id,
+        threshold=request.threshold
+    )
+
+    return {
+        "world_id": world_id,
+        "threshold": request.threshold,
+        "approved_count": approved_count
+    }
+
+
+@router.get("/worlds/{world_id}/pending-summary")
+def get_pending_changes_summary(
+    world_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get summary of pending changes for a world"""
+    populator = WikiAutoPopulator(db)
+    return populator.get_pending_changes_summary(world_id)
+
+
+@router.post("/changes/bulk-approve")
+def bulk_approve_changes(
+    change_ids: List[str],
+    review: ChangeReviewRequest,
+    db: Session = Depends(get_db)
+):
+    """Approve multiple changes at once"""
+    service = WikiService(db)
+    approved = []
+    failed = []
+
+    for change_id in change_ids:
+        result = service.approve_change(change_id, review.reviewer_note)
+        if result is not None:
+            approved.append(change_id)
+        else:
+            failed.append(change_id)
+
+    return {
+        "approved": approved,
+        "failed": failed,
+        "approved_count": len(approved),
+        "failed_count": len(failed)
+    }
+
+
+@router.post("/changes/bulk-reject")
+def bulk_reject_changes(
+    change_ids: List[str],
+    review: ChangeReviewRequest,
+    db: Session = Depends(get_db)
+):
+    """Reject multiple changes at once"""
+    service = WikiService(db)
+    rejected = []
+    failed = []
+
+    for change_id in change_ids:
+        if service.reject_change(change_id, review.reviewer_note):
+            rejected.append(change_id)
+        else:
+            failed.append(change_id)
+
+    return {
+        "rejected": rejected,
+        "failed": failed,
+        "rejected_count": len(rejected),
+        "failed_count": len(failed)
+    }
