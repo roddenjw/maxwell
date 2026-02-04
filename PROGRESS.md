@@ -183,6 +183,92 @@
 
 ## Recent Completions (Last 2 Weeks)
 
+### February 4, 2026
+- **Feature 4: Character Voice Consistency Analyzer - Complete**
+  - **Backend VoiceAnalysisService:**
+    - Dialogue extraction with character attribution (regex-based)
+    - Voice metrics computation: avg sentence length, vocabulary complexity, formality score
+    - Contraction rate, question rate, exclamation rate analysis
+    - Signature words and common phrases detection
+    - Type-token ratio for vocabulary richness
+    - Filler words and emotion markers tracking
+  - **Backend Models:**
+    - CharacterVoiceProfile model for storing computed voice metrics
+    - VoiceInconsistency model for detected issues with severity levels
+    - VoiceComparison model for comparing character voice distinctiveness
+    - Database migration for voice profile tables
+  - **API Endpoints (9 endpoints):**
+    - `GET /api/voice-analysis/profile/{character_id}` - Get/build voice profile
+    - `POST /api/voice-analysis/analyze/{manuscript_id}` - Run consistency analysis
+    - `GET /api/voice-analysis/compare/{char_a}/{char_b}` - Compare voices
+    - `GET /api/voice-analysis/inconsistencies/{manuscript_id}` - List issues
+    - `PUT /api/voice-analysis/inconsistencies/{id}/resolve` - Resolve issue
+    - `PUT /api/voice-analysis/inconsistencies/{id}/dismiss` - Dismiss issue
+    - `GET /api/voice-analysis/summary/{manuscript_id}` - Voice summary
+    - `POST /api/voice-analysis/profiles/build-all/{manuscript_id}` - Build all
+    - `GET /api/voice-analysis/health` - Health check
+  - **Frontend VoiceProfilePanel:**
+    - Three tabs: Profiles, Issues, Compare
+    - Voice profile cards with metrics visualization
+    - Inconsistency list with resolve/dismiss actions
+    - Character comparison with similarity scores
+  - **Files Created:**
+    - `backend/app/models/voice_profile.py` (155 lines)
+    - `backend/app/services/voice_analysis_service.py` (550 lines)
+    - `backend/app/api/routes/voice_analysis.py` (458 lines)
+    - `backend/migrations/versions/voice_profiles_001.py`
+    - `frontend/src/components/VoiceAnalysis/VoiceProfilePanel.tsx` (450 lines)
+  - **Impact:** Writers can now analyze character dialogue for voice consistency
+
+- **Feature 5: Visual Timeline Enhancement - Complete**
+  - **EnhancedSwimlaneTimeline Component:**
+    - Character swimlanes with emotional arc overlays
+    - Conflict markers between characters (vertical connecting lines)
+    - Sentiment color coding on event nodes
+    - Story beat annotations and progression visualization
+    - High importance event indicators (stars)
+    - Interactive tooltips with event details
+    - Character filtering and selection
+  - **TensionHeatmap Component:**
+    - Tension/conflict density visualization across story timeline
+    - Heatmap bars showing tension levels by story section
+    - Color gradient from blue (low) to red (high tension)
+    - Conflict markers showing number of conflicts per section
+    - Pacing analysis recommendations (5 rule-based suggestions)
+    - Stats: avg tension, peak tension, total conflicts
+    - Selected section details panel
+  - **Files Created:**
+    - `frontend/src/components/Timeline/EnhancedSwimlaneTimeline.tsx` (650 lines)
+    - `frontend/src/components/Timeline/TensionHeatmap.tsx` (400 lines)
+  - **Impact:** Timeline visualization now shows character journeys with conflict/tension context
+
+- **Feature 6: Foreshadowing Tracker Expansion - Complete**
+  - **Backend ForeshadowingDetectorService:**
+    - Auto-detection of potential setups using pattern matching
+    - 6 pattern categories: Chekhov's Guns, Prophecies, Symbols, Hints, Parallels
+    - 30+ regex patterns for detecting narrative promises
+    - Payoff detection based on keyword matching with prior setups
+    - Setup-payoff matching with similarity scoring
+    - Confidence scoring based on pattern specificity
+    - Writing suggestions for unresolved narrative promises
+  - **API Endpoints (2 new endpoints):**
+    - `POST /api/foreshadowing/detect/{manuscript_id}` - Auto-detect foreshadowing
+    - `POST /api/foreshadowing/detect/{manuscript_id}/confirm` - Confirm detection
+  - **Frontend ForeshadowingThreading Component:**
+    - Visual thread representation of setup-payoff connections
+    - Auto-detection panel with detected setups
+    - Thread cards showing setup → payoff connections
+    - Unresolved threads highlighted as warnings (Chekhov violations)
+    - Confidence indicators and type filtering
+    - "Confirm & Track" workflow for detected pairs
+  - **Files Created:**
+    - `backend/app/services/foreshadowing_detector_service.py` (600 lines)
+    - `frontend/src/components/Timeline/ForeshadowingThreading.tsx` (550 lines)
+  - **Files Modified:**
+    - `backend/app/api/routes/foreshadowing.py` (+80 lines)
+    - `frontend/src/components/Timeline/index.ts` (+4 exports)
+  - **Impact:** Writers can auto-detect foreshadowing and visually track narrative threads
+
 ### February 2, 2026
 - **Story Structure Guide Agent (NEW)**
   - **Purpose:** A specialized agent for guiding writers through outlining, distinct from StructureAgent (which analyzes prose)
