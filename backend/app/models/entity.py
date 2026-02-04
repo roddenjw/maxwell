@@ -78,6 +78,9 @@ class Entity(Base):
     # For potential image generation
     image_seed = Column(Integer, nullable=True)
 
+    # Link to World Wiki entry (for unified data management)
+    linked_wiki_entry_id = Column(String, ForeignKey("wiki_entries.id"), nullable=True)
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -85,6 +88,7 @@ class Entity(Base):
     # Relationships
     manuscript = relationship("Manuscript", back_populates="entities", foreign_keys=[manuscript_id])
     world = relationship("World", back_populates="world_entities", foreign_keys=[world_id])
+    wiki_entry = relationship("WikiEntry", foreign_keys=[linked_wiki_entry_id], backref="linked_entities")
     source_relationships = relationship(
         "Relationship",
         foreign_keys="Relationship.source_entity_id",

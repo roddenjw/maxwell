@@ -17,6 +17,12 @@ from app.models.shareable_recap import ShareableRecap
 from app.models.agent import AgentAnalysis, CoachSession, CoachMessage, AuthorLearning, SuggestionFeedback
 from app.models.privacy import AuthorPrivacyPreferences, ConsentRecord, AIInteractionAudit, ContentSharingLevel, ConsentType
 from app.models.carbon import CarbonMetric, CarbonReport, CarbonBudget, ENERGY_ESTIMATES_MICRO_KWH, CARBON_INTENSITY_BY_REGION
+from app.models.wiki import (
+    WikiEntry, WikiChange, WikiCrossReference,
+    WikiEntryType, WikiEntryStatus, WikiChangeType, WikiChangeStatus, WikiReferenceType
+)
+from app.models.character_arc import CharacterArc, ArcTemplate, ARC_TEMPLATE_DEFINITIONS
+from app.models.world_rule import WorldRule, RuleViolation, RuleType, RuleSeverity, RULE_TEMPLATES
 
 __all__ = [
     # World/Series hierarchy
@@ -81,4 +87,23 @@ __all__ = [
     "CarbonBudget",
     "ENERGY_ESTIMATES_MICRO_KWH",
     "CARBON_INTENSITY_BY_REGION",
+    # Wiki
+    "WikiEntry",
+    "WikiChange",
+    "WikiCrossReference",
+    "WikiEntryType",
+    "WikiEntryStatus",
+    "WikiChangeType",
+    "WikiChangeStatus",
+    "WikiReferenceType",
+    # Character Arc
+    "CharacterArc",
+    "ArcTemplate",
+    "ARC_TEMPLATE_DEFINITIONS",
+    # World Rules
+    "WorldRule",
+    "RuleViolation",
+    "RuleType",
+    "RuleSeverity",
+    "RULE_TEMPLATES",
 ]
