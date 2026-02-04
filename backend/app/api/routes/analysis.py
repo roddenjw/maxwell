@@ -411,6 +411,184 @@ def full_manuscript_analysis(
     return results
 
 
+# ==================== Unified Dashboard Endpoint ====================
+
+class DashboardIssue(BaseModel):
+    """Standardized issue format for dashboard"""
+    id: str
+    category: str
+    severity: str
+    title: str
+    description: str
+    location: Optional[str] = None
+    fix_suggestion: Optional[str] = None
+    related_wiki_entry: Optional[str] = None
+
+
+@router.post("/dashboard/issues")
+def get_dashboard_issues(
+    request: ManuscriptAnalysisRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Get aggregated issues from all analyzers for dashboard display.
+    Issues are sorted by severity and category.
+    """
+    issues = []
+
+    # POV Issues
+    pov_service = POVConsistencyService(db)
+    pov_result = pov_service.analyze_manuscript(request.manuscript_id)
+    if "error" not in pov_result:
+        for ch in pov_result.get("chapter_analyses", []):
+            # Head hopping
+            for switch in ch.get("head_hopping", {}).get("pov_switches", [])[:3]:
+                issues.append({
+                    "id": f"pov-hh-{ch.get('chapter_id')}-{switch.get('paragraph_index')}",
+                    "category": "pov",
+                    "severity": "high",
+                    "title": "Head-Hopping Detected",
+                    "description": f"POV switches in {ch.get('chapter_title')}",
+                    "location": f"{ch.get('chapter_title')}, paragraph {switch.get('paragraph_index')}",
+                    "fix_suggestion": "Add a scene break or rewrite from single POV"
+                })
+
+    # Scene Purpose Issues
+    purpose_service = ScenePurposeService(db)
+    purpose_result = purpose_service.analyze_manuscript(request.manuscript_id, request.genre)
+    if "error" not in purpose_result:
+        for ch in purpose_result.get("chapter_analyses", []):
+            for scene in ch.get("scene_analyses", []):
+                if scene.get("is_purposeless"):
+                    issues.append({
+                        "id": f"purpose-{ch.get('chapter_id')}-{scene.get('title')}",
+                        "category": "scene_purpose",
+                        "severity": "medium",
+                        "title": "Scene Lacks Clear Purpose",
+                        "description": f"Scene in {ch.get('chapter_title')} has no clear narrative purpose",
+                        "location": ch.get("chapter_title"),
+                        "fix_suggestion": "Add clear plot, character, or world-building purpose"
+                    })
+
+    # Relationship Issues
+    rel_service = RelationshipEvolutionService(db)
+    rel_result = rel_service.analyze_all_relationships(request.manuscript_id)
+    if "error" not in rel_result:
+        for rel in rel_result.get("relationships", []):
+            for change in rel.get("unearned_change_details", []):
+                issues.append({
+                    "id": f"rel-{rel.get('character_a')}-{rel.get('character_b')}-{change.get('chapter_index')}",
+                    "category": "relationships",
+                    "severity": "high",
+                    "title": f"Unearned Relationship Change",
+                    "description": f"{rel.get('character_a')} and {rel.get('character_b')}: sudden shift from {change.get('from_state')} to {change.get('to_state')}",
+                    "location": change.get("chapter_title"),
+                    "fix_suggestion": "Add transitional scenes showing relationship development"
+                })
+
+    # Emotional Beat Issues
+    emotion_service = EmotionalBeatService(db)
+    emotion_result = emotion_service.analyze_manuscript(request.manuscript_id, request.genre)
+    if "error" not in emotion_result:
+        for beat in emotion_result.get("missing_beats", [])[:3]:
+            issues.append({
+                "id": f"emotion-missing-{beat}",
+                "category": "emotional_beats",
+                "severity": "low",
+                "title": f"Missing Emotional Beat",
+                "description": f"No scenes with {emotion_service._beat_label(beat)} emotions",
+                "fix_suggestion": "Consider adding scenes that evoke this emotion"
+            })
+
+    # Subplot Issues
+    subplot_service = SubplotTrackerService(db)
+    subplot_result = subplot_service.analyze_manuscript(request.manuscript_id)
+    if "error" not in subplot_result:
+        for subplot in subplot_result.get("abandoned_subplots", []):
+            health = subplot_result.get("subplot_health", {}).get(subplot, {})
+            issues.append({
+                "id": f"subplot-abandoned-{subplot}",
+                "category": "subplots",
+                "severity": "high",
+                "title": f"Abandoned Subplot",
+                "description": f"{subplot_service._subplot_label(subplot)} subplot disappears after chapter {health.get('last_chapter', '?') + 1}",
+                "fix_suggestion": "Resolve this subplot or remove early references"
+            })
+
+        for subplot in subplot_result.get("unresolved_subplots", []):
+            issues.append({
+                "id": f"subplot-unresolved-{subplot}",
+                "category": "subplots",
+                "severity": "medium",
+                "title": f"Unresolved Subplot",
+                "description": f"{subplot_service._subplot_label(subplot)} subplot may need resolution",
+                "fix_suggestion": "Add a resolution scene or clarify continuation"
+            })
+
+    # Pacing Issues
+    pacing_service = PacingOptimizerService(db)
+    pacing_result = pacing_service.analyze_manuscript_pacing(request.manuscript_id, request.genre)
+    if "error" not in pacing_result:
+        for valley in pacing_result.get("tension_valleys", []):
+            issues.append({
+                "id": f"pacing-valley-{valley.get('start_chapter_index')}",
+                "category": "pacing",
+                "severity": valley.get("severity", "medium"),
+                "title": "Tension Valley",
+                "description": f"{valley.get('length')} consecutive chapters with low tension",
+                "location": f"Starting at {valley.get('start_chapter_title')}",
+                "fix_suggestion": "Add conflict, deadline, or revelation in this stretch"
+            })
+
+        for slow in pacing_result.get("slow_sections", [])[:3]:
+            issues.append({
+                "id": f"pacing-slow-{slow.get('chapter_id')}",
+                "category": "pacing",
+                "severity": "medium",
+                "title": "Slow Section",
+                "description": f"{slow.get('chapter_title')} is description-heavy",
+                "location": slow.get("chapter_title"),
+                "fix_suggestion": "Add dialogue or action beats"
+            })
+
+    # Sort by severity
+    severity_order = {"high": 0, "medium": 1, "low": 2}
+    issues.sort(key=lambda x: (severity_order.get(x.get("severity", "low"), 3), x.get("category", "")))
+
+    # Group by category
+    by_category = {}
+    for issue in issues:
+        cat = issue.get("category", "other")
+        if cat not in by_category:
+            by_category[cat] = []
+        by_category[cat].append(issue)
+
+    return {
+        "manuscript_id": request.manuscript_id,
+        "total_issues": len(issues),
+        "by_severity": {
+            "high": len([i for i in issues if i.get("severity") == "high"]),
+            "medium": len([i for i in issues if i.get("severity") == "medium"]),
+            "low": len([i for i in issues if i.get("severity") == "low"])
+        },
+        "by_category": {cat: len(items) for cat, items in by_category.items()},
+        "issues": issues
+    }
+
+
+@router.get("/dashboard/categories")
+def get_issue_categories():
+    """Get all issue categories with labels"""
+    return [
+        {"value": "pov", "label": "POV Consistency", "icon": "eye"},
+        {"value": "scene_purpose", "label": "Scene Purpose", "icon": "target"},
+        {"value": "relationships", "label": "Relationships", "icon": "users"},
+        {"value": "emotional_beats", "label": "Emotional Beats", "icon": "heart"},
+        {"value": "subplots", "label": "Subplots", "icon": "git-branch"},
+        {"value": "pacing", "label": "Pacing", "icon": "activity"}
+    ]
+
+
 # ==================== Emotional Beat Endpoints ====================
 
 @router.post("/emotional-beats/chapter")
