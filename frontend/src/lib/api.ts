@@ -3104,6 +3104,178 @@ export interface OutlineGuideRequest {
   model_name?: string;
 }
 
+// ========================================
+// Maxwell Memory & Preferences Types
+// ========================================
+
+export type SynthesisTone = 'encouraging' | 'direct' | 'mentor' | 'collaborator' | 'analytical' | 'celebratory';
+export type FeedbackDepth = 'brief' | 'standard' | 'comprehensive';
+export type TeachingMode = 'on' | 'off' | 'auto';
+
+export interface VoicePreferences {
+  tone: SynthesisTone;
+  depth: FeedbackDepth;
+  teaching_mode: TeachingMode;
+  priority_focus: string;
+}
+
+export interface MaxwellPreferences {
+  user_id: string;
+  preferred_tone: SynthesisTone;
+  feedback_depth: FeedbackDepth;
+  teaching_mode: TeachingMode;
+  priority_focus: string;
+  proactive_suggestions: 'on' | 'gentle' | 'off';
+  extra_preferences: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MaxwellConversation {
+  id: string;
+  user_id: string;
+  manuscript_id?: string;
+  chapter_id?: string;
+  interaction_type: string;
+  user_message?: string;
+  analyzed_text?: string;
+  maxwell_response: string;
+  response_type: string;
+  feedback_data: Record<string, any>;
+  agents_consulted: string[];
+  focus_area?: string;
+  cost: number;
+  tokens: number;
+  execution_time_ms: number;
+  created_at: string;
+}
+
+export interface MaxwellInsight {
+  id: string;
+  user_id: string;
+  manuscript_id?: string;
+  conversation_id: string;
+  category: string;
+  insight_text: string;
+  subject?: string;
+  sentiment: 'positive' | 'negative' | 'suggestion';
+  importance: number;
+  resolved: 'pending' | 'addressed' | 'dismissed';
+  created_at: string;
+}
+
+export interface ConversationContext {
+  id: string;
+  type: string;
+  date: string;
+  focus?: string;
+  agents: string[];
+  key_issues?: string[];
+  strengths?: string[];
+}
+
+// ========================================
+// Proactive Suggestions Types
+// ========================================
+
+export type NudgeType =
+  | 'consistency_issue'
+  | 'pacing_concern'
+  | 'character_drift'
+  | 'style_pattern'
+  | 'plot_hole'
+  | 'dialogue_issue'
+  | 'worldbuilding_gap'
+  | 'writing_streak'
+  | 'milestone';
+
+export type NudgePriority = 'low' | 'medium' | 'high';
+
+export interface ProactiveNudge {
+  id: string;
+  user_id: string;
+  manuscript_id?: string;
+  chapter_id?: string;
+  nudge_type: NudgeType;
+  priority: NudgePriority;
+  title: string;
+  message: string;
+  details: Record<string, any>;
+  content_hash: string;
+  dismissed: boolean;
+  dismissed_at?: string;
+  viewed: boolean;
+  viewed_at?: string;
+  expires_at?: string;
+  created_at: string;
+}
+
+export interface WeeklyInsight {
+  id: string;
+  user_id: string;
+  week_start: string;
+  week_end: string;
+  summary: string;
+  highlights: string[];
+  areas_to_improve: string[];
+  word_count_total: number;
+  chapters_worked_on: number;
+  most_active_day?: string;
+  analyses_run: number;
+  issues_found: number;
+  issues_addressed: number;
+  created_at: string;
+}
+
+// ========================================
+// Cross-Agent Reasoning Types
+// ========================================
+
+export type ConflictType = 'contradictory_advice' | 'stylistic_tension' | 'priority_conflict' | 'interpretation_difference';
+export type ConflictSeverity = 'low' | 'medium' | 'high';
+
+export interface AgentConflict {
+  id: string;
+  type: ConflictType;
+  severity: ConflictSeverity;
+  agent_a: string;
+  agent_b: string;
+  description: string;
+  bridge_suggestion: string;
+  context: Record<string, any>;
+}
+
+export interface StoryHealthAssessment {
+  overall_score: number;
+  dimensions: {
+    consistency: number;
+    character_development: number;
+    pacing: number;
+    worldbuilding: number;
+    dialogue: number;
+    style: number;
+  };
+  strengths: string[];
+  areas_for_growth: string[];
+  conflicts: AgentConflict[];
+  recommendations: string[];
+  generated_at: string;
+}
+
+// ========================================
+// Maxwell Memory Request Types
+// ========================================
+
+export interface UpdatePreferencesRequest {
+  user_id: string;
+  preferred_tone?: SynthesisTone;
+  feedback_depth?: FeedbackDepth;
+  teaching_mode?: TeachingMode;
+  priority_focus?: string;
+  proactive_suggestions?: 'on' | 'gentle' | 'off';
+  extra_preferences?: Record<string, any>;
+}
+
 export interface SynthesizedFeedback {
   narrative: string;
   highlights: Array<{ aspect: string; text: string }>;
@@ -3582,6 +3754,277 @@ export const agentApi = {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || 'Outline guidance failed');
+    }
+
+    return response.json();
+  },
+
+  // ========================
+  // Maxwell Memory & Preferences
+  // ========================
+
+  /**
+   * Get Maxwell conversation history for a user
+   */
+  async getMaxwellHistory(
+    userId: string,
+    manuscriptId?: string,
+    limit = 20,
+    interactionType?: string
+  ): Promise<{ success: boolean; data: MaxwellConversation[] }> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+    params.append('limit', String(limit));
+    if (interactionType) params.append('interaction_type', interactionType);
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/history/${encodeURIComponent(userId)}?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get history');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get conversation context for Maxwell to reference ("You mentioned before...")
+   */
+  async getMaxwellContext(
+    userId: string,
+    manuscriptId?: string,
+    lookbackDays = 30,
+    maxConversations = 10
+  ): Promise<{ success: boolean; data: ConversationContext[] }> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+    params.append('lookback_days', String(lookbackDays));
+    params.append('max_conversations', String(maxConversations));
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/context/${encodeURIComponent(userId)}?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get context');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get relevant insights from past conversations
+   */
+  async getMaxwellInsights(
+    userId: string,
+    manuscriptId?: string,
+    category?: string,
+    subject?: string,
+    includeResolved = false,
+    limit = 10
+  ): Promise<{ success: boolean; data: MaxwellInsight[] }> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+    if (category) params.append('category', category);
+    if (subject) params.append('subject', subject);
+    params.append('include_resolved', String(includeResolved));
+    params.append('limit', String(limit));
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/insights/${encodeURIComponent(userId)}?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get insights');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Mark an insight as resolved
+   */
+  async resolveMaxwellInsight(
+    insightId: string,
+    resolution: 'addressed' | 'dismissed' = 'addressed'
+  ): Promise<{ success: boolean; data: MaxwellInsight }> {
+    const params = new URLSearchParams();
+    params.append('resolution', resolution);
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/insights/${encodeURIComponent(insightId)}/resolve?${params.toString()}`,
+      { method: 'PUT' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to resolve insight');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get Maxwell preferences for a user
+   */
+  async getMaxwellPreferences(userId: string): Promise<{ success: boolean; data: MaxwellPreferences }> {
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/preferences/${encodeURIComponent(userId)}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get preferences');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Update Maxwell preferences for a user
+   */
+  async updateMaxwellPreferences(data: UpdatePreferencesRequest): Promise<{ success: boolean; data: MaxwellPreferences }> {
+    const response = await fetch(`${API_BASE_URL}/agents/maxwell/preferences`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update preferences');
+    }
+
+    return response.json();
+  },
+
+  // ========================
+  // Proactive Suggestions
+  // ========================
+
+  /**
+   * Get pending nudges for a user
+   */
+  async getMaxwellNudges(
+    userId: string,
+    manuscriptId?: string,
+    limit = 10,
+    includeViewed = false
+  ): Promise<{ success: boolean; data: ProactiveNudge[] }> {
+    const params = new URLSearchParams();
+    if (manuscriptId) params.append('manuscript_id', manuscriptId);
+    params.append('limit', String(limit));
+    params.append('include_viewed', String(includeViewed));
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/nudges/${encodeURIComponent(userId)}?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get nudges');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Dismiss a nudge
+   */
+  async dismissNudge(
+    nudgeId: string,
+    userId: string
+  ): Promise<{ success: boolean; message: string }> {
+    const params = new URLSearchParams();
+    params.append('user_id', userId);
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/nudges/${encodeURIComponent(nudgeId)}/dismiss?${params.toString()}`,
+      { method: 'PUT' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to dismiss nudge');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Mark a nudge as viewed
+   */
+  async viewNudge(
+    nudgeId: string,
+    userId: string
+  ): Promise<{ success: boolean; data: ProactiveNudge }> {
+    const params = new URLSearchParams();
+    params.append('user_id', userId);
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/nudges/${encodeURIComponent(nudgeId)}/view?${params.toString()}`,
+      { method: 'PUT' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to mark nudge as viewed');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get weekly insight for a user
+   */
+  async getWeeklyInsight(
+    userId: string,
+    weekOffset = 0
+  ): Promise<{ success: boolean; data: WeeklyInsight | null }> {
+    const params = new URLSearchParams();
+    params.append('week_offset', String(weekOffset));
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/weekly-insight/${encodeURIComponent(userId)}?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get weekly insight');
+    }
+
+    return response.json();
+  },
+
+  // ========================
+  // Story Health Assessment
+  // ========================
+
+  /**
+   * Get comprehensive story health assessment
+   */
+  async getStoryHealth(
+    userId: string,
+    manuscriptId: string,
+    chapterIds?: string[]
+  ): Promise<{ success: boolean; data: StoryHealthAssessment }> {
+    const params = new URLSearchParams();
+    params.append('user_id', userId);
+    if (chapterIds && chapterIds.length > 0) {
+      chapterIds.forEach(id => params.append('chapter_ids', id));
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/agents/maxwell/story-health/${encodeURIComponent(manuscriptId)}?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get story health');
     }
 
     return response.json();

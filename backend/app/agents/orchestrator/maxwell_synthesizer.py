@@ -30,6 +30,41 @@ class SynthesisTone(Enum):
     DIRECT = "direct"            # More concise, professional
     TEACHING = "teaching"        # Extra educational context
     CELEBRATORY = "celebratory"  # Focus on what's working
+    FORMAL = "formal"            # More professional/academic
+    CASUAL = "casual"            # Friendly and informal
+
+
+class FeedbackDepth(Enum):
+    """Depth options for Maxwell's feedback"""
+    BRIEF = "brief"              # Quick summary, 1-2 key points
+    STANDARD = "standard"        # Balanced feedback, 3-5 points
+    COMPREHENSIVE = "comprehensive"  # Detailed analysis, all findings
+
+
+class TeachingMode(Enum):
+    """Teaching mode options"""
+    ON = "on"                    # Always include teaching moments
+    OFF = "off"                  # Skip teaching explanations
+    AUTO = "auto"                # Include when relevant
+
+
+@dataclass
+class VoicePreferences:
+    """User preferences for Maxwell's voice."""
+    tone: SynthesisTone = SynthesisTone.ENCOURAGING
+    depth: FeedbackDepth = FeedbackDepth.STANDARD
+    teaching_mode: TeachingMode = TeachingMode.AUTO
+    priority_focus: str = "all"  # plot, character, prose, pacing, all
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "VoicePreferences":
+        """Create from preferences dictionary."""
+        return cls(
+            tone=SynthesisTone(data.get("preferred_tone", "encouraging")),
+            depth=FeedbackDepth(data.get("feedback_depth", "standard")),
+            teaching_mode=TeachingMode(data.get("teaching_mode", "auto")),
+            priority_focus=data.get("priority_focus", "all"),
+        )
 
 
 @dataclass
@@ -140,7 +175,36 @@ a learning opportunity.""",
 
     SynthesisTone.CELEBRATORY: """Focus heavily on what's working. This might be after a
 major revision or when the writer needs encouragement. Still mention key issues but frame
-them as "polish" items."""
+them as "polish" items.""",
+
+    SynthesisTone.FORMAL: """Maintain a professional, academic tone. Use precise terminology
+and structured analysis. Suitable for serious literary critique. Avoid casual language.""",
+
+    SynthesisTone.CASUAL: """Be friendly and conversational, like a knowledgeable friend.
+Use casual language, maybe even some humor. Make the feedback feel approachable and fun."""
+}
+
+DEPTH_GUIDANCE = {
+    FeedbackDepth.BRIEF: """Keep the response SHORT. Focus only on the 1-2 most important
+items. The narrative should be 1 paragraph. Skip minor issues. Writers want a quick check.""",
+
+    FeedbackDepth.STANDARD: """Provide balanced feedback with 3-5 key points. The narrative
+should be 2-3 paragraphs. Include a good mix of praise and suggestions.""",
+
+    FeedbackDepth.COMPREHENSIVE: """Provide detailed, thorough analysis. Cover ALL significant
+findings. The narrative can be 4-5 paragraphs. Include nuanced observations and connections
+between issues. Writers want the full picture."""
+}
+
+TEACHING_GUIDANCE = {
+    TeachingMode.ON: """ALWAYS include teaching moments. Explain WHY each suggestion matters.
+Reference craft principles. Help the writer learn, not just fix.""",
+
+    TeachingMode.OFF: """Skip teaching explanations. Just provide the feedback directly.
+Assume the writer knows craft principles and just wants actionable items.""",
+
+    TeachingMode.AUTO: """Include teaching moments when they're particularly relevant or
+when explaining a concept that might be unfamiliar. Use judgment."""
 }
 
 
@@ -176,19 +240,31 @@ class MaxwellSynthesizer:
         self,
         orchestrator_result: Dict[str, Any],
         tone: SynthesisTone = SynthesisTone.ENCOURAGING,
-        author_context: Optional[Dict[str, Any]] = None
+        author_context: Optional[Dict[str, Any]] = None,
+        voice_preferences: Optional[VoicePreferences] = None
     ) -> SynthesizedFeedback:
         """
         Synthesize multi-agent results into unified Maxwell feedback.
 
         Args:
             orchestrator_result: Raw result from WritingAssistantOrchestrator
-            tone: Desired tone for the feedback
+            tone: Desired tone for the feedback (overridden by voice_preferences if provided)
             author_context: Optional author learning context for personalization
+            voice_preferences: Optional full voice preferences for customization
 
         Returns:
             SynthesizedFeedback with unified narrative and structured data
         """
+        # Use voice preferences if provided, otherwise use tone parameter
+        if voice_preferences:
+            actual_tone = voice_preferences.tone
+            depth = voice_preferences.depth
+            teaching = voice_preferences.teaching_mode
+        else:
+            actual_tone = tone
+            depth = FeedbackDepth.STANDARD
+            teaching = TeachingMode.AUTO
+
         # Extract findings by agent type
         style_findings = self._extract_agent_findings(orchestrator_result, "style")
         continuity_findings = self._extract_agent_findings(orchestrator_result, "continuity")
@@ -196,16 +272,26 @@ class MaxwellSynthesizer:
         voice_findings = self._extract_agent_findings(orchestrator_result, "voice")
         praise = self._extract_praise(orchestrator_result)
 
-        # Build the synthesis prompt
+        # Build the synthesis prompt with all preferences
         prompt = SYNTHESIS_SYSTEM_PROMPT.format(
-            tone=tone.value,
-            tone_guidance=TONE_GUIDANCE[tone],
+            tone=actual_tone.value,
+            tone_guidance=TONE_GUIDANCE.get(actual_tone, TONE_GUIDANCE[SynthesisTone.ENCOURAGING]),
             style_findings=style_findings or "No specific style issues noted.",
             continuity_findings=continuity_findings or "No continuity concerns found.",
             structure_findings=structure_findings or "Structure appears solid.",
             voice_findings=voice_findings or "Voice and dialogue are working well.",
             praise=praise or "No specific praise captured."
         )
+
+        # Add depth guidance
+        prompt += f"\n\n## Feedback Depth: {depth.value}\n{DEPTH_GUIDANCE[depth]}"
+
+        # Add teaching guidance
+        prompt += f"\n\n## Teaching Mode: {teaching.value}\n{TEACHING_GUIDANCE[teaching]}"
+
+        # Add priority focus if specified
+        if voice_preferences and voice_preferences.priority_focus != "all":
+            prompt += f"\n\n## Priority Focus\nFocus especially on {voice_preferences.priority_focus}-related feedback."
 
         # Add author context if available
         if author_context:

@@ -1426,3 +1426,416 @@ async def _store_analysis(
         print(f"Failed to store analysis: {e}")
     finally:
         db.close()
+
+
+# ==================== Maxwell Memory & Preferences Endpoints ====================
+
+
+class UpdatePreferencesRequest(BaseModel):
+    """Request to update Maxwell preferences"""
+    user_id: str
+    preferred_tone: Optional[str] = None  # encouraging, direct, teaching, celebratory, formal, casual
+    feedback_depth: Optional[str] = None  # brief, standard, comprehensive
+    teaching_mode: Optional[str] = None  # on, off, auto
+    priority_focus: Optional[str] = None  # plot, character, prose, pacing, all
+    proactive_suggestions: Optional[str] = None  # on, off, minimal
+
+
+class StoryHealthRequest(BaseModel):
+    """Request for story health assessment"""
+    api_key: str
+    user_id: str
+    manuscript_id: str
+    text: str
+    model_provider: Optional[str] = "anthropic"
+    model_name: Optional[str] = "claude-3-haiku-20240307"
+
+
+@router.get("/maxwell/history")
+async def get_conversation_history(
+    user_id: str,
+    manuscript_id: Optional[str] = None,
+    limit: int = 20,
+    interaction_type: Optional[str] = None,
+):
+    """
+    Get Maxwell conversation history for a user.
+
+    Returns recent conversations with Maxwell, optionally filtered by manuscript.
+    """
+    from app.services.maxwell_memory_service import create_maxwell_memory_service
+
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+        conversations = memory_service.get_recent_conversations(
+            user_id=user_id,
+            manuscript_id=manuscript_id,
+            limit=limit,
+            interaction_type=interaction_type,
+        )
+
+        return {
+            "success": True,
+            "data": [
+                {
+                    "id": c.id,
+                    "interaction_type": c.interaction_type,
+                    "user_message": c.user_message,
+                    "maxwell_response": c.maxwell_response[:500] if c.maxwell_response else None,
+                    "response_type": c.response_type,
+                    "focus_area": c.focus_area,
+                    "agents_consulted": c.agents_consulted,
+                    "cost": c.cost,
+                    "created_at": c.created_at.isoformat() if c.created_at else None,
+                }
+                for c in conversations
+            ]
+        }
+    finally:
+        db.close()
+
+
+@router.get("/maxwell/context")
+async def get_conversation_context(
+    user_id: str,
+    manuscript_id: Optional[str] = None,
+    lookback_days: int = 30,
+    max_conversations: int = 10,
+):
+    """
+    Get conversation context for Maxwell to reference.
+
+    Returns summaries of recent feedback for "You mentioned before..." references.
+    """
+    from app.services.maxwell_memory_service import create_maxwell_memory_service
+
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+        context = memory_service.get_conversation_context(
+            user_id=user_id,
+            manuscript_id=manuscript_id,
+            lookback_days=lookback_days,
+            max_conversations=max_conversations,
+        )
+
+        return {
+            "success": True,
+            "data": context
+        }
+    finally:
+        db.close()
+
+
+@router.get("/maxwell/insights")
+async def get_insights(
+    user_id: str,
+    manuscript_id: Optional[str] = None,
+    category: Optional[str] = None,
+    include_resolved: bool = False,
+    limit: int = 10,
+):
+    """
+    Get extracted insights from Maxwell conversations.
+
+    Insights are key points extracted from feedback for quick reference.
+    """
+    from app.services.maxwell_memory_service import create_maxwell_memory_service
+
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+        insights = memory_service.get_relevant_insights(
+            user_id=user_id,
+            manuscript_id=manuscript_id,
+            category=category,
+            include_resolved=include_resolved,
+            limit=limit,
+        )
+
+        return {
+            "success": True,
+            "data": [
+                {
+                    "id": i.id,
+                    "category": i.category,
+                    "insight_text": i.insight_text,
+                    "subject": i.subject,
+                    "sentiment": i.sentiment,
+                    "importance": i.importance,
+                    "resolved": i.resolved,
+                    "created_at": i.created_at.isoformat() if i.created_at else None,
+                }
+                for i in insights
+            ]
+        }
+    finally:
+        db.close()
+
+
+@router.post("/maxwell/insights/{insight_id}/resolve")
+async def resolve_insight(
+    insight_id: str,
+    resolution: str = "addressed",
+):
+    """Mark an insight as resolved."""
+    from app.services.maxwell_memory_service import create_maxwell_memory_service
+
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+        insight = memory_service.mark_insight_resolved(insight_id, resolution)
+
+        if not insight:
+            raise HTTPException(status_code=404, detail="Insight not found")
+
+        return {
+            "success": True,
+            "data": {
+                "id": insight.id,
+                "resolved": insight.resolved,
+            }
+        }
+    finally:
+        db.close()
+
+
+@router.get("/maxwell/preferences")
+async def get_preferences(user_id: str):
+    """Get Maxwell preferences for a user."""
+    from app.services.maxwell_memory_service import create_maxwell_memory_service
+
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+        prefs = memory_service.get_preferences(user_id)
+
+        return {
+            "success": True,
+            "data": {
+                "preferred_tone": prefs.preferred_tone,
+                "feedback_depth": prefs.feedback_depth,
+                "teaching_mode": prefs.teaching_mode,
+                "priority_focus": prefs.priority_focus,
+                "proactive_suggestions": prefs.proactive_suggestions,
+                "extra_preferences": prefs.extra_preferences,
+            }
+        }
+    finally:
+        db.close()
+
+
+@router.put("/maxwell/preferences")
+async def update_preferences(request: UpdatePreferencesRequest):
+    """Update Maxwell preferences for a user."""
+    from app.services.maxwell_memory_service import create_maxwell_memory_service
+
+    db = SessionLocal()
+    try:
+        memory_service = create_maxwell_memory_service(db)
+        prefs = memory_service.update_preferences(
+            user_id=request.user_id,
+            preferred_tone=request.preferred_tone,
+            feedback_depth=request.feedback_depth,
+            teaching_mode=request.teaching_mode,
+            priority_focus=request.priority_focus,
+            proactive_suggestions=request.proactive_suggestions,
+        )
+
+        return {
+            "success": True,
+            "data": {
+                "preferred_tone": prefs.preferred_tone,
+                "feedback_depth": prefs.feedback_depth,
+                "teaching_mode": prefs.teaching_mode,
+                "priority_focus": prefs.priority_focus,
+                "proactive_suggestions": prefs.proactive_suggestions,
+            }
+        }
+    finally:
+        db.close()
+
+
+# ==================== Proactive Nudges Endpoints ====================
+
+
+@router.get("/maxwell/nudges")
+async def get_nudges(
+    user_id: str,
+    manuscript_id: Optional[str] = None,
+    limit: int = 10,
+    include_viewed: bool = False,
+):
+    """
+    Get pending proactive nudges for a user.
+
+    Nudges are gentle suggestions Maxwell generates based on detected patterns.
+    """
+    from app.services.proactive_suggestions_service import create_proactive_suggestions_service
+
+    db = SessionLocal()
+    try:
+        nudge_service = create_proactive_suggestions_service(db)
+        nudges = nudge_service.get_pending_nudges(
+            user_id=user_id,
+            manuscript_id=manuscript_id,
+            limit=limit,
+            include_viewed=include_viewed,
+        )
+
+        return {
+            "success": True,
+            "data": [
+                {
+                    "id": n.id,
+                    "nudge_type": n.nudge_type,
+                    "priority": n.priority,
+                    "title": n.title,
+                    "message": n.message,
+                    "details": n.details,
+                    "manuscript_id": n.manuscript_id,
+                    "chapter_id": n.chapter_id,
+                    "viewed": n.viewed,
+                    "created_at": n.created_at.isoformat() if n.created_at else None,
+                }
+                for n in nudges
+            ]
+        }
+    finally:
+        db.close()
+
+
+@router.post("/maxwell/nudges/{nudge_id}/dismiss")
+async def dismiss_nudge(nudge_id: str, user_id: str):
+    """Dismiss a nudge."""
+    from app.services.proactive_suggestions_service import create_proactive_suggestions_service
+
+    db = SessionLocal()
+    try:
+        nudge_service = create_proactive_suggestions_service(db)
+        nudge = nudge_service.dismiss_nudge(nudge_id, user_id)
+
+        if not nudge:
+            raise HTTPException(status_code=404, detail="Nudge not found")
+
+        return {"success": True, "data": {"id": nudge.id, "dismissed": True}}
+    finally:
+        db.close()
+
+
+@router.post("/maxwell/nudges/{nudge_id}/view")
+async def mark_nudge_viewed(nudge_id: str, user_id: str):
+    """Mark a nudge as viewed."""
+    from app.services.proactive_suggestions_service import create_proactive_suggestions_service
+
+    db = SessionLocal()
+    try:
+        nudge_service = create_proactive_suggestions_service(db)
+        nudge = nudge_service.mark_nudge_viewed(nudge_id, user_id)
+
+        if not nudge:
+            raise HTTPException(status_code=404, detail="Nudge not found")
+
+        return {"success": True, "data": {"id": nudge.id, "viewed": True}}
+    finally:
+        db.close()
+
+
+@router.get("/maxwell/weekly-insight")
+async def get_weekly_insight(
+    user_id: str,
+    week_offset: int = 0,
+):
+    """
+    Get weekly writing insight summary.
+
+    week_offset: 0 = current week, 1 = last week, etc.
+    """
+    from app.services.proactive_suggestions_service import create_proactive_suggestions_service
+
+    db = SessionLocal()
+    try:
+        nudge_service = create_proactive_suggestions_service(db)
+        insight = nudge_service.get_weekly_insight(user_id, week_offset)
+
+        if not insight:
+            return {"success": True, "data": None}
+
+        return {
+            "success": True,
+            "data": {
+                "id": insight.id,
+                "week_start": insight.week_start.isoformat(),
+                "week_end": insight.week_end.isoformat(),
+                "summary": insight.summary,
+                "highlights": insight.highlights,
+                "areas_to_improve": insight.areas_to_improve,
+                "word_count_total": insight.word_count_total,
+                "chapters_worked_on": insight.chapters_worked_on,
+                "most_active_day": insight.most_active_day,
+                "analyses_run": insight.analyses_run,
+                "issues_found": insight.issues_found,
+                "issues_addressed": insight.issues_addressed,
+            }
+        }
+    finally:
+        db.close()
+
+
+# ==================== Story Health Endpoint ====================
+
+
+@router.post("/maxwell/story-health")
+async def get_story_health(request: StoryHealthRequest):
+    """
+    Get unified story health assessment.
+
+    Runs all agents and provides:
+    - Health scores per domain (character, plot, prose, pacing, consistency)
+    - Detected conflicts between agents with bridge suggestions
+    - Top strengths and concerns
+    - Primary focus recommendation
+    """
+    from app.agents.orchestrator import (
+        WritingAssistantOrchestrator,
+        CrossAgentReasoner,
+        create_cross_agent_reasoner,
+    )
+
+    try:
+        # Create orchestrator and run analysis
+        model_config = ModelConfig(
+            provider=ModelProvider(request.model_provider),
+            model_name=request.model_name,
+            temperature=0.3,
+            max_tokens=2048
+        )
+
+        orchestrator = WritingAssistantOrchestrator(
+            api_key=request.api_key,
+            default_model_config=model_config
+        )
+
+        # Run all agents
+        result = await orchestrator.analyze(
+            text=request.text,
+            user_id=request.user_id,
+            manuscript_id=request.manuscript_id,
+        )
+
+        # Create reasoner and assess health
+        reasoner = create_cross_agent_reasoner()
+        health = reasoner.assess_story_health(result.agent_results)
+
+        return {
+            "success": True,
+            "data": health.to_dict(),
+            "cost": {
+                "total": result.total_cost,
+                "formatted": f"${result.total_cost:.4f}"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

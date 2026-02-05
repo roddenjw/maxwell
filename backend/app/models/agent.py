@@ -4,7 +4,7 @@ Agent Database Models
 Models for agent analysis results, coaching sessions, and author learning.
 """
 
-from sqlalchemy import Column, String, Text, DateTime, Integer, Float, ForeignKey, JSON
+from sqlalchemy import Column, String, Text, DateTime, Integer, Float, ForeignKey, JSON, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -206,3 +206,193 @@ class SuggestionFeedback(Base):
 
     def __repr__(self):
         return f"<SuggestionFeedback(id={self.id}, action={self.action})>"
+
+
+# ==================== Maxwell Memory Models ====================
+
+
+class MaxwellConversation(Base):
+    """
+    Stores Maxwell conversation history for persistent memory.
+
+    Enables Maxwell to reference previous conversations:
+    "You mentioned before that pacing was a concern..."
+    """
+    __tablename__ = "maxwell_conversations"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=True, index=True)
+    chapter_id = Column(String, ForeignKey("chapters.id"), nullable=True)
+
+    # Interaction details
+    interaction_type = Column(String, nullable=False)  # chat, analysis, quick_check, explain
+    user_message = Column(Text, nullable=True)  # User's input (for chat)
+    analyzed_text = Column(Text, nullable=True)  # Text that was analyzed
+    maxwell_response = Column(Text, nullable=False)  # Maxwell's response
+    response_type = Column(String, nullable=False)  # chat, analysis, quick_check, explanation
+
+    # Structured feedback data (for analysis responses)
+    feedback_data = Column(JSON, default=dict)  # {priorities, highlights, teaching_moments}
+
+    # Context
+    agents_consulted = Column(JSON, default=list)  # Which agents contributed
+    focus_area = Column(String, nullable=True)  # For quick checks: style, voice, etc.
+
+    # Performance metrics
+    cost = Column(Float, default=0.0)
+    tokens = Column(Integer, default=0)
+    execution_time_ms = Column(Integer, default=0)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    manuscript = relationship("Manuscript", foreign_keys=[manuscript_id])
+    insights = relationship("MaxwellInsight", back_populates="conversation", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<MaxwellConversation(id={self.id}, type={self.interaction_type})>"
+
+
+class MaxwellInsight(Base):
+    """
+    Extracted insights from Maxwell conversations.
+
+    Enables quick retrieval of key points for context-aware responses.
+    """
+    __tablename__ = "maxwell_insights"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=True, index=True)
+    conversation_id = Column(String, ForeignKey("maxwell_conversations.id"), nullable=False)
+
+    # Insight details
+    category = Column(String, nullable=False)  # character, plot, style, pacing, dialogue, etc.
+    insight_text = Column(Text, nullable=False)
+    subject = Column(String, nullable=True)  # Character name, chapter, etc.
+
+    # Sentiment and importance
+    sentiment = Column(String, default="neutral")  # positive, negative, suggestion, neutral
+    importance = Column(Float, default=0.5)  # 0.0 to 1.0
+
+    # Resolution tracking
+    resolved = Column(String, default="pending")  # pending, addressed, dismissed
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    conversation = relationship("MaxwellConversation", back_populates="insights")
+
+    def __repr__(self):
+        return f"<MaxwellInsight(id={self.id}, category={self.category})>"
+
+
+class MaxwellPreferences(Base):
+    """
+    User preferences for Maxwell's behavior.
+
+    Allows customization of tone, depth, and focus areas.
+    """
+    __tablename__ = "maxwell_preferences"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, unique=True, index=True)
+
+    # Voice preferences
+    preferred_tone = Column(String, default="encouraging")  # encouraging, direct, teaching, celebratory, formal, casual
+    feedback_depth = Column(String, default="standard")  # brief, standard, comprehensive
+    teaching_mode = Column(String, default="auto")  # on, off, auto
+    priority_focus = Column(String, default="all")  # plot, character, prose, pacing, all
+
+    # Proactive suggestions
+    proactive_suggestions = Column(String, default="on")  # on, off, minimal
+
+    # Additional preferences as JSON for flexibility
+    extra_preferences = Column(JSON, default=dict)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<MaxwellPreferences(user={self.user_id})>"
+
+
+# ==================== Proactive Suggestions Models ====================
+
+
+class ProactiveNudge(Base):
+    """
+    Proactive suggestions from Maxwell.
+
+    Gentle nudges based on detected patterns or issues.
+    """
+    __tablename__ = "proactive_nudges"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    manuscript_id = Column(String, ForeignKey("manuscripts.id"), nullable=True, index=True)
+    chapter_id = Column(String, ForeignKey("chapters.id"), nullable=True)
+
+    # Nudge content
+    nudge_type = Column(String, nullable=False)  # consistency_issue, pacing_concern, character_drift, etc.
+    priority = Column(String, default="medium")  # low, medium, high
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    details = Column(JSON, default=dict)
+
+    # Deduplication
+    content_hash = Column(String, nullable=True, index=True)
+
+    # Status
+    dismissed = Column(Boolean, default=False)
+    dismissed_at = Column(DateTime, nullable=True)
+    viewed = Column(Boolean, default=False)
+    viewed_at = Column(DateTime, nullable=True)
+
+    # Expiration
+    expires_at = Column(DateTime, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<ProactiveNudge(id={self.id}, type={self.nudge_type})>"
+
+
+class WeeklyInsight(Base):
+    """
+    Weekly writing insights for users.
+
+    Summarizes writing activity and patterns over the past week.
+    """
+    __tablename__ = "weekly_insights"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    week_start = Column(DateTime, nullable=False)
+    week_end = Column(DateTime, nullable=False)
+
+    # Insight content
+    summary = Column(Text, nullable=False)
+    highlights = Column(JSON, default=list)  # What went well
+    areas_to_improve = Column(JSON, default=list)  # Suggestions
+
+    # Activity metrics
+    word_count_total = Column(Integer, default=0)
+    chapters_worked_on = Column(Integer, default=0)
+    most_active_day = Column(String, nullable=True)
+
+    # Analysis stats
+    analyses_run = Column(Integer, default=0)
+    issues_found = Column(Integer, default=0)
+    issues_addressed = Column(Integer, default=0)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<WeeklyInsight(user={self.user_id}, week={self.week_start})>"

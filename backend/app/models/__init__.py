@@ -14,7 +14,11 @@ from app.models.entity_state import EntityTimelineState
 from app.models.foreshadowing import ForeshadowingPair, ForeshadowingType
 from app.models.achievement import Achievement, AchievementProgress, AchievementType, ACHIEVEMENT_METADATA
 from app.models.shareable_recap import ShareableRecap
-from app.models.agent import AgentAnalysis, CoachSession, CoachMessage, AuthorLearning, SuggestionFeedback
+from app.models.agent import (
+    AgentAnalysis, CoachSession, CoachMessage, AuthorLearning, SuggestionFeedback,
+    MaxwellConversation, MaxwellInsight, MaxwellPreferences,
+    ProactiveNudge, WeeklyInsight
+)
 from app.models.privacy import AuthorPrivacyPreferences, ConsentRecord, AIInteractionAudit, ContentSharingLevel, ConsentType
 from app.models.carbon import CarbonMetric, CarbonReport, CarbonBudget, ENERGY_ESTIMATES_MICRO_KWH, CARBON_INTENSITY_BY_REGION
 from app.models.wiki import (
@@ -75,6 +79,13 @@ __all__ = [
     "CoachMessage",
     "AuthorLearning",
     "SuggestionFeedback",
+    # Maxwell Memory
+    "MaxwellConversation",
+    "MaxwellInsight",
+    "MaxwellPreferences",
+    # Proactive Suggestions
+    "ProactiveNudge",
+    "WeeklyInsight",
     # Privacy
     "AuthorPrivacyPreferences",
     "ConsentRecord",
