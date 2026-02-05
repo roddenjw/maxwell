@@ -1,6 +1,6 @@
 # Maxwell Project Progress
 
-**Last Updated:** 2026-02-02
+**Last Updated:** 2026-02-03
 **Overall Completion:** 96% across all phases
 **Current Focus:** Desktop Distribution + Maxwell Unified Polish
 
@@ -182,6 +182,92 @@
 ---
 
 ## Recent Completions (Last 2 Weeks)
+
+### February 4, 2026
+- **Feature 4: Character Voice Consistency Analyzer - Complete**
+  - **Backend VoiceAnalysisService:**
+    - Dialogue extraction with character attribution (regex-based)
+    - Voice metrics computation: avg sentence length, vocabulary complexity, formality score
+    - Contraction rate, question rate, exclamation rate analysis
+    - Signature words and common phrases detection
+    - Type-token ratio for vocabulary richness
+    - Filler words and emotion markers tracking
+  - **Backend Models:**
+    - CharacterVoiceProfile model for storing computed voice metrics
+    - VoiceInconsistency model for detected issues with severity levels
+    - VoiceComparison model for comparing character voice distinctiveness
+    - Database migration for voice profile tables
+  - **API Endpoints (9 endpoints):**
+    - `GET /api/voice-analysis/profile/{character_id}` - Get/build voice profile
+    - `POST /api/voice-analysis/analyze/{manuscript_id}` - Run consistency analysis
+    - `GET /api/voice-analysis/compare/{char_a}/{char_b}` - Compare voices
+    - `GET /api/voice-analysis/inconsistencies/{manuscript_id}` - List issues
+    - `PUT /api/voice-analysis/inconsistencies/{id}/resolve` - Resolve issue
+    - `PUT /api/voice-analysis/inconsistencies/{id}/dismiss` - Dismiss issue
+    - `GET /api/voice-analysis/summary/{manuscript_id}` - Voice summary
+    - `POST /api/voice-analysis/profiles/build-all/{manuscript_id}` - Build all
+    - `GET /api/voice-analysis/health` - Health check
+  - **Frontend VoiceProfilePanel:**
+    - Three tabs: Profiles, Issues, Compare
+    - Voice profile cards with metrics visualization
+    - Inconsistency list with resolve/dismiss actions
+    - Character comparison with similarity scores
+  - **Files Created:**
+    - `backend/app/models/voice_profile.py` (155 lines)
+    - `backend/app/services/voice_analysis_service.py` (550 lines)
+    - `backend/app/api/routes/voice_analysis.py` (458 lines)
+    - `backend/migrations/versions/voice_profiles_001.py`
+    - `frontend/src/components/VoiceAnalysis/VoiceProfilePanel.tsx` (450 lines)
+  - **Impact:** Writers can now analyze character dialogue for voice consistency
+
+- **Feature 5: Visual Timeline Enhancement - Complete**
+  - **EnhancedSwimlaneTimeline Component:**
+    - Character swimlanes with emotional arc overlays
+    - Conflict markers between characters (vertical connecting lines)
+    - Sentiment color coding on event nodes
+    - Story beat annotations and progression visualization
+    - High importance event indicators (stars)
+    - Interactive tooltips with event details
+    - Character filtering and selection
+  - **TensionHeatmap Component:**
+    - Tension/conflict density visualization across story timeline
+    - Heatmap bars showing tension levels by story section
+    - Color gradient from blue (low) to red (high tension)
+    - Conflict markers showing number of conflicts per section
+    - Pacing analysis recommendations (5 rule-based suggestions)
+    - Stats: avg tension, peak tension, total conflicts
+    - Selected section details panel
+  - **Files Created:**
+    - `frontend/src/components/Timeline/EnhancedSwimlaneTimeline.tsx` (650 lines)
+    - `frontend/src/components/Timeline/TensionHeatmap.tsx` (400 lines)
+  - **Impact:** Timeline visualization now shows character journeys with conflict/tension context
+
+- **Feature 6: Foreshadowing Tracker Expansion - Complete**
+  - **Backend ForeshadowingDetectorService:**
+    - Auto-detection of potential setups using pattern matching
+    - 6 pattern categories: Chekhov's Guns, Prophecies, Symbols, Hints, Parallels
+    - 30+ regex patterns for detecting narrative promises
+    - Payoff detection based on keyword matching with prior setups
+    - Setup-payoff matching with similarity scoring
+    - Confidence scoring based on pattern specificity
+    - Writing suggestions for unresolved narrative promises
+  - **API Endpoints (2 new endpoints):**
+    - `POST /api/foreshadowing/detect/{manuscript_id}` - Auto-detect foreshadowing
+    - `POST /api/foreshadowing/detect/{manuscript_id}/confirm` - Confirm detection
+  - **Frontend ForeshadowingThreading Component:**
+    - Visual thread representation of setup-payoff connections
+    - Auto-detection panel with detected setups
+    - Thread cards showing setup → payoff connections
+    - Unresolved threads highlighted as warnings (Chekhov violations)
+    - Confidence indicators and type filtering
+    - "Confirm & Track" workflow for detected pairs
+  - **Files Created:**
+    - `backend/app/services/foreshadowing_detector_service.py` (600 lines)
+    - `frontend/src/components/Timeline/ForeshadowingThreading.tsx` (550 lines)
+  - **Files Modified:**
+    - `backend/app/api/routes/foreshadowing.py` (+80 lines)
+    - `frontend/src/components/Timeline/index.ts` (+4 exports)
+  - **Impact:** Writers can auto-detect foreshadowing and visually track narrative threads
 
 ### February 2, 2026
 - **Story Structure Guide Agent (NEW)**
@@ -381,6 +467,83 @@
     - `frontend/src/components/Maxwell/index.ts`
     - `frontend/src/hooks/useMaxwell.ts`
     - Updated: `smart_coach_agent.py`, `agents.py`, `api.ts`, `agentStore.ts`, `App.tsx`, `EditorToolbar.tsx`
+
+### February 3, 2026 (Part 2)
+- **Feature 3: Scrivener Import - Complete**
+  - **Backend ScrivenerImportService:**
+    - Parses Scrivener 3 .scriv projects from zipped folders
+    - Reads .scrivx XML manifest for binder structure
+    - Extracts RTF content using striprtf library
+    - Identifies special folders: Draft, Characters, Locations, Research
+    - Converts folder hierarchy to Maxwell chapters
+    - Creates Codex entities from character/location sheets
+  - **API Endpoints:**
+    - `POST /api/import/scrivener/preview` - Preview import before committing
+    - `POST /api/import/scrivener` - Full import with options
+    - Query params: import_characters, import_locations, import_research
+  - **Frontend ScrivenerImportModal:**
+    - Drag & drop file upload with react-dropzone
+    - Two-step flow: upload → preview → import
+    - Shows document counts and word counts before importing
+    - Checkboxes to select what to import
+    - Success screen with import statistics
+  - **Files Created:**
+    - `backend/app/services/scrivener_import_service.py` (530 lines)
+    - `frontend/src/components/Import/ScrivenerImportModal.tsx` (450 lines)
+  - **Files Modified:**
+    - `backend/app/api/routes/import_routes.py` (+235 lines)
+    - `frontend/src/components/Import/index.ts`
+  - **Import Features:**
+    - Draft folder → Maxwell chapters (preserves hierarchy)
+    - Character sheets → Codex CHARACTER entities
+    - Location documents → Codex LOCATION entities
+    - Research folder → Notes (optional)
+    - Preserves Scrivener metadata (status, labels, targets)
+  - **Impact**: Users can now migrate from Scrivener to Maxwell with one upload
+
+### February 3, 2026
+- **Feature 2: Fast Coach Expansion - Complete**
+  - **New ReadabilityAnalyzer:**
+    - Flesch-Kincaid Grade Level, Flesch Reading Ease, Gunning Fog Index
+    - Coleman-Liau Index, Automated Readability Index (ARI)
+    - Genre-specific targets (young adult, thriller, literary fiction, etc.)
+    - Teaching points for improving prose complexity
+  - **New SentenceStarterAnalyzer:**
+    - Detects 3+ consecutive sentences starting with same word
+    - Identifies pronoun overuse (>40% threshold)
+    - Flags "The" overuse (>25% threshold)
+    - Catches weak starters (there was, it was constructions)
+  - **New OverusedPhrasesAnalyzer:**
+    - 100+ overused phrases in database with alternatives
+    - Categories: physical_reaction, transition, description, action, emotion, time
+    - Examples: "took a deep breath", "heart pounded", "blood ran cold"
+    - Teaching points per category explaining why phrases are problematic
+  - **Enhanced DialogueAnalyzer with Said-ism Detection:**
+    - Categorizes tags: invisible (said/asked), alternative, fancy, impossible
+    - Counts action beats vs dialogue tags
+    - Flags impossible tags (smiled, laughed used as speech verbs)
+    - Balance analysis with professional fiction benchmarks
+  - **Frontend ReadabilityGauge Component:**
+    - Visual grade level gauge with genre targets
+    - Detailed metrics display (words/sentence, complex word %)
+    - Genre selector with appropriate target ranges
+  - **Integration:**
+    - Updated WritingFeedbackService with all new analyzers
+    - Updated Fast Coach API to call new analyzers
+    - New SuggestionTypes: READABILITY, SENTENCE_VARIETY, OVERUSED_PHRASE, DIALOGUE_TAGS
+    - Stats tracking for all new issue types
+  - **Files Created:**
+    - `backend/app/services/fast_coach/readability_analyzer.py` (349 lines)
+    - `backend/app/services/fast_coach/sentence_starter_analyzer.py` (323 lines)
+    - `backend/app/services/fast_coach/overused_phrases_analyzer.py` (279 lines)
+    - `frontend/src/components/Editor/ReadabilityGauge.tsx` (180 lines)
+  - **Files Modified:**
+    - `backend/app/services/fast_coach/dialogue_analyzer.py` (+250 lines)
+    - `backend/app/services/fast_coach/types.py` (+4 suggestion types)
+    - `backend/app/services/writing_feedback_service.py` (+150 lines)
+    - `backend/app/api/routes/fast_coach.py` (+15 lines)
+    - `frontend/src/types/writingFeedback.ts` (+3 stats fields)
+  - **Impact**: Fast Coach now provides comprehensive writing analysis beyond basic grammar
 
 ### January 25, 2026 (Night - Later)
 - **LangChain Agent Framework - All Phases Complete (1-5)**

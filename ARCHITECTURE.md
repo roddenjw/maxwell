@@ -1,6 +1,6 @@
 # Maxwell Architecture
 
-**Last Updated:** 2026-01-08
+**Last Updated:** 2026-02-04
 **Related Docs:** [CLAUDE.md](CLAUDE.md) | [PATTERNS.md](PATTERNS.md) | [WORKFLOW.md](WORKFLOW.md)
 
 ---
@@ -420,6 +420,217 @@ coach_messages         # Individual messages in sessions
 author_learning        # Learned preferences and patterns
 suggestion_feedback    # User response to suggestions
 ```
+
+---
+
+## World Wiki: The Narrative Backbone
+
+### Philosophy: Single Source of Truth
+
+The **World Wiki** is the architectural foundation that unifies all Maxwell features. Rather than having disconnected analysis tools, the wiki serves as a **central knowledge graph** that:
+
+1. **Stores all narrative facts** - Characters, locations, items, world rules, relationships
+2. **Provides context to all agents** - Every AI query draws from wiki knowledge
+3. **Enables consistency checking** - All validators reference the same truth source
+4. **Supports auto-population** - AI extracts facts from writing and suggests wiki updates
+5. **Lives at the World level** - Shared across manuscripts in a series/universe
+
+### Why Wiki-Centric Architecture?
+
+**Problem:** In competitive tools (Sudowrite, Novelcrafter), features feel "disparate and scattered." Character tracking, timeline validation, world rules, and AI assistance operate independently, leading to inconsistent suggestions and duplicated information.
+
+**Solution:** The World Wiki acts as the **narrative backbone**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        WORLD WIKI                                │
+│  (Single Source of Truth for all narrative elements)            │
+│                                                                  │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐            │
+│  │  Characters  │ │  Locations   │ │    Items     │            │
+│  │  - Facts     │ │  - Geography │ │  - Properties│            │
+│  │  - Arcs      │ │  - Culture   │ │  - Lore      │            │
+│  │  - Relations │ │  - History   │ │  - Rules     │            │
+│  └──────────────┘ └──────────────┘ └──────────────┘            │
+│                                                                  │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐            │
+│  │ World Rules  │ │ Relationships│ │   Factions   │            │
+│  │  - Magic     │ │  - States    │ │  - Politics  │            │
+│  │  - Physics   │ │  - Evolution │ │  - Alliances │            │
+│  │  - Social    │ │  - Conflicts │ │  - Culture   │            │
+│  └──────────────┘ └──────────────┘ └──────────────┘            │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+         ┌────────────────────┼────────────────────┐
+         │                    │                    │
+         ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   AI Agents     │  │   Validators    │  │   Analyzers     │
+│  - Continuity   │  │  - POV          │  │  - Pacing       │
+│  - Style        │  │  - Timeline     │  │  - Subplots     │
+│  - Voice        │  │  - Rules        │  │  - Beats        │
+│  Query wiki for │  │  Check against  │  │  Reference wiki │
+│  character facts│  │  wiki rules     │  │  for context    │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
+
+### Wiki Data Model
+
+```
+worlds
+├── wiki_entries (characters, locations, items, factions, concepts, events)
+│   ├── structured_data (JSON - type-specific fields)
+│   ├── aliases (alternative names)
+│   ├── tags (categorization)
+│   └── confidence_score (AI vs human certainty)
+├── world_rules (magic_system, physical_law, social_rule, cultural, temporal)
+│   ├── validation_keywords (trigger detection)
+│   ├── severity (error, warning, info)
+│   └── examples (usage patterns)
+├── character_arcs (per manuscript)
+│   ├── arc_template (hero's journey, redemption, etc.)
+│   ├── planned_arc vs detected_arc
+│   └── arc_beats (mapped to chapters)
+├── relationship_entries
+│   ├── relationship_type (family, romantic, rival, etc.)
+│   ├── state_history (evolution over time)
+│   └── wiki_consistency_link
+└── wiki_changes (approval queue)
+    ├── change_type (create, update, delete)
+    ├── confidence (AI certainty)
+    ├── source_text (where extracted from)
+    └── status (pending, approved, rejected)
+```
+
+### Agent Wiki Integration
+
+All agents access the wiki through a standardized tool set:
+
+```python
+# Wiki Query Tools (read-only)
+query_wiki(world_id, query, entry_types, limit)
+get_character_facts(character_name, world_id)
+get_location_facts(location_name, world_id)
+get_world_rules(world_id, rule_type)
+get_relationship_state(char_a, char_b, world_id)
+
+# Consistency Check Tools
+check_rule_violations(text, world_id, rule_types)
+check_character_consistency(character_name, text, world_id)
+
+# Wiki Update Tools (suggestions only)
+suggest_wiki_update(world_id, change_type, entry_type, title, ...)
+suggest_character_update(world_id, character_name, field, value, ...)
+```
+
+**Key Principle:** Agents **never modify the wiki directly**. All changes go through the approval queue for author review.
+
+### Auto-Population Pipeline
+
+The wiki grows automatically as writers work:
+
+```
+Writer saves chapter
+        │
+        ▼
+┌─────────────────────────────────────┐
+│     WikiAutoPopulator.on_chapter_save│
+│  1. Extract entities (NER)          │
+│  2. Extract world rules (patterns)  │
+│  3. Detect relationships            │
+│  4. Track location details          │
+└─────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────┐
+│     WikiChange Queue (Pending)      │
+│  - Each extraction = change request │
+│  - Includes source text, confidence │
+│  - Deduplicates against existing    │
+└─────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────┐
+│     Author Review Dashboard         │
+│  - Approve individual changes       │
+│  - Bulk approve high-confidence     │
+│  - Edit before accepting            │
+│  - Reject with reason               │
+└─────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────┐
+│     Wiki Updated                    │
+│  - New entries created              │
+│  - Existing entries enriched        │
+│  - Agents now have richer context   │
+└─────────────────────────────────────┘
+```
+
+### Consistency Engine
+
+The wiki powers a comprehensive consistency system:
+
+| Analyzer | Wiki Data Used | What It Checks |
+|----------|----------------|----------------|
+| POV Consistency | Character knowledge scope | Head-hopping, inappropriate knowledge |
+| Scene Purpose | Story structure, arcs | Every scene advances plot/character |
+| Relationship Evolution | Relationship states | Natural progression, no sudden jumps |
+| World Rules | Magic/physics/social rules | Text doesn't violate established rules |
+| Character Consistency | Physical traits, personality | Contradictions in descriptions |
+| Timeline Validation | Events, locations, travel | Temporal impossibilities |
+
+### Updated Context Hierarchy
+
+With the wiki, agents now operate with a **five-level** context hierarchy:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  AUTHOR CONTEXT (Persistent across all work)                    │
+│  - Writing style preferences, strengths, weaknesses             │
+│  - Overused words/patterns, favorite techniques                 │
+├─────────────────────────────────────────────────────────────────┤
+│  WORLD WIKI (Shared across universe) ◄── NEW: Central backbone  │
+│  - All characters, locations, items, factions                   │
+│  - World rules (magic, physics, social, cultural)               │
+│  - Relationships and their evolution                            │
+│  - Character arcs and progression                               │
+├─────────────────────────────────────────────────────────────────┤
+│  SERIES CONTEXT (Shared within series)                          │
+│  - Plot threads and arcs across books                           │
+│  - Character development, series timeline                       │
+├─────────────────────────────────────────────────────────────────┤
+│  MANUSCRIPT CONTEXT (Current work)                              │
+│  - Chapters, scenes, current position                           │
+│  - Manuscript-specific timeline, outline                        │
+├─────────────────────────────────────────────────────────────────┤
+│  CHAPTER/SCENE CONTEXT (Immediate focus)                        │
+│  - Current text being analyzed                                  │
+│  - Local POV character, active scene purpose                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### ADR-006: World Wiki as Central Context Backbone
+
+**Context:** Maxwell's features (AI agents, validators, analyzers) were operating independently, each maintaining their own understanding of the story world. This led to inconsistent suggestions and duplicated effort.
+
+**Decision:** Implement the World Wiki as the **single source of truth** for all narrative elements. All AI features query the wiki for context rather than inferring from raw text alone.
+
+**Consequences:**
+- ✅ Unified context across all features
+- ✅ Agents give consistent, wiki-aware suggestions
+- ✅ Authors maintain control via approval queue
+- ✅ Knowledge persists across manuscripts in a world
+- ✅ Deep analysis (POV, pacing, subplots) references established facts
+- ⚠️ Requires wiki population before full effectiveness
+- ⚠️ Auto-population needs careful confidence thresholds
+- ⚠️ Author approval queue adds friction (by design)
+
+**Implementation:**
+- Models: `backend/app/models/wiki.py`, `character_arc.py`
+- Services: `wiki_service.py`, `wiki_auto_populator.py`, `pov_consistency_service.py`, etc.
+- Agent Tools: `backend/app/agents/tools/wiki_tools.py`
+- API: `/api/wiki/*`, `/api/analysis/*`
 
 ---
 

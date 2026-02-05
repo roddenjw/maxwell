@@ -31,3 +31,9 @@ export { default as CharacterLocationTracker } from './CharacterLocationTracker'
 // Foreshadowing Components
 export { default as ForeshadowingTracker } from './ForeshadowingTracker';
 export { default as ForeshadowingPairCard } from './ForeshadowingPairCard';
+export { default as ForeshadowingThreading } from './ForeshadowingThreading';
+
+// Conflict and Tension Visualization
+export { default as ConflictTracker } from './ConflictTracker';
+export { default as EnhancedSwimlaneTimeline } from './EnhancedSwimlaneTimeline';
+export { default as TensionHeatmap } from './TensionHeatmap';

@@ -17,6 +17,9 @@ from app.services.fast_coach import (
     ConsistencyChecker,
     Suggestion
 )
+from app.services.fast_coach.readability_analyzer import ReadabilityAnalyzer
+from app.services.fast_coach.sentence_starter_analyzer import SentenceStarterAnalyzer
+from app.services.fast_coach.overused_phrases_analyzer import OverusedPhrasesAnalyzer
 from app.services.openrouter_service import OpenRouterService
 
 
@@ -58,6 +61,9 @@ class AIAnalyzeResponse(BaseModel):
 style_analyzer = StyleAnalyzer()
 word_analyzer = WordAnalyzer()
 dialogue_analyzer = DialogueAnalyzer()
+readability_analyzer = ReadabilityAnalyzer()
+sentence_starter_analyzer = SentenceStarterAnalyzer()
+overused_phrases_analyzer = OverusedPhrasesAnalyzer()
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -92,6 +98,19 @@ async def analyze_text(
         # Run dialogue analysis
         dialogue_suggestions = dialogue_analyzer.analyze(request.text)
         all_suggestions.extend(dialogue_suggestions)
+
+        # Run readability analysis (for longer texts)
+        if len(request.text) >= 200:
+            readability_suggestions = readability_analyzer.analyze(request.text)
+            all_suggestions.extend(readability_suggestions)
+
+        # Run sentence starter analysis
+        sentence_suggestions = sentence_starter_analyzer.analyze(request.text)
+        all_suggestions.extend(sentence_suggestions)
+
+        # Run overused phrases analysis
+        overused_suggestions = overused_phrases_analyzer.analyze(request.text)
+        all_suggestions.extend(overused_suggestions)
 
         # Run consistency check if requested and manuscript_id provided
         if request.check_consistency and request.manuscript_id:
@@ -237,7 +256,15 @@ async def health_check():
         "data": {
             "status": "ok",
             "service": "fast-coach",
-            "analyzers": ["style", "word", "dialogue", "consistency"],
+            "analyzers": [
+                "style",
+                "word",
+                "dialogue",
+                "readability",
+                "sentence_starter",
+                "overused_phrases",
+                "consistency"
+            ],
             "ai_enabled": True
         }
     }

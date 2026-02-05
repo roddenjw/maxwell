@@ -2,8 +2,8 @@
 
 > **Quick Start:** This is the entry point for Maxwell development. Choose the guide you need below.
 
-**Last Updated:** 2026-01-08
-**Version:** 2.0
+**Last Updated:** 2026-02-04
+**Version:** 2.1
 
 ---
 
@@ -85,6 +85,7 @@ curl http://localhost:8000/health
 - Architecture layers (backend 3-tier, frontend component-store-API)
 - Database schema
 - Key architectural decisions (ADRs)
+- **World Wiki** - The narrative backbone (single source of truth for all features)
 
 ### "I'm adding a new feature"
 → Read [WORKFLOW.md](WORKFLOW.md) Section 3.5: Feature Development Process
@@ -142,6 +143,32 @@ Maxwell is a **local-first fiction writing IDE** with invisible engineering:
 ```
 Frontend Components → Zustand Stores → API Client → Backend Routes → Services → Models → Database
 ```
+
+### World Wiki: The Narrative Backbone
+The **World Wiki** is the architectural foundation that unifies all Maxwell features:
+
+- **Single Source of Truth** - All narrative facts (characters, locations, rules, relationships) live in the wiki
+- **Agent Context Provider** - Every AI agent queries the wiki for consistent context
+- **Auto-Population** - AI extracts facts from writing and suggests wiki updates via approval queue
+- **World-Level Scope** - Wiki data is shared across manuscripts in the same world/universe
+
+```
+                    WORLD WIKI
+                        │
+        ┌───────────────┼───────────────┐
+        ▼               ▼               ▼
+   AI Agents       Validators      Analyzers
+   (Continuity,    (POV, Rules,   (Pacing,
+    Style, Voice)   Timeline)      Subplots)
+```
+
+**Key Files:**
+- Models: `backend/app/models/wiki.py`, `character_arc.py`
+- Services: `wiki_service.py`, `wiki_auto_populator.py`
+- Agent Tools: `backend/app/agents/tools/wiki_tools.py`
+- Analysis: `pov_consistency_service.py`, `pacing_optimizer_service.py`, etc.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md#world-wiki-the-narrative-backbone) for full details.
 
 ### Design System
 - **Vellum:** Warm cream background (feels like parchment)
@@ -208,8 +235,20 @@ Maxwell/
 ├── backend/
 │   ├── app/
 │   │   ├── api/routes/      # API endpoints
+│   │   │   ├── wiki.py      # World Wiki endpoints
+│   │   │   └── analysis.py  # Deep analysis endpoints
 │   │   ├── models/          # Database models
+│   │   │   ├── wiki.py      # WikiEntry, WorldRule, WikiChange
+│   │   │   └── character_arc.py  # Character arcs
 │   │   ├── services/        # Business logic
+│   │   │   ├── wiki_service.py           # Wiki CRUD + consistency
+│   │   │   ├── wiki_auto_populator.py    # AI extraction pipeline
+│   │   │   ├── pov_consistency_service.py
+│   │   │   ├── pacing_optimizer_service.py
+│   │   │   └── subplot_tracker_service.py
+│   │   ├── agents/
+│   │   │   └── tools/
+│   │   │       └── wiki_tools.py  # LangChain wiki tools
 │   │   ├── database.py      # SQLAlchemy config
 │   │   └── main.py          # FastAPI app
 │   ├── migrations/          # Alembic migrations
@@ -218,6 +257,7 @@ Maxwell/
 ├── frontend/
 │   └── src/
 │       ├── components/      # React components (feature-based)
+│       │   └── Wiki/        # Wiki UI components
 │       ├── stores/          # Zustand state management
 │       ├── types/           # TypeScript types
 │       ├── lib/             # API client, utilities
@@ -238,22 +278,24 @@ Maxwell/
 ### "Where is the X model defined?"
 - **Backend models:** `backend/app/models/`
 - Look for: `manuscript.py`, `entity.py`, `timeline.py`, `outline.py`
+- **Wiki models:** `wiki.py` (WikiEntry, WorldRule, WikiChange), `character_arc.py`
 
 ### "Where is the X API endpoint?"
 - **Backend routes:** `backend/app/api/routes/`
 - Look for: `chapters.py`, `codex.py`, `timeline.py`, `outlines.py`
+- **Wiki/Analysis:** `wiki.py`, `analysis.py`
 
 ### "Where is the X component?"
 - **Frontend components:** `frontend/src/components/{Feature}/`
-- Features: `Codex/`, `Timeline/`, `Outline/`, `Editor/`
+- Features: `Codex/`, `Timeline/`, `Outline/`, `Editor/`, `Wiki/`
 
 ### "Where is the X store?"
 - **Zustand stores:** `frontend/src/stores/`
-- Look for: `codexStore.ts`, `timelineStore.ts`, `outlineStore.ts`
+- Look for: `codexStore.ts`, `timelineStore.ts`, `outlineStore.ts`, `wikiStore.ts`
 
 ### "How do I call the X API?"
 - **API client:** `frontend/src/lib/api.ts`
-- Exports: `manuscriptApi`, `codexApi`, `timelineApi`, `outlineApi`
+- Exports: `manuscriptApi`, `codexApi`, `timelineApi`, `outlineApi`, `wikiApi`
 
 See [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for full directory structure
 
@@ -330,6 +372,7 @@ See [WORKFLOW.md](WORKFLOW.md) for full development workflow
 - **Backend architecture:** [ARCHITECTURE.md](ARCHITECTURE.md#backend-three-tier-pattern)
 - **Frontend architecture:** [ARCHITECTURE.md](ARCHITECTURE.md#frontend-component-store-api-pattern)
 - **Database schema:** [ARCHITECTURE.md](ARCHITECTURE.md#database-schema-overview)
+- **World Wiki (narrative backbone):** [ARCHITECTURE.md](ARCHITECTURE.md#world-wiki-the-narrative-backbone)
 
 ### Code examples
 - **API routes:** [PATTERNS.md](PATTERNS.md#creating-a-new-api-route)

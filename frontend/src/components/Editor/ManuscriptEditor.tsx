@@ -28,6 +28,10 @@ import EntityHighlightPlugin from './plugins/EntityHighlightPlugin';
 import RealtimeNLPPlugin from './plugins/RealtimeNLPPlugin';
 import FastCoachPlugin from './plugins/FastCoachPlugin';
 import SceneDetectionPlugin from './plugins/SceneDetectionPlugin';
+import WritingIssueHighlightPlugin from './plugins/WritingIssueHighlightPlugin';
+
+// Import writing feedback CSS
+import '@/styles/writing-feedback.css';
 import SelectionToolbar from './SelectionToolbar';
 import QuickEntityModal from './QuickEntityModal';
 import ThesaurusPopup from './ThesaurusPopup';
@@ -329,6 +333,15 @@ export default function ManuscriptEditor({
 
             {/* Fast Coach plugin - real-time writing suggestions */}
             {manuscriptId && <FastCoachPlugin manuscriptId={manuscriptId} enabled={true} />}
+
+            {/* Writing Feedback plugin - inline grammar/spelling/style highlighting */}
+            {manuscriptId && (
+              <WritingIssueHighlightPlugin
+                manuscriptId={manuscriptId}
+                chapterId={chapterId}
+                enabled={true}
+              />
+            )}
 
             {/* Scene Detection plugin - tracks which scene cursor is in */}
             {chapterId && (

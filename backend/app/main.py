@@ -23,7 +23,7 @@ from app.services import (
     GRAPH_AVAILABLE
 )
 from app.services.nlp_service import nlp_service
-from app.api.routes import versioning, manuscripts, codex, timeline, chapters, stats, realtime, fast_coach, recap, export, onboarding, outlines, brainstorming, worlds, entity_states, foreshadowing, import_routes, share, agents, privacy, carbon, thesaurus
+from app.api.routes import versioning, manuscripts, codex, timeline, chapters, stats, realtime, fast_coach, recap, export, onboarding, outlines, brainstorming, worlds, entity_states, foreshadowing, import_routes, share, agents, privacy, carbon, thesaurus, writing_feedback, voice_analysis, wiki, character_arcs, world_rules, analysis
 
 
 @asynccontextmanager
@@ -54,6 +54,7 @@ async def lifespan(app: FastAPI):
 
     print("🔒 Privacy protection enabled (AI training opt-out by default)")
     print("🌱 Carbon tracking enabled (SCI methodology)")
+    print("📚 World Wiki enabled (unified narrative backbone)")
 
     print("✅ Backend ready!")
 
@@ -103,6 +104,12 @@ app.include_router(agents.router)
 app.include_router(privacy.router)
 app.include_router(carbon.router)
 app.include_router(thesaurus.router)
+app.include_router(writing_feedback.router)
+app.include_router(voice_analysis.router)
+app.include_router(wiki.router)
+app.include_router(character_arcs.router)
+app.include_router(world_rules.router)
+app.include_router(analysis.router)
 
 
 @app.get("/")
