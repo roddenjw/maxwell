@@ -475,6 +475,8 @@ export const codexApi = {
     field_path: string;
     existing_data?: Record<string, any>;
     manuscript_context?: string;
+    entity_id?: string;
+    manuscript_id?: string;
   }): Promise<{ suggestion: string | string[]; usage: any; cost: { total: number; formatted: string } }> {
     const url = `${API_BASE_URL}/codex/entities/ai-field-suggestion`;
     const response = await fetch(url, {
@@ -568,6 +570,7 @@ export const codexApi = {
   async aiEntityFill(data: {
     api_key: string;
     entity_id: string;
+    manuscript_id?: string;
   }): Promise<{
     description: string;
     attributes: Record<string, any>;

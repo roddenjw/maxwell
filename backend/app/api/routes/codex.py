@@ -2,6 +2,7 @@
 Codex API routes for entity and relationship management
 """
 
+import logging
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -9,6 +10,8 @@ from typing import List, Dict, Any, Optional
 from app.services.codex_service import codex_service
 from app.services.nlp_service import nlp_service
 from app.services.ai_entity_service import ai_entity_service
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/codex", tags=["codex"])
@@ -77,6 +80,8 @@ class AIFieldSuggestionRequest(BaseModel):
     field_path: str
     existing_data: Optional[Dict[str, Any]] = None
     manuscript_context: Optional[str] = None
+    entity_id: Optional[str] = None
+    manuscript_id: Optional[str] = None
 
 
 class MergeEntitiesRequest(BaseModel):
@@ -98,6 +103,203 @@ class AIEntityFillRequest(BaseModel):
     """Request for AI-powered comprehensive entity fill from appearances"""
     api_key: str
     entity_id: str
+    manuscript_id: Optional[str] = None
+
+
+def _gather_entity_world_context(
+    entity_id: Optional[str] = None,
+    manuscript_id: Optional[str] = None,
+    entity_name: Optional[str] = None,
+) -> str:
+    """
+    Assemble rich world context for an entity to ground AI generation.
+
+    Queries wiki entries, world rules, culture data, chapter text mentions,
+    and related entities. Returns a formatted string (max ~4000 chars).
+    """
+    from app.database import SessionLocal
+    from app.models.manuscript import Manuscript, Chapter
+    from app.models.entity import Entity, Relationship
+    from app.models.world import World, Series
+    from app.models.wiki import WikiEntry
+    from app.models.world_rule import WorldRule
+    from app.services.wiki_service import WikiService
+    from app.services.culture_service import CultureService
+
+    db = SessionLocal()
+    try:
+        parts: list[str] = []
+
+        # --- Resolve entity and world ---
+        entity = None
+        world = None
+        manuscript = None
+        world_id = None
+
+        if entity_id:
+            entity = db.query(Entity).filter(Entity.id == entity_id).first()
+
+        if entity and entity.world_id:
+            world_id = entity.world_id
+        if entity and not world_id and entity.manuscript_id:
+            manuscript_id = manuscript_id or entity.manuscript_id
+
+        if not manuscript_id and entity:
+            manuscript_id = entity.manuscript_id
+
+        if manuscript_id:
+            manuscript = db.query(Manuscript).filter(Manuscript.id == manuscript_id).first()
+            if manuscript and not world_id and manuscript.series_id:
+                series = db.query(Series).filter(Series.id == manuscript.series_id).first()
+                if series:
+                    world_id = series.world_id
+
+        if world_id:
+            world = db.query(World).filter(World.id == world_id).first()
+
+        # --- World + manuscript metadata ---
+        if world:
+            parts.append(f"WORLD: {world.name}" + (f" — {world.description[:300]}" if world.description else ""))
+        if manuscript:
+            if manuscript.genre:
+                parts.append(f"GENRE: {manuscript.genre}")
+            if manuscript.premise:
+                parts.append(f"PREMISE: {manuscript.premise[:300]}")
+
+        # --- Linked wiki entry ---
+        wiki_service = WikiService(db)
+        wiki_content = ""
+        wiki_entry = None
+
+        if entity and entity.linked_wiki_entry_id:
+            wiki_entry = db.query(WikiEntry).filter(WikiEntry.id == entity.linked_wiki_entry_id).first()
+
+        if not wiki_entry and world_id and entity_name:
+            # Search by name
+            matches = wiki_service.search_entries(world_id, entity_name, limit=3)
+            if matches:
+                # Prefer exact title match
+                wiki_entry = next(
+                    (m for m in matches if m.title.lower() == entity_name.lower()),
+                    matches[0]
+                )
+
+        if wiki_entry:
+            wiki_parts = []
+            if wiki_entry.summary:
+                wiki_parts.append(wiki_entry.summary[:500])
+            if wiki_entry.structured_data:
+                sd = wiki_entry.structured_data
+                if isinstance(sd, dict):
+                    sd_lines = []
+                    for k, v in sd.items():
+                        if v:
+                            sd_lines.append(f"  {k}: {str(v)[:200]}")
+                    if sd_lines:
+                        wiki_parts.append("Structured data:\n" + "\n".join(sd_lines[:10]))
+            if wiki_entry.content and not wiki_entry.summary:
+                wiki_parts.append(wiki_entry.content[:500])
+            if wiki_parts:
+                wiki_content = "\n".join(wiki_parts)
+                parts.append(f"ESTABLISHED FACTS (from World Wiki):\n{wiki_content}")
+
+        # --- World rules ---
+        if world_id:
+            rules = db.query(WorldRule).filter(
+                WorldRule.world_id == world_id,
+                WorldRule.is_active == 1
+            ).limit(15).all()
+            if rules:
+                rule_lines = []
+                for r in rules:
+                    line = f"- [{r.rule_type}] {r.rule_name}"
+                    if r.rule_description:
+                        line += f": {r.rule_description[:150]}"
+                    rule_lines.append(line)
+                parts.append("WORLD RULES:\n" + "\n".join(rule_lines))
+
+        # --- Culture context ---
+        if world_id and entity_name:
+            try:
+                culture_service = CultureService(db)
+                culture_summary = culture_service.format_character_culture_summary(
+                    entity_name, world_id
+                )
+                if culture_summary:
+                    parts.append(f"CULTURAL CONTEXT:\n{culture_summary}")
+            except Exception:
+                pass  # Culture data may not exist
+
+        # --- Chapter text mentions ---
+        if manuscript_id and entity_name:
+            try:
+                chapters = db.query(Chapter).filter(
+                    Chapter.manuscript_id == manuscript_id,
+                    Chapter.content.ilike(f"%{entity_name}%")
+                ).order_by(Chapter.order_index).limit(10).all()
+
+                if chapters:
+                    mention_parts = []
+                    total_chars = 0
+                    for ch in chapters:
+                        if total_chars >= 3000:
+                            break
+                        # Find the mention in context
+                        content = ch.content or ""
+                        lower_content = content.lower()
+                        lower_name = entity_name.lower()
+                        idx = lower_content.find(lower_name)
+                        if idx >= 0:
+                            start = max(0, idx - 150)
+                            end = min(len(content), idx + len(entity_name) + 150)
+                            snippet = content[start:end].strip()
+                            if start > 0:
+                                snippet = "..." + snippet
+                            if end < len(content):
+                                snippet = snippet + "..."
+                            mention_parts.append(f"[{ch.title}]: {snippet}")
+                            total_chars += len(snippet)
+
+                    if mention_parts:
+                        parts.append("MANUSCRIPT MENTIONS:\n" + "\n".join(mention_parts))
+            except Exception:
+                pass
+
+        # --- Related entities ---
+        if entity_id:
+            try:
+                rels = db.query(Relationship).filter(
+                    (Relationship.source_entity_id == entity_id) |
+                    (Relationship.target_entity_id == entity_id)
+                ).limit(8).all()
+
+                if rels:
+                    rel_lines = []
+                    for r in rels:
+                        other_id = r.target_entity_id if r.source_entity_id == entity_id else r.source_entity_id
+                        other = db.query(Entity).filter(Entity.id == other_id).first()
+                        if other:
+                            desc = other.attributes.get("description", "")[:80] if other.attributes else ""
+                            rel_lines.append(
+                                f"- {other.name} ({other.type}, {r.relationship_type})"
+                                + (f": {desc}" if desc else "")
+                            )
+                    if rel_lines:
+                        parts.append("RELATED ENTITIES:\n" + "\n".join(rel_lines))
+            except Exception:
+                pass
+
+        result = "\n\n".join(parts)
+        # Truncate to ~4000 chars
+        if len(result) > 4000:
+            result = result[:4000] + "\n[...truncated]"
+        return result
+
+    except Exception as e:
+        logger.warning(f"Failed to gather entity world context: {e}")
+        return ""
+    finally:
+        db.close()
 
 
 # Entity Endpoints
@@ -320,6 +522,15 @@ async def add_appearance(request: AddAppearanceRequest):
 async def generate_field_suggestion(request: AIFieldSuggestionRequest):
     """Generate AI suggestion for a specific entity template field"""
     try:
+        # Gather rich world context if entity_id is provided
+        world_context = ""
+        if request.entity_id:
+            world_context = _gather_entity_world_context(
+                entity_id=request.entity_id,
+                manuscript_id=request.manuscript_id,
+                entity_name=request.entity_name,
+            )
+
         result = await ai_entity_service.generate_field_suggestion(
             api_key=request.api_key,
             entity_name=request.entity_name,
@@ -327,7 +538,8 @@ async def generate_field_suggestion(request: AIFieldSuggestionRequest):
             template_type=request.template_type,
             field_path=request.field_path,
             existing_data=request.existing_data or {},
-            manuscript_context=request.manuscript_context
+            manuscript_context=request.manuscript_context,
+            world_context=world_context or None,
         )
 
         if not result.get("success"):
@@ -583,6 +795,13 @@ async def ai_fill_entity(request: AIEntityFillRequest):
                 detail="No appearances found for this entity. AI Fill requires at least one appearance in the manuscript."
             )
 
+        # Gather rich world context
+        world_context = _gather_entity_world_context(
+            entity_id=entity.id,
+            manuscript_id=request.manuscript_id or entity.manuscript_id,
+            entity_name=entity.name,
+        )
+
         # Generate comprehensive fill
         result = await ai_entity_service.generate_comprehensive_entity_fill(
             api_key=request.api_key,
@@ -592,7 +811,8 @@ async def ai_fill_entity(request: AIEntityFillRequest):
             existing_data={
                 "attributes": entity.attributes or {},
                 "template_data": entity.template_data or {}
-            }
+            },
+            world_context=world_context or None,
         )
 
         if not result.get("success"):

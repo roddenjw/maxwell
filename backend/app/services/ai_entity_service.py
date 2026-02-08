@@ -193,7 +193,8 @@ class AIEntityService:
         template_type: str,
         field_path: str,
         existing_data: Dict[str, Any],
-        manuscript_context: Optional[str] = None
+        manuscript_context: Optional[str] = None,
+        world_context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Generate a suggestion for a specific entity field
@@ -206,6 +207,7 @@ class AIEntityService:
             field_path: Which field to generate (e.g., "physical.appearance")
             existing_data: Already filled template fields for context
             manuscript_context: Optional story context from manuscript
+            world_context: Optional rich world context (wiki, rules, culture, mentions)
 
         Returns:
             Dict with success, suggestion, and usage info
@@ -215,13 +217,26 @@ class AIEntityService:
         # Build the prompt
         field_hint = FIELD_PROMPTS.get(field_path, f"appropriate content for the {field_path.replace('.', ' ')} field")
 
+        # Build world-grounding instruction if context is available
+        world_grounding = ""
+        if world_context:
+            world_grounding = f"""
+The following world and manuscript context has been gathered for this entity. Use it to ground your generation:
+
+{world_context}
+
+"""
+
         system_prompt = f"""You are a creative writing assistant helping an author develop a {template_type.lower()} for their story.
 
 Your task is to generate {field_hint} for a {template_type.lower()} named "{entity_name}".
-
+{world_grounding}
 Guidelines:
-- Be specific and evocative, avoiding generic descriptions
-- Match the tone and style implied by the entity name and existing details
+- ONLY use races, species, creatures, and concepts that exist in the established world
+- Do NOT invent new species, races, or world elements not mentioned in the world context
+- Ground all descriptions in the established facts provided
+- If no world context is available, keep descriptions generic and adaptable
+- Be specific and evocative while staying consistent with the world
 - Create content that could inspire interesting story developments
 - Keep your response focused and appropriately sized for the field
 - Write in a way that's easy for the author to edit and build upon
@@ -435,7 +450,8 @@ Extract all available information about this entity from the context."""
         entity_name: str,
         entity_type: str,
         appearance_contexts: list,
-        existing_data: Dict[str, Any]
+        existing_data: Dict[str, Any],
+        world_context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Generate comprehensive entity content from all appearance contexts
@@ -446,6 +462,7 @@ Extract all available information about this entity from the context."""
             entity_type: Type (CHARACTER, LOCATION, ITEM, LORE, CULTURE, CREATURE, RACE)
             appearance_contexts: List of {chapter_title, summary, context_text}
             existing_data: Dict with "attributes" and "template_data" keys
+            world_context: Optional rich world context (wiki, rules, culture, mentions)
 
         Returns:
             Dict with generated description and attributes
@@ -477,15 +494,36 @@ Extract all available information about this entity from the context."""
             if template_parts:
                 template_context = "\n\nESTABLISHED TEMPLATE DATA:\n" + "\n".join(template_parts)
 
+        # Build world-grounding section
+        world_grounding = ""
+        if world_context:
+            world_grounding = f"""
+The following world and manuscript context has been gathered for this entity. Use it to ground your generation:
+
+{world_context}
+
+"""
+
         system_prompt = f"""You are an expert at analyzing fiction text to extract and synthesize information about story entities.
 
 Given all the appearances of a {entity_type.lower()} named "{entity_name}" throughout a story, generate comprehensive details about them.
-
+{world_grounding}
 {"Consider the established template data when generating the description - incorporate relevant details like physical characteristics, abilities, culture, and origin into the description." if template_data else ""}
+
+IMPORTANT RULES:
+- ONLY reference races, species, creatures, and concepts that exist in the established world
+- Do NOT invent world elements not present in the provided context
+- Ground all details in what the manuscript text and wiki actually say
+
+TIME-AWARE DESCRIPTIONS:
+- Track how the entity changes across appearances (ordered by chapter)
+- Note physical changes over time (e.g., "Before Chapter X they had [feature]; after [event] they [changed]")
+- Describe the entity's current state but note key changes with chapter context
+- If a character gains/loses features, relationships, or status, document the timeline
 
 Respond with a JSON object containing:
 {{
-  "description": "A comprehensive description synthesized from all appearances (2-3 paragraphs). Include relevant details from template data if available.",
+  "description": "A comprehensive description synthesized from all appearances (2-3 paragraphs). Include relevant details from template data if available. Note time-based changes.",
   "attributes": {{
     "appearance": "Physical description details found in the text",
     "personality": "Personality traits and behaviors observed",
@@ -507,6 +545,9 @@ APPEARANCES:
 {f"EXISTING ATTRIBUTES: {json.dumps(attributes)}" if attributes else ""}{template_context}
 
 Generate comprehensive details based on these appearances{" and incorporate the established template data" if template_data else ""}."""
+
+        if world_context:
+            user_prompt = f"WORLD CONTEXT:\n{world_context}\n\n" + user_prompt
 
         # Call OpenRouter
         openrouter = OpenRouterService(api_key)

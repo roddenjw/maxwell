@@ -766,6 +766,8 @@ export default function EntityDetail({
         field_path: field,
         existing_data: entity.attributes,
         manuscript_context: manuscript_context || undefined,
+        entity_id: entity.id,
+        manuscript_id: entity.manuscript_id,
       });
 
       // Apply the suggestion
@@ -802,6 +804,7 @@ export default function EntityDetail({
       const result = await codexApi.aiEntityFill({
         api_key: storedApiKey,
         entity_id: entity.id,
+        manuscript_id: entity.manuscript_id,
       });
 
       // Update entity with AI-generated content
