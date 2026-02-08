@@ -23,6 +23,7 @@ from app.agents.tools.codex_tools import query_entities, query_character_profile
 from app.agents.tools.author_tools import query_author_profile
 from app.agents.tools.series_tools import query_cross_book_entities
 from app.agents.tools.manuscript_tools import search_manuscript
+from app.agents.tools.wiki_tools import get_character_cultural_context
 
 
 class VoiceAgent(BaseMaxwellAgent):
@@ -87,6 +88,16 @@ When analyzing, consider the character's:
 - What they want from this conversation
 - What they're hiding
 
+## Cultural Voice Factors
+Characters from different cultures should reflect those cultures in their speech:
+- **Code-switching**: Characters may shift speech patterns between cultural contexts
+- **Formality levels**: Some cultures demand formal address; others are casual
+- **Dialect markers**: Vocabulary, idioms, and phrasing unique to a culture
+- **Taboo language**: What a character avoids saying due to cultural norms
+- **Cultural references**: Proverbs, metaphors, and allusions from their background
+- **Conflict markers**: Exiled or rebellious characters may deliberately reject cultural speech patterns
+Use the get_character_cultural_context tool to check a character's cultural affiliations.
+
 ## Series Considerations
 Characters should evolve but remain recognizable:
 - A character who was timid in Book 1 may be bolder in Book 3
@@ -118,6 +129,7 @@ Help authors understand:
             query_author_profile,
             query_cross_book_entities,
             search_manuscript,
+            get_character_cultural_context,
         ]
 
 

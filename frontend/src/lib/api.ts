@@ -4301,6 +4301,84 @@ export const thesaurusApi = {
 };
 
 /**
+ * Culture API (Culture-Entity Links)
+ * Wiki endpoints return raw responses (not wrapped in ApiResponse)
+ */
+export const cultureApi = {
+  async linkEntityToCulture(data: {
+    entity_entry_id: string;
+    culture_entry_id: string;
+    reference_type: string;
+    context?: string;
+  }) {
+    const response = await fetch(`${API_BASE_URL}/wiki/cultures/link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to link entity to culture');
+    }
+    return response.json();
+  },
+
+  async unlinkEntityFromCulture(referenceId: string) {
+    const response = await fetch(`${API_BASE_URL}/wiki/cultures/link/${referenceId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to unlink entity from culture');
+    }
+    return response.json();
+  },
+
+  async getEntityCultures(entryId: string) {
+    const response = await fetch(`${API_BASE_URL}/wiki/entries/${entryId}/cultures`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch entity cultures');
+    }
+    return response.json();
+  },
+
+  async getCultureMembers(cultureId: string, memberType?: string) {
+    const params = memberType ? `?member_type=${memberType}` : '';
+    const response = await fetch(`${API_BASE_URL}/wiki/cultures/${cultureId}/members${params}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch culture members');
+    }
+    return response.json();
+  },
+
+  async getCultureChildren(cultureId: string) {
+    const response = await fetch(`${API_BASE_URL}/wiki/cultures/${cultureId}/children`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch culture children');
+    }
+    return response.json();
+  },
+
+  async getWorldCultures(worldId: string) {
+    const response = await fetch(`${API_BASE_URL}/wiki/worlds/${worldId}/cultures`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch world cultures');
+    }
+    return response.json();
+  },
+
+  async getCharacterCulturalContext(worldId: string, characterName: string) {
+    const response = await fetch(
+      `${API_BASE_URL}/wiki/worlds/${worldId}/characters/${encodeURIComponent(characterName)}/cultural-context`
+    );
+    if (!response.ok) {
+      throw new Error('Failed to fetch cultural context');
+    }
+    return response.json();
+  },
+};
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
@@ -4329,5 +4407,6 @@ export default {
   agent: agentApi,
   thesaurus: thesaurusApi,
   writingFeedback: writingFeedbackApi,
+  culture: cultureApi,
   healthCheck,
 };

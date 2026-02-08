@@ -11,6 +11,7 @@ import type {
   WikiEntryUpdate,
 } from '../../types/wiki';
 import { WIKI_ENTRY_TYPE_INFO } from '../../types/wiki';
+import { cultureApi } from '../../lib/api';
 
 const ENTRY_TYPES: WikiEntryType[] = [
   'character',
@@ -52,8 +53,17 @@ export function WikiEntryEditor({
   const [newTag, setNewTag] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [parentCultureId, setParentCultureId] = useState<string>(entry?.parent_id || '');
+  const [availableCultures, setAvailableCultures] = useState<Array<{ id: string; title: string }>>([]);
 
   const isEditing = !!entry;
+
+  // Load cultures for parent culture dropdown
+  useEffect(() => {
+    cultureApi.getWorldCultures(worldId)
+      .then((cultures: any[]) => setAvailableCultures(cultures.map(c => ({ id: c.id, title: c.title }))))
+      .catch(() => setAvailableCultures([]));
+  }, [worldId]);
 
   const handleAddAlias = () => {
     if (newAlias.trim() && !aliases.includes(newAlias.trim())) {
@@ -96,6 +106,7 @@ export function WikiEntryEditor({
           content: content.trim() || undefined,
           aliases: aliases.length > 0 ? aliases : undefined,
           tags: tags.length > 0 ? tags : undefined,
+          parent_id: parentCultureId || undefined,
         };
         await onSave(updates);
       } else {
@@ -107,6 +118,7 @@ export function WikiEntryEditor({
           content: content.trim() || undefined,
           aliases: aliases.length > 0 ? aliases : undefined,
           tags: tags.length > 0 ? tags : undefined,
+          parent_id: parentCultureId || undefined,
         };
         await onSave(data);
       }
@@ -306,6 +318,31 @@ export function WikiEntryEditor({
                 </div>
               )}
             </div>
+
+            {/* Parent Culture (for non-culture entry types) */}
+            {entryType !== 'culture' && availableCultures.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Parent Culture
+                  <span className="text-xs text-gray-400 ml-1">(optional)</span>
+                </label>
+                <select
+                  value={parentCultureId}
+                  onChange={(e) => setParentCultureId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">None</option>
+                  {availableCultures.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      🎭 {c.title}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Organize this entry under a culture
+                </p>
+              </div>
+            )}
 
             {/* Error */}
             {error && (

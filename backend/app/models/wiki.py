@@ -80,6 +80,18 @@ class WikiReferenceType(str, Enum):
     MEMBER_OF = "member_of"
     LOCATED_IN = "located_in"
 
+    # Culture-specific reference types
+    BORN_IN = "born_in"
+    EXILED_FROM = "exiled_from"
+    ADOPTED_INTO = "adopted_into"
+    LEADER_OF = "leader_of"
+    REBEL_AGAINST = "rebel_against"
+    WORSHIPS = "worships"
+    TRADES_WITH = "trades_with"
+    ORIGINATED_IN = "originated_in"
+    SACRED_TO = "sacred_to"
+    RESENTS = "resents"
+
 
 class WikiEntry(Base):
     """

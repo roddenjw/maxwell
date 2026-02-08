@@ -537,6 +537,147 @@ def check_character_consistency(
         db.close()
 
 
+# ==================== Culture Tools ====================
+
+@tool
+def get_culture_facts(
+    culture_name: str,
+    world_id: str
+) -> Dict[str, Any]:
+    """
+    Get details about a culture including values, traditions, social structure, and members.
+
+    Args:
+        culture_name: Name of the culture to look up
+        world_id: The world ID to search in
+
+    Returns:
+        Culture facts including structured data, members, rules, and children
+    """
+    from app.services.culture_service import CultureService
+    from app.models.wiki import WikiEntry, WikiEntryType
+
+    db = next(get_db())
+    try:
+        # Find culture entry by name
+        entry = db.query(WikiEntry).filter(
+            WikiEntry.world_id == world_id,
+            WikiEntry.entry_type == WikiEntryType.CULTURE.value,
+            WikiEntry.title.ilike(f"%{culture_name}%")
+        ).first()
+
+        if not entry:
+            return {"found": False, "culture_name": culture_name}
+
+        service = CultureService(db)
+        return service.get_culture_facts(entry.id)
+    finally:
+        db.close()
+
+
+@tool
+def get_character_cultural_context(
+    character_name: str,
+    world_id: str
+) -> Dict[str, Any]:
+    """
+    Get a character's cultural affiliations and behavioral norms.
+
+    Returns cultures they belong to, cultural values, taboos, speech patterns,
+    and any cultural tensions (e.g., exiled from birth culture).
+
+    Args:
+        character_name: Name of the character
+        world_id: The world ID to search in
+
+    Returns:
+        Cultural context including cultures, values, taboos, norms, tensions
+    """
+    from app.services.culture_service import CultureService
+
+    db = next(get_db())
+    try:
+        service = CultureService(db)
+        return service.get_character_cultural_context(character_name, world_id)
+    finally:
+        db.close()
+
+
+@tool
+def check_cultural_consistency(
+    character_name: str,
+    text_to_check: str,
+    world_id: str
+) -> Dict[str, Any]:
+    """
+    Check if a character's behavior in text aligns with their cultural background.
+
+    Compares character actions/speech against known cultural values, taboos,
+    and behavioral norms. Flags potential violations.
+
+    Args:
+        character_name: Name of the character to check
+        text_to_check: Text containing the character's actions/dialogue
+        world_id: The world ID
+
+    Returns:
+        Consistency analysis with potential cultural violations
+    """
+    from app.services.culture_service import CultureService
+
+    db = next(get_db())
+    try:
+        service = CultureService(db)
+        ctx = service.get_character_cultural_context(character_name, world_id)
+
+        if not ctx.get("found"):
+            return {
+                "character_found": False,
+                "message": f"No wiki entry for {character_name}"
+            }
+
+        if not ctx.get("has_cultures"):
+            return {
+                "character_found": True,
+                "has_cultures": False,
+                "message": f"{character_name} has no culture links — cannot check cultural consistency"
+            }
+
+        # Build summary of cultural norms to check against
+        issues = []
+        text_lower = text_to_check.lower()
+
+        # Check taboos
+        for taboo in ctx.get("taboos", []):
+            taboo_words = taboo.lower().split()
+            for word in taboo_words:
+                if len(word) > 3 and word in text_lower:
+                    issues.append({
+                        "type": "potential_taboo_violation",
+                        "severity": "medium",
+                        "description": f"{character_name} may be violating cultural taboo: '{taboo}'",
+                        "taboo": taboo,
+                    })
+                    break
+
+        return {
+            "character_found": True,
+            "character_name": ctx["character_name"],
+            "has_cultures": True,
+            "cultures": [c["culture_title"] for c in ctx["cultures"]],
+            "values": ctx.get("values", []),
+            "taboos": ctx.get("taboos", []),
+            "behavioral_norms": ctx.get("behavioral_norms", []),
+            "speech_patterns": ctx.get("speech_patterns", []),
+            "cultural_tensions": ctx.get("cultural_tensions", []),
+            "issues_found": len(issues),
+            "issues": issues,
+            "note": "Use these cultural facts to assess whether the character's behavior in the text is consistent with their cultural background. Consider that characters may intentionally break norms."
+        }
+    finally:
+        db.close()
+
+
 # ==================== Analysis Tools ====================
 
 @tool
@@ -624,7 +765,10 @@ def get_wiki_tools():
         suggest_character_update,
         get_wiki_entry_detail,
         check_character_consistency,
-        get_character_arc_status
+        get_character_arc_status,
+        get_culture_facts,
+        get_character_cultural_context,
+        check_cultural_consistency,
     ]
 
 
@@ -639,7 +783,9 @@ def get_wiki_query_tools():
         get_all_characters,
         get_all_locations,
         get_wiki_entry_detail,
-        get_character_arc_status
+        get_character_arc_status,
+        get_culture_facts,
+        get_character_cultural_context,
     ]
 
 
@@ -650,7 +796,9 @@ def get_wiki_consistency_tools():
         get_world_rules,
         check_rule_violations,
         check_character_consistency,
-        get_relationship_state
+        get_relationship_state,
+        get_character_cultural_context,
+        check_cultural_consistency,
     ]
 
 

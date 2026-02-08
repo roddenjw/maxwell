@@ -5,7 +5,8 @@
 import { useState, useEffect } from 'react';
 import type { Entity, TemplateType } from '@/types/codex';
 import { EntityType, getEntityTypeColor, getEntityTypeIcon } from '@/types/codex';
-import { codexApi } from '@/lib/api';
+import { codexApi, cultureApi } from '@/lib/api';
+import { WIKI_REFERENCE_TYPE_INFO, type WikiReferenceType } from '@/types/wiki';
 import { toast } from '@/stores/toastStore';
 import { getErrorMessage } from '@/lib/retry';
 import {
@@ -14,6 +15,7 @@ import {
   getRoleById,
   getTropeById,
 } from '@/lib/characterArchetypes';
+import { CultureLinkManager } from '@/components/Wiki/CultureLinkManager';
 
 // Template field labels and icons for display
 const TEMPLATE_FIELD_CONFIG: Record<string, { label: string; icon: string }> = {
@@ -437,6 +439,133 @@ function TemplateDataEditor({
     </div>
   );
 }
+
+// ==================== Cultural Background Section ====================
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
+function CulturalBackgroundSection({ entityId, manuscriptId }: { entityId: string; manuscriptId: string }) {
+  const [wikiEntryId, setWikiEntryId] = useState<string | null>(null);
+  const [worldId, setWorldId] = useState<string | null>(null);
+  const [cultures, setCultures] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showLinkManager, setShowLinkManager] = useState(false);
+
+  useEffect(() => {
+    // Find the wiki entry linked to this codex entity
+    async function findWikiEntry() {
+      setIsLoading(true);
+      try {
+        // Get manuscript to find world_id
+        const msRes = await fetch(`${API_BASE}/manuscripts/${manuscriptId}`);
+        if (!msRes.ok) { setIsLoading(false); return; }
+        const msData = await msRes.json();
+        const ms = msData.data || msData;
+
+        // Get world_id from manuscript's series
+        let wId: string | null = null;
+        if (ms.series_id) {
+          const seriesRes = await fetch(`${API_BASE}/worlds/series/${ms.series_id}`);
+          if (seriesRes.ok) {
+            const seriesData = await seriesRes.json();
+            const series = seriesData.data || seriesData;
+            wId = series.world_id || null;
+          }
+        }
+
+        if (!wId) { setIsLoading(false); return; }
+        setWorldId(wId);
+
+        // Search for wiki entry linked to this entity
+        const wikiRes = await fetch(
+          `${API_BASE}/wiki/worlds/${wId}/entries?limit=500`
+        );
+        if (!wikiRes.ok) { setIsLoading(false); return; }
+        const wikiEntries = await wikiRes.json();
+        const linked = wikiEntries.find((e: any) => e.linked_entity_id === entityId);
+
+        if (linked) {
+          setWikiEntryId(linked.id);
+          const culturesData = await cultureApi.getEntityCultures(linked.id);
+          setCultures(culturesData);
+        }
+      } catch {
+        // Silently fail - culture section is optional
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    findWikiEntry();
+  }, [entityId, manuscriptId]);
+
+  if (isLoading) return null;
+  if (!wikiEntryId && cultures.length === 0) return null;
+
+  return (
+    <>
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 p-4 space-y-3" style={{ borderRadius: '2px' }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🎭</span>
+            <label className="text-sm font-sans font-semibold text-amber-800">
+              Cultural Background
+            </label>
+          </div>
+          {wikiEntryId && worldId && (
+            <button
+              onClick={() => setShowLinkManager(true)}
+              className="px-2 py-1 text-xs font-sans bg-amber-600 text-white hover:bg-amber-700 rounded-sm"
+            >
+              Manage Links
+            </button>
+          )}
+        </div>
+
+        {cultures.length === 0 ? (
+          <p className="text-sm text-amber-700 italic">
+            No cultural affiliations yet.
+            {wikiEntryId && ' Click "Manage Links" to add culture connections.'}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {cultures.map((c: any) => {
+              const refInfo = WIKI_REFERENCE_TYPE_INFO[c.reference_type as WikiReferenceType];
+              return (
+                <div
+                  key={c.reference_id}
+                  className="flex items-center gap-2 p-2 bg-white/60 rounded border border-amber-200"
+                >
+                  <span className="text-sm font-medium text-amber-900">{c.culture_title}</span>
+                  <span className="px-1.5 py-0.5 bg-amber-200 text-amber-800 text-xs rounded-full font-medium">
+                    {refInfo?.label || c.reference_type.replace(/_/g, ' ')}
+                  </span>
+                  {c.context && (
+                    <span className="text-xs text-amber-600 italic ml-1">{c.context}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {showLinkManager && wikiEntryId && worldId && (
+        <CultureLinkManager
+          entryId={wikiEntryId}
+          worldId={worldId}
+          entryTitle=""
+          onClose={() => setShowLinkManager(false)}
+          onLinksChanged={() => {
+            cultureApi.getEntityCultures(wikiEntryId).then(setCultures).catch(() => {});
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// ==================== Entity Detail Component ====================
 
 interface EntityDetailProps {
   entity: Entity;
@@ -997,6 +1126,9 @@ export default function EntityDetail({
             </p>
           )}
         </div>
+
+        {/* Cultural Background */}
+        <CulturalBackgroundSection entityId={entity.id} manuscriptId={entity.manuscript_id} />
 
         {/* Character Development Fields (Sanderson Methodology) - Only for CHARACTER type */}
         {(isEditing ? editedType : entity.type) === EntityType.CHARACTER && (

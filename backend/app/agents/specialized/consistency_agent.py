@@ -47,6 +47,7 @@ class ConsistencyFocus(str, Enum):
     WORLD = "world"
     RELATIONSHIP = "relationship"
     LOCATION = "location"
+    CULTURE = "culture"
     ALL = "all"
 
 
@@ -149,12 +150,15 @@ REALTIME_PROMPT_TEMPLATE = """Perform a quick consistency check on this text, fo
 ## World Rules
 {world_context}
 
+## Cultural Context
+{culture_context}
+
 ## Text to Check
 ---
 {text}
 ---
 
-Check for any contradictions with the established facts. Be concise - this is a real-time check while the author writes."""
+Check for any contradictions with the established facts, including cultural norms and behaviors. Be concise - this is a real-time check while the author writes."""
 
 
 FULL_SCAN_PROMPT_TEMPLATE = """Perform a comprehensive consistency analysis of this manuscript section.
@@ -171,6 +175,9 @@ FULL_SCAN_PROMPT_TEMPLATE = """Perform a comprehensive consistency analysis of t
 ## Relationships
 {relationship_context}
 
+## Cultural Context
+{culture_context}
+
 ## Text to Analyze
 ---
 {text}
@@ -182,6 +189,7 @@ Thoroughly check for:
 3. World rule violations
 4. Relationship inconsistencies
 5. Location/geography errors
+6. Cultural behavior violations (actions contradicting cultural values, taboos, or norms)
 
 Be comprehensive - this is a full manuscript scan."""
 
@@ -232,6 +240,7 @@ class ConsistencyAgent(BaseMaxwellAgent):
             entity_context = await self._load_entity_context(manuscript_id, focus)
             timeline_context = await self._load_timeline_context(manuscript_id)
             world_context = await self._load_world_context(manuscript_id)
+            culture_context = await self._load_culture_context(manuscript_id)
 
             # Build focused prompt
             prompt = REALTIME_PROMPT_TEMPLATE.format(
@@ -239,6 +248,7 @@ class ConsistencyAgent(BaseMaxwellAgent):
                 entity_context=entity_context,
                 timeline_context=timeline_context,
                 world_context=world_context,
+                culture_context=culture_context,
                 text=text[:3000]  # Limit text for real-time
             )
 
@@ -297,6 +307,7 @@ class ConsistencyAgent(BaseMaxwellAgent):
             timeline_context = await self._load_full_timeline(manuscript_id)
             world_context = await self._load_world_context(manuscript_id)
             relationship_context = await self._load_relationships(manuscript_id)
+            culture_context = await self._load_culture_context(manuscript_id)
 
             # Load chapter content
             chapters = await self._load_chapters(manuscript_id, chapter_ids)
@@ -311,6 +322,7 @@ class ConsistencyAgent(BaseMaxwellAgent):
                     timeline_context=timeline_context,
                     world_context=world_context,
                     relationship_context=relationship_context,
+                    culture_context=culture_context,
                     text=chapter.get("content", "")[:8000]
                 )
 
@@ -394,6 +406,10 @@ class ConsistencyAgent(BaseMaxwellAgent):
     async def _load_relationships(self, manuscript_id: str) -> str:
         """Load relationship data for full scan"""
         return f"[Relationships for manuscript {manuscript_id}]"
+
+    async def _load_culture_context(self, manuscript_id: str) -> str:
+        """Load cultural context for consistency checking"""
+        return f"[Cultural context for manuscript {manuscript_id}]"
 
     async def _load_chapters(
         self,

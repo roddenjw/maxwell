@@ -18,6 +18,7 @@ from app.database import get_db
 from app.services.wiki_service import WikiService, WikiConsistencyEngine
 from app.services.wiki_codex_bridge import WikiCodexBridge
 from app.services.wiki_auto_populator import WikiAutoPopulator
+from app.services.culture_service import CultureService
 from app.models.wiki import WikiEntryType, WikiEntryStatus, WikiChangeType, WikiReferenceType
 
 
@@ -460,6 +461,95 @@ def validate_against_world_rules(
         "violations": violations,
         "count": len(violations)
     }
+
+
+# ==================== Culture Endpoints ====================
+
+class CultureLinkCreate(BaseModel):
+    entity_entry_id: str
+    culture_entry_id: str
+    reference_type: str
+    context: Optional[str] = None
+
+
+@router.post("/cultures/link", response_model=WikiCrossReferenceResponse)
+def link_entity_to_culture(
+    data: CultureLinkCreate,
+    db: Session = Depends(get_db)
+):
+    """Link an entity to a culture with a relationship type"""
+    service = CultureService(db)
+    ref = service.link_entity_to_culture(
+        entity_entry_id=data.entity_entry_id,
+        culture_entry_id=data.culture_entry_id,
+        reference_type=data.reference_type,
+        context=data.context,
+    )
+    return ref
+
+
+@router.delete("/cultures/link/{reference_id}")
+def unlink_entity_from_culture(
+    reference_id: str,
+    db: Session = Depends(get_db)
+):
+    """Remove a culture link"""
+    service = CultureService(db)
+    if not service.unlink_entity_from_culture(reference_id):
+        raise HTTPException(status_code=404, detail="Culture link not found")
+    return {"status": "deleted", "id": reference_id}
+
+
+@router.get("/entries/{entry_id}/cultures")
+def get_entity_cultures(
+    entry_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get all cultures linked to an entity"""
+    service = CultureService(db)
+    return service.get_entity_cultures(entry_id)
+
+
+@router.get("/cultures/{culture_id}/members")
+def get_culture_members(
+    culture_id: str,
+    member_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get all members of a culture, optionally filtered by type"""
+    service = CultureService(db)
+    return service.get_culture_members(culture_id, member_type)
+
+
+@router.get("/cultures/{culture_id}/children")
+def get_culture_children(
+    culture_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get hierarchical children of a culture"""
+    service = CultureService(db)
+    return service.get_culture_children(culture_id)
+
+
+@router.get("/worlds/{world_id}/cultures")
+def get_world_cultures(
+    world_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get all cultures in a world with member counts"""
+    service = CultureService(db)
+    return service.get_world_cultures(world_id)
+
+
+@router.get("/worlds/{world_id}/characters/{character_name}/cultural-context")
+def get_character_cultural_context(
+    world_id: str,
+    character_name: str,
+    db: Session = Depends(get_db)
+):
+    """Get full cultural context for a character"""
+    service = CultureService(db)
+    return service.get_character_cultural_context(character_name, world_id)
 
 
 # ==================== Entry Type Metadata ====================

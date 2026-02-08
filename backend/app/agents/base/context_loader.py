@@ -81,6 +81,7 @@ class WorldContext:
     settings: Dict[str, Any] = field(default_factory=dict)
     world_entities: List[Dict[str, Any]] = field(default_factory=list)
     rules: List[str] = field(default_factory=list)  # Magic systems, laws of physics, etc.
+    cultures: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_prompt_context(self) -> str:
         """Convert to text suitable for prompt injection"""
@@ -103,6 +104,19 @@ class WorldContext:
             parts.append("\n### World Rules")
             for rule in self.rules[:10]:
                 parts.append(f"- {rule}")
+
+        if self.cultures:
+            parts.append(f"\n### Cultures ({len(self.cultures)} total)")
+            for culture in self.cultures[:10]:
+                line = f"- {culture.get('title')}"
+                sd = culture.get('structured_data', {})
+                if sd.get('values'):
+                    line += f" — Values: {', '.join(sd['values'][:3])}"
+                if sd.get('taboos'):
+                    line += f" | Taboos: {', '.join(sd['taboos'][:3])}"
+                parts.append(line)
+                if culture.get('member_count', 0) > 0:
+                    parts.append(f"  Members: {culture['member_count']}")
 
         if self.world_entities:
             parts.append(f"\n### World Entities ({len(self.world_entities)} total)")
@@ -347,6 +361,15 @@ class ContextLoader:
             if "world_rules" in settings:
                 rules.extend(settings["world_rules"])
 
+            # Load cultures from wiki
+            cultures = []
+            try:
+                from app.services.culture_service import CultureService
+                culture_service = CultureService(db)
+                cultures = culture_service.get_world_cultures(world_id)
+            except Exception:
+                pass  # Culture data is optional context
+
             return WorldContext(
                 world_id=world_id,
                 name=world.name,
@@ -361,7 +384,8 @@ class ContextLoader:
                     }
                     for e in world_entities
                 ],
-                rules=rules
+                rules=rules,
+                cultures=cultures,
             )
         finally:
             db.close()

@@ -21,6 +21,7 @@ from app.agents.tools.codex_tools import query_entities, query_character_profile
 from app.agents.tools.timeline_tools import query_timeline, query_character_locations
 from app.agents.tools.world_tools import query_world_rules
 from app.agents.tools.series_tools import query_series_context
+from app.agents.tools.wiki_tools import get_character_cultural_context, check_cultural_consistency
 
 
 class ContinuityAgent(BaseMaxwellAgent):
@@ -51,7 +52,8 @@ You analyze text for continuity issues including:
 2. **Timeline Logic** - Event ordering, travel time feasibility, temporal references
 3. **Relationship Continuity** - Established relationships, character dynamics, alliances/conflicts
 4. **World Rule Adherence** - Magic system rules, technology limits, social structures
-5. **Cross-Reference Accuracy** - Names, places, dates mentioned consistently
+5. **Cultural Consistency** - Character behavior aligns with cultural background (values, taboos, speech patterns)
+6. **Cross-Reference Accuracy** - Names, places, dates mentioned consistently
 
 ## Analysis Approach
 For each piece of text:
@@ -87,6 +89,8 @@ For each piece of text:
             query_character_locations,
             query_world_rules,
             query_series_context,
+            get_character_cultural_context,
+            check_cultural_consistency,
         ]
 
 

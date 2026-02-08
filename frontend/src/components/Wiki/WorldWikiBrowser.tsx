@@ -10,11 +10,14 @@ import type {
   WikiEntryType,
   WikiEntryCreate,
   WikiFilters,
-  WIKI_ENTRY_TYPE_INFO,
+  WikiReferenceType,
 } from '../../types/wiki';
+import { WIKI_REFERENCE_TYPE_INFO } from '../../types/wiki';
 import { WikiEntryCard } from './WikiEntryCard';
 import { WikiEntryEditor } from './WikiEntryEditor';
 import { WikiChangeQueue } from './WikiChangeQueue';
+import { CultureLinkManager } from './CultureLinkManager';
+import { cultureApi } from '../../lib/api';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -74,6 +77,9 @@ export default function WorldWikiBrowser({ world, onClose }: WorldWikiBrowserPro
   const [showChangeQueue, setShowChangeQueue] = useState(false);
   const [pendingChangesCount, setPendingChangesCount] = useState(0);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [showCultureLinks, setShowCultureLinks] = useState(false);
+  const [cultureMembers, setCultureMembers] = useState<any[]>([]);
+  const [entityCultures, setEntityCultures] = useState<any[]>([]);
 
   // Fetch entries
   const fetchEntries = useCallback(async () => {
@@ -143,6 +149,23 @@ export default function WorldWikiBrowser({ world, onClose }: WorldWikiBrowserPro
     fetchEntries();
     fetchPendingChanges();
   }, [fetchEntries, fetchPendingChanges]);
+
+  // Load culture data for selected entry
+  useEffect(() => {
+    if (!selectedEntry) {
+      setCultureMembers([]);
+      setEntityCultures([]);
+      return;
+    }
+
+    if (selectedEntry.entry_type === 'culture') {
+      cultureApi.getCultureMembers(selectedEntry.id).then(setCultureMembers).catch(() => setCultureMembers([]));
+    } else {
+      setCultureMembers([]);
+    }
+
+    cultureApi.getEntityCultures(selectedEntry.id).then(setEntityCultures).catch(() => setEntityCultures([]));
+  }, [selectedEntry?.id]);
 
   // Handle search
   useEffect(() => {
@@ -497,6 +520,93 @@ export default function WorldWikiBrowser({ world, onClose }: WorldWikiBrowserPro
                 </div>
               </div>
             )}
+            {/* Culture Members (shown when viewing a culture entry) */}
+            {selectedEntry.entry_type === 'culture' && cultureMembers.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
+                  Members ({cultureMembers.length})
+                </h4>
+                <div className="space-y-1.5">
+                  {(() => {
+                    const grouped: Record<string, any[]> = {};
+                    cultureMembers.forEach((m: any) => {
+                      const t = m.entity_type || 'other';
+                      if (!grouped[t]) grouped[t] = [];
+                      grouped[t].push(m);
+                    });
+                    return Object.entries(grouped).map(([type, members]) => (
+                      <div key={type}>
+                        <div className="text-xs font-medium text-gray-500 capitalize mb-1">
+                          {type.replace(/_/g, ' ')}
+                        </div>
+                        {members.map((m: any) => {
+                          const refInfo = WIKI_REFERENCE_TYPE_INFO[m.reference_type as WikiReferenceType];
+                          return (
+                            <div
+                              key={m.reference_id}
+                              className="flex items-center gap-2 pl-2 py-0.5 cursor-pointer hover:bg-gray-50 rounded"
+                              onClick={() => {
+                                const entry = entries.find(e => e.id === m.entity_id);
+                                if (entry) setSelectedEntry(entry);
+                              }}
+                            >
+                              <span className="text-sm text-gray-700">{m.entity_title}</span>
+                              <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full">
+                                {refInfo?.reverseLabel || m.reference_type.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Culture Links (shown for non-culture entries that have culture links) */}
+            {selectedEntry.entry_type !== 'culture' && entityCultures.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
+                  Cultures
+                </h4>
+                <div className="space-y-1.5">
+                  {entityCultures.map((c: any) => {
+                    const refInfo = WIKI_REFERENCE_TYPE_INFO[c.reference_type as WikiReferenceType];
+                    return (
+                      <div
+                        key={c.reference_id}
+                        className="flex items-center gap-2 p-2 bg-orange-50 rounded-lg border border-orange-200 cursor-pointer hover:bg-orange-100"
+                        onClick={() => {
+                          const entry = entries.find(e => e.id === c.culture_id);
+                          if (entry) setSelectedEntry(entry);
+                        }}
+                      >
+                        <span className="text-lg">🎭</span>
+                        <span className="text-sm font-medium text-gray-700">{c.culture_title}</span>
+                        <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full">
+                          {refInfo?.label || c.reference_type.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Link to Culture button */}
+            {selectedEntry.entry_type !== 'culture' && (
+              <div className="mb-4">
+                <button
+                  onClick={() => setShowCultureLinks(true)}
+                  className="w-full px-3 py-2 text-sm border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 flex items-center justify-center gap-2"
+                >
+                  <span>🎭</span>
+                  <span>Link to Culture</span>
+                </button>
+              </div>
+            )}
+
             <div className="mt-4 pt-4 border-t border-gray-200">
               <div className="text-xs text-gray-400 space-y-1">
                 <div>Type: {selectedEntry.entry_type.replace(/_/g, ' ')}</div>
@@ -542,6 +652,20 @@ export default function WorldWikiBrowser({ world, onClose }: WorldWikiBrowserPro
             setShowChangeQueue(false);
             fetchPendingChanges();
             fetchEntries();
+          }}
+        />
+      )}
+
+      {/* Culture Link Manager Modal */}
+      {showCultureLinks && selectedEntry && (
+        <CultureLinkManager
+          entryId={selectedEntry.id}
+          worldId={world.id}
+          entryTitle={selectedEntry.title}
+          onClose={() => setShowCultureLinks(false)}
+          onLinksChanged={() => {
+            // Reload culture data for the selected entry
+            cultureApi.getEntityCultures(selectedEntry.id).then(setEntityCultures).catch(() => {});
           }}
         />
       )}

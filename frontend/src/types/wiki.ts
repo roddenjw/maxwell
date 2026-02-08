@@ -40,7 +40,18 @@ export type WikiReferenceType =
   | 'enemy_of'
   | 'owns'
   | 'member_of'
-  | 'located_in';
+  | 'located_in'
+  // Culture-specific reference types
+  | 'born_in'
+  | 'exiled_from'
+  | 'adopted_into'
+  | 'leader_of'
+  | 'rebel_against'
+  | 'worships'
+  | 'trades_with'
+  | 'originated_in'
+  | 'sacred_to'
+  | 'resents';
 
 // ==================== Wiki Entry ====================
 
@@ -198,7 +209,35 @@ export const WIKI_REFERENCE_TYPE_INFO: Record<WikiReferenceType, {
   owns: { label: 'Owns', reverseLabel: 'Owned by' },
   member_of: { label: 'Member of', reverseLabel: 'Has member' },
   located_in: { label: 'Located in', reverseLabel: 'Contains' },
+  // Culture-specific reference types
+  born_in: { label: 'Born in', reverseLabel: 'Birthplace of' },
+  exiled_from: { label: 'Exiled from', reverseLabel: 'Exiled' },
+  adopted_into: { label: 'Adopted into', reverseLabel: 'Adopted' },
+  leader_of: { label: 'Leader of', reverseLabel: 'Led by' },
+  rebel_against: { label: 'Rebel against', reverseLabel: 'Opposed by' },
+  worships: { label: 'Worships', reverseLabel: 'Worshipped by' },
+  trades_with: { label: 'Trades with', reverseLabel: 'Trades with' },
+  originated_in: { label: 'Originated in', reverseLabel: 'Origin of' },
+  sacred_to: { label: 'Sacred to', reverseLabel: 'Holds sacred' },
+  resents: { label: 'Resents', reverseLabel: 'Resented by' },
 };
+
+/** Culture-specific reference types for UI filtering */
+export const CULTURE_REFERENCE_TYPES: WikiReferenceType[] = [
+  'born_in',
+  'exiled_from',
+  'adopted_into',
+  'leader_of',
+  'rebel_against',
+  'worships',
+  'trades_with',
+  'originated_in',
+  'sacred_to',
+  'resents',
+  'member_of',
+  'part_of',
+  'located_in',
+];
 
 // ==================== API Response Types ====================
 

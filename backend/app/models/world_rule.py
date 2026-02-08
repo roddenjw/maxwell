@@ -26,6 +26,7 @@ class RuleType(str, Enum):
     POLITICAL = "political"      # Political/governmental rules
     ECONOMIC = "economic"        # Economic system rules
     LINGUISTIC = "linguistic"    # Language rules
+    CULTURAL = "cultural"        # Cultural norms and traditions
     CUSTOM = "custom"            # User-defined category
 
 
