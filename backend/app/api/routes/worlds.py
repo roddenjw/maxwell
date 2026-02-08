@@ -121,6 +121,54 @@ class CopyEntityRequest(BaseModel):
     manuscript_id: str
 
 
+class MoveManuscriptRequest(BaseModel):
+    target_series_id: str
+    order_index: Optional[int] = None
+
+
+# ========================
+# Manuscript → World Resolution
+# ========================
+
+@router.get("/manuscripts/{manuscript_id}/world", response_model=WorldResponse)
+async def get_world_for_manuscript(
+    manuscript_id: str,
+    create: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Get the world a manuscript belongs to. If create=true and none exists, auto-create one."""
+    if create:
+        world = world_service.ensure_manuscript_has_world(db, manuscript_id)
+    else:
+        world = world_service.get_world_for_manuscript(db, manuscript_id)
+
+    if not world:
+        raise HTTPException(status_code=404, detail="No world found for this manuscript")
+    return world
+
+
+# ========================
+# Move Manuscript Between Worlds
+# ========================
+
+@router.post("/manuscripts/{manuscript_id}/move")
+async def move_manuscript(
+    manuscript_id: str,
+    request: MoveManuscriptRequest,
+    db: Session = Depends(get_db),
+):
+    """Move a manuscript to a different series (possibly cross-world)."""
+    result = world_service.move_manuscript_to_world(
+        db=db,
+        manuscript_id=manuscript_id,
+        target_series_id=request.target_series_id,
+        order_index=request.order_index,
+    )
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
 # ========================
 # World Endpoints
 # ========================

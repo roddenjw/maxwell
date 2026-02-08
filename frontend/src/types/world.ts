@@ -141,3 +141,16 @@ export interface DeleteResponse {
   success: boolean;
   message: string;
 }
+
+export interface MoveManuscriptRequest {
+  target_series_id: string;
+  order_index?: number;
+}
+
+export interface MoveManuscriptResponse {
+  entries_copied: number;
+  entries_merged: number;
+  changes_copied: number;
+  arcs_updated: number;
+  cross_world: boolean;
+}

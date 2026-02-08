@@ -16,6 +16,7 @@ import type {
   UpdateSeriesRequest,
   WorldEntityResponse,
   CreateWorldEntityRequest,
+  MoveManuscriptResponse,
 } from '../types/world';
 
 interface WorldStore {
@@ -56,6 +57,10 @@ interface WorldStore {
   fetchWorldEntities: (worldId: string, type?: string) => Promise<void>;
   createWorldEntity: (worldId: string, data: CreateWorldEntityRequest) => Promise<WorldEntityResponse>;
   getWorldEntities: (worldId: string) => WorldEntityResponse[];
+
+  // Manuscript → World
+  getWorldForManuscript: (manuscriptId: string, create?: boolean) => Promise<World>;
+  moveManuscriptToWorld: (manuscriptId: string, targetSeriesId: string, orderIndex?: number) => Promise<MoveManuscriptResponse>;
 
   // Utility
   clearError: () => void;
@@ -402,6 +407,54 @@ export const useWorldStore = create<WorldStore>()(
 
       getWorldEntities: (worldId: string) => {
         return get().worldEntities[worldId] || [];
+      },
+
+      // ========================
+      // Manuscript → World
+      // ========================
+
+      getWorldForManuscript: async (manuscriptId: string, create = false) => {
+        try {
+          set({ isLoading: true, error: null });
+          const world = await worldsApi.getWorldForManuscript(manuscriptId, create);
+          // Ensure world is in our local list
+          set((state) => {
+            const exists = state.worlds.some((w) => w.id === world.id);
+            return {
+              worlds: exists ? state.worlds : [...state.worlds, world],
+              isLoading: false,
+            };
+          });
+          return world;
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : 'Failed to get world for manuscript',
+            isLoading: false,
+          });
+          throw error;
+        }
+      },
+
+      moveManuscriptToWorld: async (
+        manuscriptId: string,
+        targetSeriesId: string,
+        orderIndex?: number
+      ) => {
+        try {
+          set({ isLoading: true, error: null });
+          const result = await worldsApi.moveManuscriptToWorld(manuscriptId, {
+            target_series_id: targetSeriesId,
+            order_index: orderIndex,
+          });
+          set({ isLoading: false });
+          return result;
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : 'Failed to move manuscript',
+            isLoading: false,
+          });
+          throw error;
+        }
       },
 
       // ========================

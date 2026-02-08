@@ -183,6 +183,40 @@
 
 ## Recent Completions (Last 2 Weeks)
 
+### February 8, 2026
+- **Wiki as Master + World Navigation + Manuscript Move**
+  - **Backend: Manuscript → World Resolution**
+    - `GET /worlds/manuscripts/{id}/world?create=true` endpoint
+    - `ensure_manuscript_has_world()` auto-creates world for standalone manuscripts
+  - **Backend: Manuscript Move Between Worlds**
+    - `POST /worlds/manuscripts/{id}/move` endpoint
+    - `move_manuscript_to_world()` handles same-world and cross-world moves
+    - Cross-world: copies/merges wiki entries, transfers changes, updates arcs
+  - **Backend: Wiki Merge Agent**
+    - New `wiki_merge_agent.py` — AI-powered merge of codex data into wiki entries
+    - Confidence threshold: >= 0.85 auto-merges, < 0.85 queues for review
+    - Falls back to simple field-level merge when no API key
+  - **Backend: Codex ↔ Wiki Sync**
+    - `codex_service.py` triggers wiki sync on entity create/update
+    - Entity delete clears wiki link without deleting wiki entry
+    - `agent_merge_entity_to_wiki()` in wiki_codex_bridge.py
+    - `assign_manuscript_to_series()` auto-populates codex from world wiki
+  - **Frontend: Wiki in World Library**
+    - "Series | Wiki" tab bar when viewing a world
+    - Wiki tab renders WorldWikiBrowser with full editing
+  - **Frontend: Wiki in Editor Sidebar**
+    - "World Wiki" nav item in UnifiedSidebar
+    - Wiki view in App.tsx with auto-world resolution
+    - Standalone manuscripts auto-create world on first wiki access
+  - **Frontend: Move Manuscript Modal**
+    - MoveManuscriptModal with world/series tree selector
+    - Cross-world warning panel
+    - "Move" button on manuscript cards in WorldLibrary
+  - **Frontend: API & Store Updates**
+    - `worldsApi.getWorldForManuscript()`, `moveManuscriptToWorld()`
+    - `worldStore.getWorldForManuscript()`, `moveManuscriptToWorld()`
+    - `MoveManuscriptRequest`, `MoveManuscriptResponse` types
+
 ### February 4, 2026
 - **Feature 4: Character Voice Consistency Analyzer - Complete**
   - **Backend VoiceAnalysisService:**

@@ -3,13 +3,16 @@
  * Main library view showing all worlds with navigation to series and manuscripts
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useWorldStore } from '../../stores/worldStore';
 import { toast } from '../../stores/toastStore';
 import type { World, Series } from '../../types/world';
 import WorldCard from './WorldCard';
 import CreateWorldModal from './CreateWorldModal';
 import SeriesExplorer from './SeriesExplorer';
+import MoveManuscriptModal from './MoveManuscriptModal';
+
+const WorldWikiBrowser = lazy(() => import('../Wiki/WorldWikiBrowser'));
 
 interface WorldLibraryProps {
   onOpenManuscript: (manuscriptId: string) => void;
@@ -46,6 +49,8 @@ export default function WorldLibrary({
 
   const [showCreateWorldModal, setShowCreateWorldModal] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('worlds');
+  const [worldTab, setWorldTab] = useState<'series' | 'wiki'>('series');
+  const [moveManuscriptId, setMoveManuscriptId] = useState<string | null>(null);
 
   // Fetch worlds on mount
   useEffect(() => {
@@ -68,6 +73,7 @@ export default function WorldLibrary({
 
   const handleSelectWorld = (world: World) => {
     setCurrentWorld(world.id);
+    setWorldTab('series');
     setViewMode('series');
   };
 
@@ -236,15 +242,52 @@ export default function WorldLibrary({
           </>
         )}
 
-        {/* Series View */}
+        {/* Series/Wiki View (when a world is selected but no series yet) */}
         {viewMode === 'series' && currentWorld && (
-          <SeriesExplorer
-            world={currentWorld}
-            series={seriesInWorld}
-            onSelectSeries={handleSelectSeries}
-            onBack={handleBackToWorlds}
-            isLoading={isLoading}
-          />
+          <>
+            {/* Tab Bar */}
+            <div className="flex gap-1 mb-6 border-b border-slate-ui">
+              <button
+                onClick={() => setWorldTab('series')}
+                className={`px-6 py-3 font-sans text-sm font-medium transition-colors border-b-2 -mb-px ${
+                  worldTab === 'series'
+                    ? 'border-bronze text-bronze'
+                    : 'border-transparent text-faded-ink hover:text-midnight'
+                }`}
+              >
+                Series
+              </button>
+              <button
+                onClick={() => setWorldTab('wiki')}
+                className={`px-6 py-3 font-sans text-sm font-medium transition-colors border-b-2 -mb-px ${
+                  worldTab === 'wiki'
+                    ? 'border-bronze text-bronze'
+                    : 'border-transparent text-faded-ink hover:text-midnight'
+                }`}
+              >
+                Wiki
+              </button>
+            </div>
+
+            {worldTab === 'series' ? (
+              <SeriesExplorer
+                world={currentWorld}
+                series={seriesInWorld}
+                onSelectSeries={handleSelectSeries}
+                onBack={handleBackToWorlds}
+                isLoading={isLoading}
+              />
+            ) : (
+              <Suspense fallback={
+                <div className="text-center py-20">
+                  <div className="text-4xl mb-4 text-bronze">&#x23F3;</div>
+                  <p className="text-faded-ink font-sans">Loading Wiki...</p>
+                </div>
+              }>
+                <WorldWikiBrowser world={currentWorld} />
+              </Suspense>
+            )}
+          </>
         )}
 
         {/* Manuscripts View */}
@@ -315,16 +358,29 @@ export default function WorldLibrary({
                       <p>{(manuscript.word_count || 0).toLocaleString()} words</p>
                       <p>Updated {formatDate(manuscript.updated_at)}</p>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenManuscript(manuscript.id);
-                      }}
-                      className="w-full px-4 py-2 bg-bronze hover:bg-bronze-dark text-white font-sans text-sm font-medium uppercase tracking-button transition-colors"
-                      style={{ borderRadius: '2px' }}
-                    >
-                      Open
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenManuscript(manuscript.id);
+                        }}
+                        className="flex-1 px-4 py-2 bg-bronze hover:bg-bronze-dark text-white font-sans text-sm font-medium uppercase tracking-button transition-colors"
+                        style={{ borderRadius: '2px' }}
+                      >
+                        Open
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMoveManuscriptId(manuscript.id);
+                        }}
+                        className="px-3 py-2 border border-slate-ui text-faded-ink hover:text-midnight hover:border-bronze font-sans text-sm transition-colors"
+                        style={{ borderRadius: '2px' }}
+                        title="Move to another world/series"
+                      >
+                        Move
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -340,6 +396,27 @@ export default function WorldLibrary({
           onCreated={(world) => {
             toast.success(`World "${world.name}" created!`);
             handleSelectWorld(world);
+          }}
+        />
+      )}
+
+      {/* Move Manuscript Modal */}
+      {moveManuscriptId && (
+        <MoveManuscriptModal
+          manuscriptId={moveManuscriptId}
+          currentWorldId={currentWorldId}
+          onClose={() => setMoveManuscriptId(null)}
+          onMoved={(result) => {
+            setMoveManuscriptId(null);
+            if (result.cross_world) {
+              toast.success(
+                `Manuscript moved! ${result.entries_copied} entries copied, ${result.entries_merged} merged.`
+              );
+            } else {
+              toast.success('Manuscript moved to new series.');
+            }
+            // Refresh data
+            if (currentSeriesId) fetchSeriesManuscripts(currentSeriesId);
           }}
         />
       )}

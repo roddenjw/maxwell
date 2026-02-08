@@ -10,13 +10,17 @@ The Codex is the manuscript-level view into the World Wiki:
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
+import asyncio
+import logging
 import uuid
 
 from app.models.entity import Entity, ENTITY_SCOPE_MANUSCRIPT, ENTITY_SCOPE_WORLD
-from app.models.wiki import WikiEntry, WikiEntryType, WikiEntryStatus
+from app.models.wiki import WikiEntry, WikiEntryType, WikiEntryStatus, WikiChange
 from app.models.world import World
 from app.models.manuscript import Manuscript
 from app.services.wiki_service import WikiService, generate_slug
+
+logger = logging.getLogger(__name__)
 
 
 # Map Codex entity types to Wiki entry types
@@ -291,6 +295,145 @@ class WikiCodexBridge:
                 })
 
         return stats
+
+    def agent_merge_entity_to_wiki(
+        self,
+        entity: Entity,
+        world_id: str,
+        api_key: Optional[str] = None,
+    ) -> Optional[WikiEntry]:
+        """
+        Sync a codex entity to wiki using AI merge agent when there's an
+        existing entry to merge with. Falls back to simple sync when:
+        - No API key available
+        - Entry is new (no conflict to resolve)
+        - Agent returns error
+
+        For existing entries with changes, the agent produces a merged version.
+        High confidence (>= 0.85) → auto-apply. Low confidence → queue WikiChange.
+        """
+        wiki_type = ENTITY_TO_WIKI_TYPE.get(entity.type, WikiEntryType.CHARACTER.value)
+
+        # Find existing wiki entry by link or name match
+        wiki_entry = None
+        if entity.linked_wiki_entry_id:
+            wiki_entry = self.db.query(WikiEntry).filter(
+                WikiEntry.id == entity.linked_wiki_entry_id
+            ).first()
+
+        if not wiki_entry:
+            wiki_entry = self.db.query(WikiEntry).filter(
+                WikiEntry.world_id == world_id,
+                WikiEntry.entry_type == wiki_type,
+                WikiEntry.title.ilike(entity.name)
+            ).first()
+
+        # New entry — create directly, no merge needed
+        if not wiki_entry:
+            return self.sync_entity_to_wiki(entity, world_id, create_if_missing=True)
+
+        # Link entity if not already linked
+        if not entity.linked_wiki_entry_id:
+            entity.linked_wiki_entry_id = wiki_entry.id
+            self.db.commit()
+
+        # No API key — fall back to simple merge
+        if not api_key:
+            return self._update_wiki_from_entity(entity, wiki_entry)
+
+        # Use AI merge agent
+        try:
+            from app.agents.specialized.wiki_merge_agent import merge_entity_into_wiki
+
+            existing_wiki = {
+                "title": wiki_entry.title,
+                "content": wiki_entry.content or "",
+                "structured_data": wiki_entry.structured_data or {},
+                "summary": wiki_entry.summary or "",
+                "aliases": wiki_entry.aliases or [],
+            }
+            incoming_entity = {
+                "name": entity.name,
+                "type": entity.type,
+                "attributes": entity.attributes or {},
+                "aliases": entity.aliases or [],
+            }
+
+            # Run async merge in sync context
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    result = pool.submit(
+                        asyncio.run,
+                        merge_entity_into_wiki(
+                            api_key=api_key,
+                            existing_wiki=existing_wiki,
+                            incoming_entity=incoming_entity,
+                            entry_type=wiki_type,
+                        )
+                    ).result()
+            else:
+                result = asyncio.run(
+                    merge_entity_into_wiki(
+                        api_key=api_key,
+                        existing_wiki=existing_wiki,
+                        incoming_entity=incoming_entity,
+                        entry_type=wiki_type,
+                    )
+                )
+
+            # High confidence — auto-apply
+            if result.confidence >= 0.85 and not result.needs_review:
+                updates = {
+                    "content": result.merged_content,
+                    "structured_data": result.merged_structured_data,
+                    "summary": result.merged_summary,
+                    "aliases": result.merged_aliases,
+                }
+
+                # Add manuscript to sources
+                sources = wiki_entry.source_manuscripts or []
+                if entity.manuscript_id and entity.manuscript_id not in sources:
+                    sources.append(entity.manuscript_id)
+                    updates["source_manuscripts"] = sources
+
+                return self.wiki_service.update_entry(wiki_entry.id, updates)
+
+            # Low confidence — queue for review
+            change = WikiChange(
+                id=str(uuid.uuid4()),
+                wiki_entry_id=wiki_entry.id,
+                world_id=world_id,
+                change_type="MERGE",
+                field_changed=None,
+                old_value={
+                    "content": wiki_entry.content,
+                    "structured_data": wiki_entry.structured_data,
+                    "summary": wiki_entry.summary,
+                    "aliases": wiki_entry.aliases,
+                },
+                new_value={
+                    "content": result.merged_content,
+                    "structured_data": result.merged_structured_data,
+                    "summary": result.merged_summary,
+                    "aliases": result.merged_aliases,
+                },
+                reason=result.reason,
+                source_text=f"Codex entity '{entity.name}' updated in manuscript",
+                source_manuscript_id=entity.manuscript_id,
+                confidence=result.confidence,
+                status="PENDING",
+                priority=1,
+            )
+            self.db.add(change)
+            self.db.commit()
+
+            return wiki_entry
+
+        except Exception as e:
+            logger.warning(f"Agent merge failed, falling back to simple merge: {e}")
+            return self._update_wiki_from_entity(entity, wiki_entry)
 
     def _update_wiki_from_entity(
         self,

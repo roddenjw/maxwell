@@ -86,6 +86,8 @@ import type {
   CopyEntityRequest,
   WorldEntityResponse,
   DeleteResponse,
+  MoveManuscriptRequest,
+  MoveManuscriptResponse,
 } from '@/types/world';
 
 import type {
@@ -2286,6 +2288,45 @@ export const worldsApi = {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || 'Failed to copy entity to manuscript');
+    }
+
+    return response.json();
+  },
+
+  // ========================
+  // Manuscript ↔ World
+  // ========================
+
+  async getWorldForManuscript(manuscriptId: string, create = false): Promise<World> {
+    const params = create ? '?create=true' : '';
+    const response = await fetch(
+      `${API_BASE_URL}/worlds/manuscripts/${manuscriptId}/world${params}`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get world for manuscript');
+    }
+
+    return response.json();
+  },
+
+  async moveManuscriptToWorld(
+    manuscriptId: string,
+    data: MoveManuscriptRequest
+  ): Promise<MoveManuscriptResponse> {
+    const response = await fetch(
+      `${API_BASE_URL}/worlds/manuscripts/${manuscriptId}/move`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to move manuscript');
     }
 
     return response.json();

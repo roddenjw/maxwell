@@ -3,6 +3,7 @@ Codex service for entity and relationship management
 Handles CRUD operations for characters, locations, items, and lore
 """
 
+import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
@@ -12,6 +13,45 @@ from app.database import SessionLocal
 from app.models.entity import Entity, Relationship, EntitySuggestion
 from app.models.scene import EntityAppearance
 from app.models.manuscript import Chapter
+
+logger = logging.getLogger(__name__)
+
+
+def _trigger_wiki_sync(entity_id: str, manuscript_id: str):
+    """
+    Trigger background wiki sync for an entity after create/update.
+    Uses agent merge if API key is available, falls back to simple sync.
+    Non-blocking — errors are logged but don't affect the codex operation.
+    """
+    try:
+        db = SessionLocal()
+        try:
+            entity = db.query(Entity).filter(Entity.id == entity_id).first()
+            if not entity:
+                return
+
+            # Find world for this manuscript
+            from app.services.world_service import world_service
+            world = world_service.get_world_for_manuscript(db, manuscript_id)
+            if not world:
+                return  # Standalone manuscript, no wiki to sync to
+
+            from app.services.wiki_codex_bridge import WikiCodexBridge
+            bridge = WikiCodexBridge(db)
+
+            # Try to get API key for agent merge
+            api_key = None
+            try:
+                import os
+                api_key = os.environ.get("OPENROUTER_API_KEY")
+            except Exception:
+                pass
+
+            bridge.agent_merge_entity_to_wiki(entity, world.id, api_key=api_key)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Wiki sync failed for entity {entity_id}: {e}")
 
 
 class CodexService:
@@ -58,6 +98,11 @@ class CodexService:
             db.add(entity)
             db.commit()
             db.refresh(entity)
+            db.expunge(entity)
+
+            # Trigger wiki sync (non-blocking)
+            _trigger_wiki_sync(entity.id, manuscript_id)
+
             return entity
         finally:
             db.close()
@@ -164,13 +209,18 @@ class CodexService:
             db.commit()
             db.refresh(entity)
             db.expunge(entity)
+
+            # Trigger wiki sync (non-blocking)
+            if entity.manuscript_id:
+                _trigger_wiki_sync(entity.id, entity.manuscript_id)
+
             return entity
         finally:
             db.close()
 
     def delete_entity(self, entity_id: str) -> bool:
         """
-        Delete entity
+        Delete entity. Clears wiki link but does NOT delete the wiki entry.
 
         Args:
             entity_id: Entity ID
@@ -184,6 +234,10 @@ class CodexService:
 
             if not entity:
                 return False
+
+            # Clear wiki link but don't delete wiki entry
+            if entity.linked_wiki_entry_id:
+                entity.linked_wiki_entry_id = None
 
             db.delete(entity)
             db.commit()
