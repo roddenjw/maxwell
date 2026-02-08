@@ -1,11 +1,8 @@
-import { useState, useEffect, useRef, Suspense, lazy } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import ManuscriptEditor from './components/Editor/ManuscriptEditor'
 import { CharacterSheetEditor, NotesEditor, TitlePageForm } from './components/Editor'
 import type { Chapter } from './lib/api'
 import ManuscriptLibrary from './components/ManuscriptLibrary'
-import { WorldLibrary } from './components/WorldLibrary'
-import { worldsApi } from './lib/api'
-import type { World } from './types/world'
 import { CodexMainView } from './components/Codex'
 import TimelineSidebar from './components/Timeline/TimelineSidebar'
 import DocumentNavigator from './components/Document/DocumentNavigator'
@@ -15,7 +12,7 @@ import UnifiedSidebar from './components/Navigation/UnifiedSidebar'
 import ToastContainer from './components/Common/ToastContainer'
 import KeyboardShortcutsModal from './components/Common/KeyboardShortcutsModal'
 import ViewLoadingSpinner from './components/Common/ViewLoadingSpinner'
-import { FeatureErrorBoundary } from './components/Common'
+import { FeatureErrorBoundary, BalanceWidget } from './components/Common'
 import { OutlineMainView } from './components/Outline'
 import { BrainstormingModal } from './components/Brainstorming'
 import { useManuscriptStore } from './stores/manuscriptStore'
@@ -41,13 +38,11 @@ import {
   LazyAnalyticsDashboard,
   LazyTimeMachine,
   LazyExportModal,
-  LazyRecapModal,
   LazyManuscriptWizard,
   LazyWelcomeModal,
   LazyFeatureTour,
   LazySettingsModal,
 } from './views'
-const LazyWorldWikiBrowser = lazy(() => import('./components/Wiki/WorldWikiBrowser'))
 import { AchievementDashboard } from './components/Achievements'
 
 function App() {
@@ -60,8 +55,7 @@ function App() {
   const { isCoachPanelOpen, setCoachPanelOpen } = useAgentStore()
   const { clearOutline } = useOutlineStore()
   const { loadAchievements, showDashboard: showAchievements, setShowDashboard: setShowAchievements, earnAchievement } = useAchievementStore()
-  const [activeView, setActiveView] = useState<'chapters' | 'codex' | 'wiki' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export' | 'outline'>('chapters')
-  const [currentWorld, setCurrentWorld] = useState<World | null>(null)
+  const [activeView, setActiveView] = useState<'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'analytics' | 'export' | 'outline'>('chapters')
   const [editorKey, setEditorKey] = useState(0) // Force editor re-mount on restore
   const [currentChapterContent, setCurrentChapterContent] = useState<string>('')
   const [currentChapterData, setCurrentChapterData] = useState<Chapter | null>(null)
@@ -88,7 +82,6 @@ function App() {
   const [showWelcome, setShowWelcome] = useState(false)
   const [showTour, setShowTour] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
-  const [libraryView, setLibraryView] = useState<'manuscripts' | 'worlds'>('manuscripts')
 
   // Track unsaved changes and warn before closing
   const { checkNavigateAway } = useUnsavedChanges(saveStatus === 'unsaved' || saveStatus === 'saving')
@@ -256,7 +249,7 @@ function App() {
     setActiveView('chapters') // Reset view
   }
 
-  const handleNavigate = (view: 'chapters' | 'codex' | 'wiki' | 'timeline' | 'timemachine' | 'coach' | 'recap' | 'analytics' | 'export' | 'outline') => {
+  const handleNavigate = (view: 'chapters' | 'codex' | 'timeline' | 'timemachine' | 'coach' | 'analytics' | 'export' | 'outline') => {
     setActiveView(view)
 
     // Track feature usage
@@ -274,14 +267,8 @@ function App() {
         case 'coach':
           analytics.fastCoachOpened(currentManuscriptId)
           break
-        case 'recap':
-          analytics.recapOpened(currentManuscriptId)
-          break
         case 'timemachine':
           analytics.timeMachineOpened(currentManuscriptId)
-          break
-        case 'wiki':
-          // Wiki opened
           break
         case 'outline':
           // Track outline opened if needed
@@ -302,19 +289,12 @@ function App() {
       if (!isCoachOpen) toggleCoach()
     } else if (view === 'outline') {
       // Outline is self-contained, no sidebar needed
-    } else if (view === 'wiki') {
-      // Wiki view — auto-create world if needed
-      if (!currentWorld && currentManuscriptId) {
-        worldsApi.getWorldForManuscript(currentManuscriptId, true)
-          .then(setCurrentWorld)
-          .catch(() => {});
-      }
     }
   }
 
   const handleRestoreSnapshot = async (snapshotId: string) => {
     if (!currentManuscriptId) {
-      alert('No manuscript selected')
+      toast.warning('No manuscript selected')
       return
     }
 
@@ -607,16 +587,6 @@ function App() {
     };
   }, [activeView]); // Only run when activeView changes, NOT when chapter changes
 
-  // Resolve world for current manuscript (for wiki view)
-  useEffect(() => {
-    if (!currentManuscriptId) {
-      setCurrentWorld(null);
-      return;
-    }
-    worldsApi.getWorldForManuscript(currentManuscriptId).then(setCurrentWorld).catch(() => {
-      setCurrentWorld(null);
-    });
-  }, [currentManuscriptId]);
 
   // Listen for openSettings custom event from brainstorming components
   useEffect(() => {
@@ -734,15 +704,25 @@ function App() {
 
         {/* Main Content Area */}
         <main className="flex-1 flex flex-col overflow-hidden">
-          {/* Minimal Header */}
+          {/* Header Bar */}
           <header className="border-b border-slate-ui bg-white px-6 py-3 flex-shrink-0">
-            <div className="flex items-center justify-end gap-4">
-              {/* Save status indicator */}
-              <span className="text-xs font-sans text-faded-ink">
-                {saveStatus === 'saved' && '✓ Saved'}
-                {saveStatus === 'saving' && '⋯ Saving...'}
-                {saveStatus === 'unsaved' && '• Unsaved changes'}
+            <div className="flex items-center justify-between gap-4">
+              {/* Left: Current chapter title */}
+              <span className="text-sm font-garamond text-midnight truncate">
+                {currentChapterData?.title
+                  ? `Chapter: ${currentChapterData.title}`
+                  : 'Select a chapter'}
               </span>
+
+              {/* Right: Balance + Save status */}
+              <div className="flex items-center gap-4">
+                <BalanceWidget onOpenSettings={() => setShowSettings(true)} />
+                <span className="text-xs font-sans text-faded-ink">
+                  {saveStatus === 'saved' && '\u2713 Saved'}
+                  {saveStatus === 'saving' && '\u22EF Saving...'}
+                  {saveStatus === 'unsaved' && '\u2022 Unsaved changes'}
+                </span>
+              </div>
             </div>
           </header>
 
@@ -852,9 +832,15 @@ function App() {
               </div>
             )}
 
-            {/* Coach View */}
+            {/* Coach View — Chapters layout with coach sidebar */}
             {activeView === 'coach' && (
               <>
+                <div className="w-64 flex-shrink-0">
+                  <DocumentNavigator
+                    manuscriptId={currentManuscript.id}
+                    onChapterSelect={handleChapterSelect}
+                  />
+                </div>
                 <div className="flex-1 overflow-auto">
                   {currentChapterId ? (
                     <ManuscriptEditor
@@ -869,21 +855,13 @@ function App() {
                   ) : (
                     <div className="flex items-center justify-center h-full bg-vellum">
                       <div className="text-center max-w-md p-8">
-                        <div className="text-6xl mb-6">✨</div>
+                        <div className="text-6xl mb-6">&#x2728;</div>
                         <h2 className="font-garamond text-2xl font-semibold text-midnight mb-4">
                           Writing Coach
                         </h2>
                         <p className="font-sans text-faded-ink mb-6">
                           Select a chapter to get AI-powered writing assistance.
-                          The coach analyzes your text in real-time.
                         </p>
-                        <button
-                          onClick={() => setActiveView('chapters')}
-                          className="px-6 py-3 bg-bronze hover:bg-bronze-dark text-white font-sans font-medium uppercase tracking-button transition-colors"
-                          style={{ borderRadius: '2px' }}
-                        >
-                          Select a Chapter
-                        </button>
                       </div>
                     </div>
                   )}
@@ -931,16 +909,6 @@ function App() {
               </Suspense>
             )}
 
-            {/* Recap View (Modal) */}
-            {activeView === 'recap' && (
-              <Suspense fallback={<ViewLoadingSpinner />}>
-                <LazyRecapModal
-                  manuscriptId={currentManuscript.id}
-                  onClose={() => setActiveView('chapters')}
-                />
-              </Suspense>
-            )}
-
             {/* Outline View - Self-contained, no sidebar needed */}
             {activeView === 'outline' && (
               <div className="flex-1 flex bg-vellum">
@@ -960,31 +928,6 @@ function App() {
               </div>
             )}
 
-            {/* Wiki View */}
-            {activeView === 'wiki' && (
-              <div className="flex-1 flex bg-vellum">
-                {currentWorld ? (
-                  <Suspense fallback={<ViewLoadingSpinner />}>
-                    <LazyWorldWikiBrowser
-                      world={currentWorld}
-                      onClose={() => setActiveView('chapters')}
-                    />
-                  </Suspense>
-                ) : (
-                  <div className="flex items-center justify-center h-full w-full">
-                    <div className="text-center max-w-md p-8">
-                      <div className="text-6xl mb-6">🌍</div>
-                      <h2 className="font-garamond text-2xl font-semibold text-midnight mb-4">
-                        World Wiki
-                      </h2>
-                      <p className="font-sans text-faded-ink mb-6">
-                        Loading world wiki...
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </main>
 
@@ -1047,40 +990,11 @@ function App() {
   // Show manuscript/world library by default
   return (
     <>
-      {libraryView === 'manuscripts' ? (
-        <ManuscriptLibrary
-          onOpenManuscript={handleOpenManuscript}
-          onSettingsClick={() => setShowSettings(true)}
-          onCreateWithWizard={() => setShowWizard(true)}
-        />
-      ) : (
-        <WorldLibrary
-          onOpenManuscript={handleOpenManuscript}
-          onSettingsClick={() => setShowSettings(true)}
-          onCreateWithWizard={() => setShowWizard(true)}
-          onBackToManuscripts={() => setLibraryView('manuscripts')}
-        />
-      )}
-
-      {/* Library View Toggle - Fixed position button */}
-      <button
-        onClick={() => setLibraryView(libraryView === 'manuscripts' ? 'worlds' : 'manuscripts')}
-        className="fixed bottom-6 right-6 px-4 py-3 bg-bronze hover:bg-bronze-dark text-white font-sans text-sm font-medium shadow-book transition-colors flex items-center gap-2 z-40"
-        style={{ borderRadius: '2px' }}
-        title={libraryView === 'manuscripts' ? 'Switch to World Library' : 'Switch to All Manuscripts'}
-      >
-        {libraryView === 'manuscripts' ? (
-          <>
-            <span>&#x1F30D;</span>
-            <span>World Library</span>
-          </>
-        ) : (
-          <>
-            <span>&#x1F4DA;</span>
-            <span>All Manuscripts</span>
-          </>
-        )}
-      </button>
+      <ManuscriptLibrary
+        onOpenManuscript={handleOpenManuscript}
+        onSettingsClick={() => setShowSettings(true)}
+        onCreateWithWizard={() => setShowWizard(true)}
+      />
 
       <ToastContainer />
 

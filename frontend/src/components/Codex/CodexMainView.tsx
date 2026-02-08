@@ -4,12 +4,13 @@
  * Provides entity list, detail view, and relationship visualization
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { useCodexStore } from '@/stores/codexStore';
 import { useBrainstormStore } from '@/stores/brainstormStore';
-import { codexApi, chaptersApi } from '@/lib/api';
+import { codexApi, chaptersApi, worldsApi } from '@/lib/api';
 import { toast } from '@/stores/toastStore';
 import type { Entity, EntityType } from '@/types/codex';
+import type { World } from '@/types/world';
 import EntityCard from './EntityCard';
 import EntityDetail from './EntityDetail';
 import EntityTemplateWizard from './EntityTemplateWizard';
@@ -18,12 +19,14 @@ import RelationshipGraph from './RelationshipGraph';
 import SuggestionQueue from './SuggestionQueue';
 import { EntityType as EntityTypeEnum, TemplateType } from '@/types/codex';
 
+const LazyWorldWikiBrowser = lazy(() => import('@/components/Wiki/WorldWikiBrowser'));
+
 interface CodexMainViewProps {
   manuscriptId: string;
   onOpenChapter?: (chapterId: string) => void;
 }
 
-type CodexTab = 'entities' | 'relationships' | 'intel';
+type CodexTab = 'entities' | 'world' | 'relationships' | 'intel';
 
 export default function CodexMainView({
   manuscriptId,
@@ -68,6 +71,20 @@ export default function CodexMainView({
   // Quick create form state
   const [newEntityName, setNewEntityName] = useState('');
   const [newEntityType, setNewEntityType] = useState<EntityType>(EntityTypeEnum.CHARACTER);
+
+  // World state for the World tab
+  const [currentWorld, setCurrentWorld] = useState<World | null>(null);
+  const [worldLoading, setWorldLoading] = useState(false);
+
+  // Auto-resolve world when World tab is activated
+  useEffect(() => {
+    if (activeTab !== 'world' || currentWorld) return;
+    setWorldLoading(true);
+    worldsApi.getWorldForManuscript(manuscriptId, true)
+      .then(setCurrentWorld)
+      .catch(() => {})
+      .finally(() => setWorldLoading(false));
+  }, [activeTab, manuscriptId, currentWorld]);
 
   // Load entities on mount
   useEffect(() => {
@@ -177,7 +194,7 @@ export default function CodexMainView({
         setSelectedEntity(null);
       }
     } catch (err) {
-      alert('Failed to delete entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to delete entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   }, [removeEntity, selectedEntityId, setSelectedEntity]);
 
@@ -187,7 +204,7 @@ export default function CodexMainView({
       const updated = await codexApi.updateEntity(entityId, updates);
       updateEntity(entityId, updated);
     } catch (err) {
-      alert('Failed to update entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to update entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   }, [updateEntity]);
 
@@ -239,7 +256,7 @@ export default function CodexMainView({
 
   const handleBulkDelete = async () => {
     if (selectedEntityIds.size === 0) return;
-    if (!confirm(`Delete ${selectedEntityIds.size} selected entities? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete ${selectedEntityIds.size} selected entities? This cannot be undone.`)) return;
 
     try {
       await Promise.all(
@@ -248,13 +265,13 @@ export default function CodexMainView({
       selectedEntityIds.forEach(id => removeEntity(id));
       setSelectedEntityIds(new Set());
     } catch (err) {
-      alert('Failed to delete entities: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to delete entities: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 
   const handleMergeEntities = () => {
     if (selectedEntityIds.size < 2) {
-      alert('Select at least 2 entities to merge');
+      toast.warning('Select at least 2 entities to merge');
       return;
     }
     setShowMergeModal(true);
@@ -498,7 +515,18 @@ export default function CodexMainView({
             }`}
             style={{ borderRadius: '2px' }}
           >
-            📝 Entities
+            Entities
+          </button>
+          <button
+            onClick={() => setActiveTab('world')}
+            className={`flex-1 px-4 py-2 font-sans text-sm font-medium uppercase tracking-button transition-colors ${
+              activeTab === 'world'
+                ? 'bg-bronze text-white'
+                : 'bg-slate-ui/20 text-faded-ink hover:bg-slate-ui/40'
+            }`}
+            style={{ borderRadius: '2px' }}
+          >
+            World
           </button>
           <button
             onClick={() => setActiveTab('relationships')}
@@ -509,7 +537,7 @@ export default function CodexMainView({
             }`}
             style={{ borderRadius: '2px' }}
           >
-            🕸️ Relationships
+            Relationships
           </button>
           <button
             onClick={() => setActiveTab('intel')}
@@ -520,7 +548,7 @@ export default function CodexMainView({
             }`}
             style={{ borderRadius: '2px' }}
           >
-            🔍 Intel
+            Intel
             {pendingSuggestionsCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-redline text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
                 {pendingSuggestionsCount > 9 ? '9+' : pendingSuggestionsCount}
@@ -690,6 +718,36 @@ export default function CodexMainView({
               )}
             </div>
           </>
+        )}
+
+        {activeTab === 'world' && (
+          <div className="flex-1 overflow-hidden bg-vellum">
+            {worldLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="inline-block w-8 h-8 border-2 border-bronze border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : currentWorld ? (
+              <Suspense fallback={
+                <div className="flex items-center justify-center h-full">
+                  <div className="inline-block w-8 h-8 border-2 border-bronze border-t-transparent rounded-full animate-spin" />
+                </div>
+              }>
+                <LazyWorldWikiBrowser world={currentWorld} />
+              </Suspense>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center max-w-md p-8">
+                  <div className="text-6xl mb-6">&#x1F30D;</div>
+                  <h2 className="font-garamond text-2xl font-semibold text-midnight mb-4">
+                    World Wiki
+                  </h2>
+                  <p className="font-sans text-faded-ink">
+                    No world found for this manuscript. A world will be created automatically when needed.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {activeTab === 'relationships' && (

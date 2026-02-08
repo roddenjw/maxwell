@@ -184,6 +184,42 @@
 ## Recent Completions (Last 2 Weeks)
 
 ### February 8, 2026
+- **Frontend UX Polish — Complete Reorganization**
+  - **Phase 1: Unified Library with Tabs, Search, and Sort**
+    - Replaced disconnected Manuscripts/Worlds toggle FAB with clean tabbed library (All Manuscripts | Worlds)
+    - Added search-by-title filtering and sort options (Last Updated, Title A-Z, Word Count)
+    - Replaced `prompt()` with inline create form in the create dialog
+    - Replaced `confirm()` with styled delete confirmation modal (vellum bg, bronze buttons)
+    - WorldLibrary renders in embedded mode (no duplicate header) when shown as a tab
+    - Manuscript count shown next to active tab, Settings button in tab bar row
+  - **Phase 2: Sidebar Navigation Grouping**
+    - Reorganized 10 flat sidebar items into 4 logical sections: WRITING, REFERENCE, COACHING, TOOLS
+    - Section labels styled as small uppercase muted text with divider lines
+    - Removed Recap as standalone sidebar item — folded into Analytics as a "Recap" tab
+    - Collapsed sidebar now shows home/back icon button (was invisible before)
+    - Removed Wiki as standalone sidebar item — merged into Codex (Phase 4)
+  - **Phase 3: Editor Toolbar Simplification**
+    - Reduced toolbar from 8+ groups to 6 essential groups: Undo/Redo, Block Type, B/I/U, Format dropdown, Scene Break, Focus Mode
+    - Removed non-functional font family/size dropdowns (they tracked state but dispatched no Lexical commands)
+    - Removed Analyze, Recap, Balance Widget, and Maxwell AI buttons from toolbar
+    - Balance Widget moved to header bar (Phase 5)
+    - Analyze/Recap accessible from their respective views; Maxwell accessible via sidebar + Ctrl+M
+    - Outline reference toggle kept as icon-only button (removed "Outline XX%" text)
+    - Added click-outside-to-close for Format dropdown
+  - **Phase 4: Merge Codex + Wiki into Unified "Codex"**
+    - Added "World" tab to CodexMainView alongside Entities, Relationships, Intel
+    - World tab auto-resolves world for manuscript and embeds WorldWikiBrowser
+    - Removed "World Wiki" from sidebar and `activeView` union type
+    - All wiki functionality accessible through Codex > World tab
+  - **Phase 5: Header Bar & Manuscript Polish**
+    - Header now shows current chapter title (left) + Balance Widget + save status (right)
+    - Balance Widget relocated from toolbar to header for persistent visibility
+  - **Phase 6: Minor Polish & Bug Fixes**
+    - Replaced `alert('No manuscript selected')` with `toast.warning()` in App.tsx
+    - Replaced `alert()` calls in CodexMainView with `toast.error()`/`toast.warning()`
+    - Fixed Coach view duplicate editor — now renders DocumentNavigator + editor + FastCoachSidebar (same layout as Chapters view, no double mount)
+  - **Files Modified:** `App.tsx`, `ManuscriptLibrary.tsx`, `UnifiedSidebar.tsx`, `EditorToolbar.tsx`, `CodexMainView.tsx`, `AnalyticsDashboard.tsx`, `RecapModal.tsx`, `WorldLibrary.tsx`, `views/index.ts`
+
 - **Plot Hole Interaction System (FUTURE_ENHANCEMENTS)**
   - **Problem:** Plot holes detected by AI could only be "Mark Resolved" (frontend-only toggle, lost on refresh). No way to explain intentional choices or get AI help fixing real holes.
   - **Backend: PlotHoleDismissal Model + Migration**

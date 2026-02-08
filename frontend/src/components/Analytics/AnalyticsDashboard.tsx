@@ -3,19 +3,25 @@
  * Shows comprehensive stats, trends, and visualizations
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { analyticsApi, type WritingAnalytics } from '@/lib/api';
 import { toast } from '@/stores/toastStore';
 import WritingStreakCalendar from './WritingStreakCalendar';
 
+const LazyRecapModal = lazy(() => import('@/components/RecapModal'));
+
+type AnalyticsTab = 'dashboard' | 'recap';
+
 interface AnalyticsDashboardProps {
   manuscriptId: string;
+  initialTab?: AnalyticsTab;
 }
 
-export default function AnalyticsDashboard({ manuscriptId }: AnalyticsDashboardProps) {
+export default function AnalyticsDashboard({ manuscriptId, initialTab = 'dashboard' }: AnalyticsDashboardProps) {
   const [analytics, setAnalytics] = useState<WritingAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<number>(30);
+  const [activeTab, setActiveTab] = useState<AnalyticsTab>(initialTab);
 
   useEffect(() => {
     loadAnalytics();
@@ -52,6 +58,48 @@ export default function AnalyticsDashboard({ manuscriptId }: AnalyticsDashboardP
 
   return (
     <div className="analytics-dashboard p-6 space-y-6">
+      {/* Tab Bar */}
+      <div className="flex items-center gap-6 border-b border-slate-ui">
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`pb-3 font-sans text-sm font-medium transition-colors border-b-2 -mb-px ${
+            activeTab === 'dashboard'
+              ? 'border-bronze text-bronze'
+              : 'border-transparent text-faded-ink hover:text-midnight'
+          }`}
+        >
+          Dashboard
+        </button>
+        <button
+          onClick={() => setActiveTab('recap')}
+          className={`pb-3 font-sans text-sm font-medium transition-colors border-b-2 -mb-px ${
+            activeTab === 'recap'
+              ? 'border-bronze text-bronze'
+              : 'border-transparent text-faded-ink hover:text-midnight'
+          }`}
+        >
+          Recap
+        </button>
+      </div>
+
+      {/* Recap Tab */}
+      {activeTab === 'recap' && (
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-20">
+            <div className="w-16 h-16 border-4 border-bronze border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        }>
+          <LazyRecapModal
+            manuscriptId={manuscriptId}
+            onClose={() => setActiveTab('dashboard')}
+            embedded
+          />
+        </Suspense>
+      )}
+
+      {/* Dashboard Tab */}
+      {activeTab === 'dashboard' && (
+      <>
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="font-garamond text-4xl font-semibold text-midnight">
@@ -164,6 +212,8 @@ export default function AnalyticsDashboard({ manuscriptId }: AnalyticsDashboardP
             ))}
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

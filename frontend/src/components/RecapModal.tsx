@@ -10,9 +10,10 @@ import { toast } from '@/stores/toastStore';
 interface RecapModalProps {
   manuscriptId: string;
   onClose: () => void;
+  embedded?: boolean;
 }
 
-export default function RecapModal({ manuscriptId, onClose }: RecapModalProps) {
+export default function RecapModal({ manuscriptId, onClose, embedded = false }: RecapModalProps) {
   const [stats, setStats] = useState<WritingStats | null>(null);
   const [template, setTemplate] = useState<TemplateType>('dark');
   const [timeframe, setTimeframe] = useState<string>('week');
@@ -119,24 +120,8 @@ export default function RecapModal({ manuscriptId, onClose }: RecapModalProps) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4">
-      <div className="bg-vellum rounded-sm shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-ui bg-white flex items-center justify-between">
-          <h2 className="font-garamond text-3xl font-semibold text-midnight">
-            Your Writing Wrapped
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-faded-ink hover:text-midnight transition-colors text-2xl leading-none"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="p-6">
+  const content = (
+        <div className={embedded ? '' : 'p-6'}>
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <div className="w-12 h-12 border-4 border-bronze border-t-transparent rounded-full animate-spin"></div>
@@ -256,15 +241,41 @@ export default function RecapModal({ manuscriptId, onClose }: RecapModalProps) {
                 >
                   Copy to Clipboard
                 </button>
-                <button
-                  onClick={onClose}
-                  className="px-6 py-3 bg-slate-ui text-midnight rounded-sm font-sans hover:bg-slate-ui/70 transition-colors"
-                >
-                  Close
-                </button>
+                {!embedded && (
+                  <button
+                    onClick={onClose}
+                    className="px-6 py-3 bg-slate-ui text-midnight rounded-sm font-sans hover:bg-slate-ui/70 transition-colors"
+                  >
+                    Close
+                  </button>
+                )}
               </div>
             </>
           )}
+        </div>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4">
+      <div className="bg-vellum rounded-sm shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-slate-ui bg-white flex items-center justify-between">
+          <h2 className="font-garamond text-3xl font-semibold text-midnight">
+            Your Writing Wrapped
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-faded-ink hover:text-midnight transition-colors text-2xl leading-none"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </div>
+        <div className="p-6">
+          {content}
         </div>
       </div>
     </div>

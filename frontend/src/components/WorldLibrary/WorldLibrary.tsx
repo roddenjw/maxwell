@@ -19,6 +19,7 @@ interface WorldLibraryProps {
   onSettingsClick?: () => void;
   onCreateWithWizard?: () => void;
   onBackToManuscripts?: () => void;
+  embedded?: boolean;
 }
 
 type ViewMode = 'worlds' | 'series' | 'manuscripts';
@@ -28,6 +29,7 @@ export default function WorldLibrary({
   onSettingsClick,
   onCreateWithWizard,
   onBackToManuscripts,
+  embedded = false,
 }: WorldLibraryProps) {
   const {
     worlds,
@@ -137,39 +139,41 @@ export default function WorldLibrary({
   );
 
   return (
-    <div className="min-h-screen bg-vellum">
-      {/* Header */}
-      <header className="border-b border-slate-ui bg-white px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-serif font-bold text-midnight tracking-tight">
-              MAXWELL
-            </h1>
-            <span className="text-sm text-faded-ink font-sans">World Library</span>
+    <div className={embedded ? 'bg-vellum' : 'min-h-screen bg-vellum'}>
+      {/* Header — hidden in embedded mode */}
+      {!embedded && (
+        <header className="border-b border-slate-ui bg-white px-6 py-4">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-serif font-bold text-midnight tracking-tight">
+                MAXWELL
+              </h1>
+              <span className="text-sm text-faded-ink font-sans">World Library</span>
+            </div>
+            <div className="flex items-center gap-4">
+              {onBackToManuscripts && (
+                <button
+                  onClick={onBackToManuscripts}
+                  className="flex items-center gap-2 px-4 py-2 text-faded-ink hover:text-midnight hover:bg-slate-ui/20 transition-colors rounded-sm"
+                >
+                  <span className="text-lg">&#x1F4DA;</span>
+                  <span className="font-sans text-sm font-medium">All Manuscripts</span>
+                </button>
+              )}
+              {onSettingsClick && (
+                <button
+                  onClick={onSettingsClick}
+                  className="flex items-center gap-2 px-4 py-2 text-faded-ink hover:text-midnight hover:bg-slate-ui/20 transition-colors rounded-sm"
+                  title="Settings"
+                >
+                  <span className="text-xl">&#x2699;&#xFE0F;</span>
+                  <span className="font-sans text-sm font-medium">Settings</span>
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            {onBackToManuscripts && (
-              <button
-                onClick={onBackToManuscripts}
-                className="flex items-center gap-2 px-4 py-2 text-faded-ink hover:text-midnight hover:bg-slate-ui/20 transition-colors rounded-sm"
-              >
-                <span className="text-lg">📚</span>
-                <span className="font-sans text-sm font-medium">All Manuscripts</span>
-              </button>
-            )}
-            {onSettingsClick && (
-              <button
-                onClick={onSettingsClick}
-                className="flex items-center gap-2 px-4 py-2 text-faded-ink hover:text-midnight hover:bg-slate-ui/20 transition-colors rounded-sm"
-                title="Settings"
-              >
-                <span className="text-xl">&#x2699;&#xFE0F;</span>
-                <span className="font-sans text-sm font-medium">Settings</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-6 py-12">
