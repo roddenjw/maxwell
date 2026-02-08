@@ -1,6 +1,6 @@
 # Maxwell Architecture
 
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-02-08
 **Related Docs:** [CLAUDE.md](CLAUDE.md) | [PATTERNS.md](PATTERNS.md) | [WORKFLOW.md](WORKFLOW.md)
 
 ---
@@ -502,6 +502,48 @@ worlds
     └── status (pending, approved, rejected)
 ```
 
+### Culture System
+
+Cultures are wiki entries of type `CULTURE` that anchor characters, factions, and locations to shared traditions, values, and norms. The culture system enables agents to understand **why** characters behave the way they do.
+
+**Culture-Entity Relationships** (10 WikiReferenceType enums):
+- `BORN_IN`, `ADOPTED_INTO`, `MEMBER_OF`, `LEADER_OF`, `WORSHIPS`
+- `EXILED_FROM`, `RESENTS`, `ALLIED_WITH`, `TRADES_WITH`, `INFLUENCED_BY`
+
+**CultureService** (`backend/app/services/culture_service.py`):
+- `link_entity_to_culture()` / `unlink_entity_from_culture()` — manage relationships
+- `get_character_cultural_context()` — full cultural context for a character
+- `format_character_culture_summary()` — compact string for agent prompts (values, taboos, norms, speech patterns, tensions)
+- `get_cultural_rules()` — world rules of type CULTURAL
+
+**Agent Integration:** All agents (continuity, consistency, voice) query culture context via `WorldContext.culture_context` to understand character behavior, speech patterns, and cultural tensions.
+
+### Codex-Wiki Bridge & AI Context
+
+The Codex (entity management) and Wiki (world knowledge) sync bidirectionally:
+
+**Codex → Wiki Sync:** When entities are created/updated in the Codex, `_trigger_wiki_sync()` fires a background task that merges entity data into the wiki via the **Wiki Merge Agent** (`wiki_merge_agent.py`). High-confidence merges (>= 0.85) auto-apply; lower-confidence changes queue for review.
+
+**Wiki → Codex:** When manuscripts are assigned to a series, `assign_manuscript_to_series()` auto-populates the Codex from the world wiki.
+
+**Context-Aware Entity AI Generation:** When generating AI suggestions for Codex entities, `_gather_entity_world_context()` assembles rich context from 7 sources:
+1. World metadata (name, description) via entity → manuscript → series → world chain
+2. Manuscript genre and premise
+3. Linked wiki entry (structured data, summary, content)
+4. Wiki search by entity name (fallback)
+5. Active world rules (especially CULTURAL rules)
+6. Culture context via `CultureService.format_character_culture_summary()`
+7. Chapter text mentions and related entities
+
+This context is injected into LLM prompts with world-grounding instructions ("ONLY use races/species that exist in the established world") and time-aware description guidance ("Note physical changes over time with chapter context").
+
+### Manuscript Movement Between Worlds
+
+Manuscripts can be moved between worlds/series via `move_manuscript_to_world()`:
+- **Same-world moves:** Reassign series, no wiki changes needed
+- **Cross-world moves:** Copy WikiEntry rows to target world, map old→new IDs for character arcs and cross-references, update entity world_id fields
+- **Auto-world creation:** `ensure_manuscript_has_world()` creates a world + "Standalone" series for manuscripts without one
+
 ### Agent Wiki Integration
 
 All agents access the wiki through a standardized tool set:
@@ -513,6 +555,10 @@ get_character_facts(character_name, world_id)
 get_location_facts(location_name, world_id)
 get_world_rules(world_id, rule_type)
 get_relationship_state(char_a, char_b, world_id)
+
+# Culture Tools
+get_culture_context(character_name, world_id)
+get_cultural_rules(world_id)
 
 # Consistency Check Tools
 check_rule_violations(text, world_id, rule_types)
@@ -627,10 +673,12 @@ With the wiki, agents now operate with a **five-level** context hierarchy:
 - ⚠️ Author approval queue adds friction (by design)
 
 **Implementation:**
-- Models: `backend/app/models/wiki.py`, `character_arc.py`
-- Services: `wiki_service.py`, `wiki_auto_populator.py`, `pov_consistency_service.py`, etc.
+- Models: `backend/app/models/wiki.py`, `character_arc.py`, `world_rule.py`
+- Services: `wiki_service.py`, `wiki_auto_populator.py`, `culture_service.py`, `pov_consistency_service.py`, etc.
+- Bridge: `wiki_codex_bridge.py` (codex↔wiki sync), `wiki_merge_agent.py` (AI-powered merge)
 - Agent Tools: `backend/app/agents/tools/wiki_tools.py`
-- API: `/api/wiki/*`, `/api/analysis/*`
+- Context Helper: `_gather_entity_world_context()` in `codex.py` routes (7-source context assembly for AI generation)
+- API: `/api/wiki/*`, `/api/wiki/cultures/*`, `/api/analysis/*`
 
 ---
 

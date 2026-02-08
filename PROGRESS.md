@@ -1,6 +1,6 @@
 # Maxwell Project Progress
 
-**Last Updated:** 2026-02-03
+**Last Updated:** 2026-02-08
 **Overall Completion:** 96% across all phases
 **Current Focus:** Desktop Distribution + Maxwell Unified Polish
 
@@ -184,6 +184,40 @@
 ## Recent Completions (Last 2 Weeks)
 
 ### February 8, 2026
+- **Context-Aware Codex Entity AI Generation (FEEDBACK General #2)**
+  - **Problem:** AI field suggestions and AI Fill were hallucinating races/species not in the story (e.g., orcs/dwarves in a world without them)
+  - **Root cause:** Both AI generation paths operated with minimal context — no wiki data, no world rules, no genre, no culture
+  - **Backend: Context-Gathering Helper**
+    - New `_gather_entity_world_context()` in codex routes assembles rich context from 7 sources:
+      - World metadata (name, description) via entity → manuscript → series → world chain
+      - Manuscript genre and premise
+      - Linked wiki entry (structured data, summary, content) or wiki search by name
+      - Active world rules (especially cultural rules)
+      - Culture context via `CultureService.format_character_culture_summary()`
+      - Chapter text mentions (snippets around entity name, up to 3000 chars)
+      - Related entities (names, types, relationship types)
+    - Returns formatted string (max ~4000 chars) for LLM context injection
+  - **Backend: Updated AI Prompts**
+    - `generate_field_suggestion()` now receives `world_context` param — injected into system prompt with world-grounding guidelines ("ONLY use races/species that exist in the established world")
+    - `generate_comprehensive_entity_fill()` now receives `world_context` — injected into both system and user prompts with time-aware description instructions
+    - Time-awareness: "Track how the entity changes across appearances; note physical changes over time"
+  - **Frontend: Context Passing**
+    - `handleAIGenerate` now passes `entity_id` and `manuscript_id` to enable backend context gathering
+    - `handleAIFill` now passes `manuscript_id`
+    - Updated API types in `api.ts` with new optional fields
+  - **Files Modified:**
+    - `backend/app/api/routes/codex.py` (+170 lines — helper + request model updates + route handler updates)
+    - `backend/app/services/ai_entity_service.py` (+60 lines — world_context params + updated prompts)
+    - `frontend/src/lib/api.ts` (+3 lines — type updates)
+    - `frontend/src/components/Codex/EntityDetail.tsx` (+3 lines — pass entity_id/manuscript_id)
+  - **Impact:** AI generation now grounds suggestions in established world facts, preventing hallucinated species/races and providing time-aware character descriptions
+
+- **Culture System for Entity-Culture Relationships (FEEDBACK General #1)**
+  - 10 new WikiReferenceType enums for culture relationships
+  - CultureService with 10 methods, CultureLinkManager frontend component
+  - 7 new API endpoints, CULTURAL rule type, agent integration
+  - See FEEDBACK.md General #1 for full details
+
 - **Wiki as Master + World Navigation + Manuscript Move**
   - **Backend: Manuscript → World Resolution**
     - `GET /worlds/manuscripts/{id}/world?create=true` endpoint
@@ -1564,7 +1598,7 @@
 
 ---
 
-**Last Updated:** 2026-02-02 by Claude Code
+**Last Updated:** 2026-02-08 by Claude Code
 **Next Scheduled Review:** 2026-01-22 (daily updates)
 **Next Milestone Review:** 2026-01-28 (Beta Launch Week)
 

@@ -1,6 +1,6 @@
 # Future Enhancements for Maxwell
 
-**Last Updated:** 2026-01-25
+**Last Updated:** 2026-02-08
 
 This document tracks feature ideas and enhancements for future development.
 
@@ -19,6 +19,13 @@ The following future enhancement ideas were fully implemented in Phase 5:
 
 ### World Management (Phase 8 - Completed Jan 18, 2026)
 - ✅ **World-building Consistency** - World/Series hierarchy with entity scoping
+
+### World Wiki, Culture & AI Context (Feb 8, 2026)
+- ✅ **Culture System** - CultureService with 10 culture-entity relationship types, CultureLinkManager UI, agent integration for culturally-aware feedback
+- ✅ **Wiki as Master Source of Truth** - Wiki Merge Agent, Codex↔Wiki bidirectional sync, wiki in editor sidebar and world library
+- ✅ **Manuscript Move** - Move manuscripts between worlds/series with cross-world wiki entry copying
+- ✅ **Context-Aware Codex Entity AI Generation** - 7-source world context gathering, world-grounded prompts preventing hallucinated species/races, time-aware entity descriptions
+- ✅ **Character Description Consistency** (partial) - AI Fill now tracks entity changes across appearances with chapter context; world-grounded prompts prevent contradictions with wiki data
 
 ---
 
@@ -198,12 +205,12 @@ Scoring Factors:
 
 **Other Ideas to Consider:**
 - Timeline Orchestrator integration with plot hole detection
-- Scene-level AI suggestions (not just beat-level)
-- Character arc tracking and analysis
-- Dialogue consistency checker (character voice)
+- ✅ ~~Scene-level AI suggestions~~ (Completed Jan 12 — SceneDetectionPlugin + BeatContextPanel)
+- ✅ ~~Character arc tracking and analysis~~ (Completed — character_arcs model + wiki arc tracking)
+- ✅ ~~Dialogue consistency checker (character voice)~~ (Completed Feb 4 — VoiceAnalysisService + VoiceProfilePanel)
 - Theme and motif tracking
-- Foreshadowing analyzer
-- World-building consistency (if sci-fi/fantasy)
+- ✅ ~~Foreshadowing analyzer~~ (Completed Jan 21 — ForeshadowingTracker + ForeshadowingDetectorService)
+- ✅ ~~World-building consistency (if sci-fi/fantasy)~~ (Completed Feb 8 — Culture system + world rules + context-aware AI)
 
 ---
 

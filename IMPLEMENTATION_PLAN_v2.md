@@ -1,7 +1,7 @@
 # Maxwell Implementation Plan v2.0
 ## Integrated Roadmap: MVP → PLG Growth Engine
 
-**Last Updated:** January 25, 2026
+**Last Updated:** February 8, 2026
 **Vision:** The world's most intuitive fiction writing IDE with invisible engineering and viral growth mechanics
 
 ---
@@ -372,6 +372,29 @@ Sudowrite refugees, cost-conscious authors, AI-curious writers
 - ✅ Zustand worldStore (350+ lines)
 - ✅ Auto-migration for existing data
 
+#### 8.4 Wiki as Master Source of Truth (Feb 8, 2026)
+- ✅ **Wiki in World Library:** "Series | Wiki" tab bar when viewing a world
+- ✅ **Wiki in Editor Sidebar:** "World Wiki" nav item in UnifiedSidebar with auto-world resolution
+- ✅ **Manuscript → World Resolution:** `ensure_manuscript_has_world()` auto-creates world for standalone manuscripts
+- ✅ **Codex ↔ Wiki Sync:** Entity create/update triggers wiki sync via `_trigger_wiki_sync()`; entity delete clears wiki link without deleting wiki entry
+- ✅ **Wiki Merge Agent:** AI-powered merge of codex data into wiki entries; confidence >= 0.85 auto-merges, lower queues for review; falls back to simple field-level merge when no API key
+- ✅ **Manuscript Move:** `move_manuscript_to_world()` handles same-world and cross-world moves; cross-world copies wiki entries, maps old→new IDs for arcs/cross-refs
+- ✅ **MoveManuscriptModal:** Frontend component with world/series tree selector and cross-world warning panel
+
+#### 8.5 Culture System (Feb 8, 2026)
+- ✅ **Culture-Entity Relationships:** 10 new WikiReferenceType enums (BORN_IN, ADOPTED_INTO, MEMBER_OF, LEADER_OF, WORSHIPS, EXILED_FROM, RESENTS, ALLIED_WITH, TRADES_WITH, INFLUENCED_BY)
+- ✅ **CultureService:** 10 methods for linking entities to cultures, querying cultural context, formatting culture summaries for agents
+- ✅ **CultureLinkManager:** Frontend component for managing entity-culture relationships
+- ✅ **7 new API endpoints** under `/api/wiki/cultures/`
+- ✅ **CULTURAL rule type** for WorldRule model
+- ✅ **Agent integration:** Continuity, consistency, and voice agents query culture context via WorldContext
+
+#### 8.6 Context-Aware Codex Entity AI Generation (Feb 8, 2026)
+- ✅ **`_gather_entity_world_context()` helper:** Assembles rich context from 7 sources (world metadata, genre/premise, wiki entries, world rules, culture, chapter mentions, related entities)
+- ✅ **World-grounded prompts:** Both `generate_field_suggestion` and `generate_comprehensive_entity_fill` use context to prevent hallucinated species/races
+- ✅ **Time-aware descriptions:** AI tracks entity changes across appearances and notes physical changes with chapter context
+- ✅ **Frontend context passing:** EntityDetail passes entity_id and manuscript_id to enable backend context gathering
+
 ---
 
 ## Phase 7: PLG Features, UX Polish & Viral Mechanics
@@ -568,7 +591,7 @@ Based on user feedback in FEEDBACK.md, these UX improvements are prioritized:
 
 ## Phase 9.5: Maxwell Unified Architecture
 **Timeline:** February 2026
-**Status:** ✅ Core Complete | ⏳ Polish Remaining
+**Status:** ✅ Complete (Feb 2, 2026) | ⏳ Optional Enhancements Remaining
 **Goal:** Maxwell presents as ONE cohesive entity, not a collection of disconnected tools
 
 ### Completed ✅
@@ -897,7 +920,7 @@ maxwell/
 
 ---
 
-**Last Updated:** January 25, 2026
+**Last Updated:** February 8, 2026
 **Next Review:** End of Phase 7 (Q2 2027)
 **Document Owner:** Implementation Team
 

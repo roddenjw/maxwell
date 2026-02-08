@@ -78,7 +78,7 @@ Binder/Chapter Features
 
 Brainstorming
 
-1. It may be worthwhile to have the entities and lore created from brainstorming output into a standardized format and have these records available as another tab in the library.
+
 2. ✅ **RESOLVED (2026-01-18)** - Potentially also have the Library view have a higher up view of 'World' or 'Series' and then within this are manuscripts, lore, history, locations, creatures, magic/technology, characters. The worldbuilding components can be related to multiple manuscripts within.
    - **Fix:** Phase 8 (Library & World Management) implemented full World → Series → Manuscript hierarchy. WorldLibrary component with 5 sub-components (WorldCard, CreateWorldModal, SeriesExplorer, SharedEntityLibrary). Entity scoping allows MANUSCRIPT, SERIES, or WORLD level entities. 18 new API endpoints for world/series CRUD and entity management.
 3. ✅ **RESOLVED (2026-01-21)** - Give users guided help brainstorming locations, creatures, magic/technology, history, and characters.
@@ -116,4 +116,19 @@ Codex
    - Also added extracted_description and extracted_attributes fields to suggestions. NLP now extracts descriptions from patterns like "X is a..." and categorized attributes (appearance, personality) which are displayed on suggestion cards and pre-filled in edit mode.
 
    General
-   1. We should have a place to create a culture and then as characters and other entites are linked to one or more cultures with a relationship such as 'born in' 'exiled from' 'part of' 'leader of' 'resents' etc. that cultural context is used to enrich characters and by the langchain agents to keep note of how a character should present themselves and respond to characters and items of another culture. Culture would essentially be a parent of different lore entities to anchor them more. Culture can also be used by the agents to identify plot holes, improvements, inconsistencies, and provide better more contextualized feedback. 
+   1. ✅ **RESOLVED (2026-02-08)** - We should have a place to create a culture and then as characters and other entites are linked to one or more cultures with a relationship such as 'born in' 'exiled from' 'part of' 'leader of' 'resents' etc. that cultural context is used to enrich characters and by the langchain agents to keep note of how a character should present themselves and respond to characters and items of another culture. Culture would essentially be a parent of different lore entities to anchor them more. Culture can also be used by the agents to identify plot holes, improvements, inconsistencies, and provide better more contextualized feedback.
+      - **Fix:** Implemented full Culture system:
+        - 10 new WikiReferenceType enums (BORN_IN, ADOPTED_INTO, MEMBER_OF, LEADER_OF, WORSHIPS, EXILED_FROM, RESENTS, ALLIED_WITH, TRADES_WITH, INFLUENCED_BY)
+        - CultureService with 10 methods for linking entities to cultures, querying cultural context, and formatting culture summaries for agents
+        - CultureLinkManager frontend component for managing entity-culture relationships
+        - 7 new API endpoints under /api/wiki/cultures/
+        - New CULTURAL rule type for WorldRule model
+        - Agent integration: continuity, consistency, and voice agents now query culture context
+        - WorldContext dataclass updated with culture fields for all agents
+   2. ✅ **RESOLVED (2026-02-08)** - Generative elements in Codex entities aren't actually looking at context from manuscript. For instance my story has no mention of orcs or dwarves but it was trying to turn a character into one. When generating the description it should search existing text and wiki first to create one, the user can then utilize or overwrite. The description of the character should be timebased if they lose an arm we'd know before point x they had two arms now they have one for example. If the character didnt exist in the manuscript the generative capabilitis should still be using world and manuscript relevant information to design characters that fit.
+      - **Fix:** Added context-aware AI generation for Codex entities:
+        - New `_gather_entity_world_context()` helper in codex routes assembles rich context from 7 sources: world metadata, manuscript genre/premise, linked wiki entries, wiki search by name, active world rules, culture context, chapter text mentions, and related entities
+        - Both `generate_field_suggestion` and `generate_comprehensive_entity_fill` now receive world context and use world-grounding prompts that instruct the LLM to only use established world elements
+        - AI Fill now includes time-aware description instructions so entity changes across chapters are tracked (e.g., "before Chapter X they had two arms; after the battle they lost one")
+        - Frontend passes entity_id and manuscript_id to enable backend context gathering
+        - Falls back gracefully to generic generation when no context is available
