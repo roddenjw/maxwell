@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
-import type { Outline } from '@/types/outline';
+import type { Outline, PlotHole, PlotHoleDismissal } from '@/types/outline';
 import { Z_INDEX } from '@/lib/zIndex';
 
 interface AISuggestionsPanelProps {
@@ -28,6 +28,12 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
   const [severityFilter, setSeverityFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null);
 
+  // Plot hole interaction state
+  const [dismissingIndex, setDismissingIndex] = useState<number | null>(null);
+  const [dismissExplanation, setDismissExplanation] = useState('');
+  const [acceptingIndex, setAcceptingIndex] = useState<number | null>(null);
+  const [showAddressed, setShowAddressed] = useState(false);
+
   const {
     aiSuggestions,
     isAnalyzing,
@@ -38,23 +44,34 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
     runAIAnalysisWithFeedback,
     updateBeat,
     clearAISuggestions,
-    markPlotHoleResolved,
     beatFeedback,
     addBeatFeedbackLike,
     addBeatFeedbackDislike,
     setBeatFeedbackNotes,
     clearBeatFeedback,
     hasFeedback,
+    plotHoleDismissals,
+    isProcessingPlotHole,
+    loadPlotHoleDismissals,
+    dismissPlotHole,
+    acceptPlotHole,
+    undismissPlotHole,
   } = useOutlineStore();
 
   // Check for existing API key on mount and switch to beat ideas tab if found
   useEffect(() => {
     const existingKey = getApiKey();
     if (existingKey && existingKey.trim()) {
-      // User already has an API key, show them the beat ideas tab
       setActiveTab('beat_ideas');
     }
   }, []);
+
+  // Load dismissals when panel opens
+  useEffect(() => {
+    if (isOpen && outline?.id) {
+      loadPlotHoleDismissals(outline.id);
+    }
+  }, [isOpen, outline?.id]);
 
   if (!isOpen) return null;
 
@@ -65,7 +82,6 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
     if (apiKeyInput.trim()) {
       setApiKey(apiKeyInput.trim());
       setApiKeyInput('');
-      // Auto-switch to beat ideas tab after setting key
       if (!hasResults) {
         setActiveTab('beat_ideas');
       }
@@ -96,13 +112,51 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
     }
   };
 
+  // Helper to check if a plot hole has a dismissal
+  const getDismissalForHole = (hole: PlotHole): PlotHoleDismissal | undefined => {
+    return hole.dismissal || plotHoleDismissals.find(
+      d => d.issue === hole.issue && d.location === hole.location
+    );
+  };
+
+  // Active plot holes (not dismissed)
   const filteredPlotHoles =
     aiSuggestions?.plot_holes?.filter((hole) => {
-      if (severityFilter === 'all') return !hole.resolved;
-      return hole.severity === severityFilter && !hole.resolved;
+      const dismissal = getDismissalForHole(hole);
+      if (dismissal) return false; // Hide dismissed/accepted holes from main list
+      if (severityFilter === 'all') return true;
+      return hole.severity === severityFilter;
     }) || [];
 
-  const resolvedCount = aiSuggestions?.plot_holes?.filter((h) => h.resolved).length || 0;
+  // Addressed plot holes (dismissed or accepted)
+  const addressedHoles = plotHoleDismissals;
+
+  const handleDismiss = async (hole: PlotHole) => {
+    if (!dismissExplanation.trim()) return;
+
+    const result = await dismissPlotHole(outline.id, {
+      severity: hole.severity,
+      location: hole.location,
+      issue: hole.issue,
+      suggestion: hole.suggestion,
+    }, dismissExplanation.trim());
+
+    if (result) {
+      setDismissingIndex(null);
+      setDismissExplanation('');
+    }
+  };
+
+  const handleAccept = async (hole: PlotHole, index: number) => {
+    setAcceptingIndex(index);
+    await acceptPlotHole(outline.id, {
+      severity: hole.severity,
+      location: hole.location,
+      issue: hole.issue,
+      suggestion: hole.suggestion,
+    });
+    setAcceptingIndex(null);
+  };
 
   return (
     <div
@@ -465,7 +519,6 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
                               <button
                                 onClick={() => {
                                   addBeatFeedbackDislike(beat.beat_name, aiDescription);
-                                  // Auto-expand feedback area when disliking
                                   setExpandedFeedback(beat.beat_name);
                                 }}
                                 className={`p-1.5 rounded transition-colors ${
@@ -624,8 +677,8 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
                   <div className="text-center py-8">
                     <div className="text-4xl mb-3">✅</div>
                     <p className="text-sm font-sans text-faded-ink">
-                      {resolvedCount > 0
-                        ? `All issues resolved! (${resolvedCount} marked as fixed)`
+                      {addressedHoles.length > 0
+                        ? `All issues addressed! (${addressedHoles.length} resolved below)`
                         : 'No plot holes detected! Great work!'}
                     </p>
                   </div>
@@ -633,10 +686,12 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
                   <div className="space-y-3">
                     {filteredPlotHoles.map((hole, index) => {
                       const globalIndex = aiSuggestions?.plot_holes?.indexOf(hole) ?? index;
+                      const isDismissing = dismissingIndex === globalIndex;
+                      const isAccepting = acceptingIndex === globalIndex;
 
                       return (
                         <div
-                          key={index}
+                          key={globalIndex}
                           className={`p-4 border-l-4 ${
                             hole.severity === 'high'
                               ? 'border-red-500 bg-red-500/10'
@@ -659,19 +714,166 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
                             >
                               {hole.severity}
                             </span>
-                            <button
-                              onClick={() => markPlotHoleResolved(globalIndex)}
-                              className="text-xs font-sans text-faded-ink hover:text-bronze"
-                            >
-                              Mark Resolved
-                            </button>
                           </div>
                           <div className="text-xs font-sans text-faded-ink mb-1">Location: {hole.location}</div>
                           <div className="text-sm font-sans text-midnight font-semibold mb-2">{hole.issue}</div>
-                          <div className="text-sm font-sans text-faded-ink italic">{hole.suggestion}</div>
+                          <div className="text-sm font-sans text-faded-ink italic mb-3">{hole.suggestion}</div>
+
+                          {/* Action Buttons */}
+                          {!isDismissing && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  setDismissingIndex(globalIndex);
+                                  setDismissExplanation('');
+                                }}
+                                className="px-3 py-1.5 text-xs font-sans font-medium bg-slate-ui/30 hover:bg-slate-ui/50 text-midnight transition-colors"
+                                style={{ borderRadius: '2px' }}
+                                disabled={isProcessingPlotHole}
+                              >
+                                It's Intentional
+                              </button>
+                              <button
+                                onClick={() => handleAccept(hole, globalIndex)}
+                                className="px-3 py-1.5 text-xs font-sans font-medium bg-bronze hover:bg-bronze-dark text-white transition-colors disabled:opacity-50"
+                                style={{ borderRadius: '2px' }}
+                                disabled={isProcessingPlotHole || isAccepting}
+                              >
+                                {isAccepting ? 'Generating fixes...' : 'Help Me Fix This'}
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Dismiss Explanation Input */}
+                          {isDismissing && (
+                            <div className="mt-2 p-3 bg-white border border-slate-ui" style={{ borderRadius: '2px' }}>
+                              <label className="block text-xs font-sans font-semibold text-midnight mb-2">
+                                Why is this intentional?
+                              </label>
+                              <textarea
+                                value={dismissExplanation}
+                                onChange={(e) => setDismissExplanation(e.target.value)}
+                                placeholder="e.g., 'Jarn's backstory is deliberately mysterious — it's revealed in Act 2'"
+                                className="w-full px-2 py-1.5 text-sm border border-slate-ui focus:border-bronze focus:outline-none font-sans"
+                                style={{ borderRadius: '2px' }}
+                                rows={2}
+                                autoFocus
+                              />
+                              <div className="flex items-center gap-2 mt-2">
+                                <button
+                                  onClick={() => handleDismiss(hole)}
+                                  disabled={!dismissExplanation.trim() || isProcessingPlotHole}
+                                  className="px-3 py-1 text-xs font-sans font-medium bg-bronze hover:bg-bronze-dark text-white transition-colors disabled:opacity-50"
+                                  style={{ borderRadius: '2px' }}
+                                >
+                                  {isProcessingPlotHole ? 'Saving...' : 'Dismiss'}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setDismissingIndex(null);
+                                    setDismissExplanation('');
+                                  }}
+                                  className="px-3 py-1 text-xs font-sans font-medium text-faded-ink hover:text-midnight"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
+                  </div>
+                )}
+
+                {/* Addressed Issues Section */}
+                {addressedHoles.length > 0 && (
+                  <div className="border-t border-slate-ui pt-4 mt-4">
+                    <button
+                      onClick={() => setShowAddressed(!showAddressed)}
+                      className="flex items-center gap-2 text-sm font-sans font-semibold text-faded-ink hover:text-midnight w-full"
+                    >
+                      <span className="text-xs">{showAddressed ? '▼' : '▶'}</span>
+                      Addressed Issues ({addressedHoles.length})
+                    </button>
+
+                    {showAddressed && (
+                      <div className="mt-3 space-y-3">
+                        {addressedHoles.map((dismissal) => (
+                          <div
+                            key={dismissal.id}
+                            className="p-3 bg-slate-ui/10 border border-slate-ui/30"
+                            style={{ borderRadius: '2px' }}
+                          >
+                            <div className="flex items-start justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`px-1.5 py-0.5 text-xs font-sans font-bold uppercase ${
+                                    dismissal.status === 'dismissed'
+                                      ? 'bg-gray-400 text-white'
+                                      : 'bg-blue-500 text-white'
+                                  }`}
+                                  style={{ borderRadius: '2px' }}
+                                >
+                                  {dismissal.status === 'dismissed' ? 'Intentional' : 'Accepted'}
+                                </span>
+                                <span
+                                  className={`px-1.5 py-0.5 text-xs font-sans uppercase ${
+                                    dismissal.severity === 'high'
+                                      ? 'text-red-600'
+                                      : dismissal.severity === 'medium'
+                                      ? 'text-yellow-600'
+                                      : 'text-gray-500'
+                                  }`}
+                                >
+                                  {dismissal.severity}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => undismissPlotHole(outline.id, dismissal.id)}
+                                className="text-xs font-sans text-red-500 hover:text-red-700"
+                                title="Remove dismissal so this can be re-flagged"
+                              >
+                                Undo
+                              </button>
+                            </div>
+                            <div className="text-sm font-sans text-midnight font-medium mb-1">{dismissal.issue}</div>
+                            <div className="text-xs font-sans text-faded-ink mb-1">Location: {dismissal.location}</div>
+
+                            {/* Show explanation for dismissed */}
+                            {dismissal.status === 'dismissed' && dismissal.user_explanation && (
+                              <div className="mt-2 p-2 bg-white border-l-2 border-gray-400 text-xs font-sans text-faded-ink italic">
+                                "{dismissal.user_explanation}"
+                              </div>
+                            )}
+
+                            {/* Show fix suggestions for accepted */}
+                            {dismissal.status === 'accepted' && dismissal.ai_fix_suggestions && dismissal.ai_fix_suggestions.length > 0 && (
+                              <div className="mt-2 space-y-2">
+                                {dismissal.ai_fix_suggestions.map((fix, fixIdx) => (
+                                  <div
+                                    key={fixIdx}
+                                    className="p-2 bg-blue-50 border-l-2 border-blue-400"
+                                    style={{ borderRadius: '2px' }}
+                                  >
+                                    <div className="text-xs font-sans font-semibold text-blue-800 mb-1">
+                                      {fix.title}
+                                    </div>
+                                    <div className="text-xs font-sans text-blue-700">{fix.description}</div>
+                                    <div className="text-xs font-sans text-blue-600 mt-1">
+                                      <span className="font-semibold">Where:</span> {fix.implementation}
+                                    </div>
+                                    <div className="text-xs font-sans text-blue-600">
+                                      <span className="font-semibold">Impact:</span> {fix.impact}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </>

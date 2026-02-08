@@ -5,6 +5,7 @@ Outline and Plot Beat models for story structure planning
 from sqlalchemy import Column, String, Text, DateTime, Integer, Float, Boolean, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
+import hashlib
 import uuid
 
 from app.database import Base
@@ -132,3 +133,36 @@ class PlotBeat(Base):
         type_indicator = "📍" if self.item_type == ITEM_TYPE_BEAT else "🎬"
         status = "✓" if self.is_completed else "○"
         return f"<PlotBeat(id={self.id}, type={type_indicator}, beat='{self.beat_name}', {status})>"
+
+
+def compute_plot_hole_hash(issue: str, location: str) -> str:
+    """Compute a short hash to identify a specific plot hole across re-analyses"""
+    return hashlib.sha256(f"{issue}:{location}".encode()).hexdigest()[:16]
+
+
+class PlotHoleDismissal(Base):
+    """Tracks user responses to AI-detected plot holes (dismissed or accepted)"""
+    __tablename__ = "plot_hole_dismissals"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    outline_id = Column(String, ForeignKey("outlines.id"), nullable=False)
+
+    # Plot hole identity — hash of issue+location to match across re-analyses
+    plot_hole_hash = Column(String, nullable=False)
+
+    # The original plot hole data (for display)
+    severity = Column(String, nullable=False)  # high, medium, low
+    location = Column(String, nullable=False)
+    issue = Column(String, nullable=False)
+    suggestion = Column(String, nullable=True)
+
+    # User response
+    status = Column(String, nullable=False, default="dismissed")  # dismissed, accepted
+    user_explanation = Column(Text, nullable=True)  # Why it's intentional (for dismissed)
+    ai_fix_suggestions = Column(JSON, nullable=True)  # AI-generated fix suggestions (for accepted)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship
+    outline = relationship("Outline", backref="plot_hole_dismissals")

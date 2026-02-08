@@ -449,7 +449,8 @@ Format as a JSON array of suggestion objects:
         self,
         outline: Outline,
         beats: List[PlotBeat],
-        db: Session
+        db: Session,
+        dismissed_holes: Optional[List] = None
     ) -> Dict[str, Any]:
         """
         Analyze outline for plot holes with manuscript context and validation
@@ -458,6 +459,7 @@ Format as a JSON array of suggestion objects:
             outline: Outline object
             beats: List of all plot beats with notes
             db: Database session
+            dismissed_holes: Optional list of PlotHoleDismissal records to exclude from re-flagging
 
         Returns:
             Dict with detected plot holes and usage info
@@ -479,14 +481,30 @@ Format as a JSON array of suggestion objects:
                     "overall_assessment": "Not enough content to analyze yet. Write some chapters or add notes to plot beats, then try again."
                 }
 
-            system_prompt = """You are a plot consistency analyst reading a SPECIFIC manuscript.
+            # Build dismissal context so the AI doesn't re-flag intentional choices
+            dismissal_context = ""
+            if dismissed_holes:
+                dismissed_items = []
+                for d in dismissed_holes:
+                    if d.status == "dismissed" and d.user_explanation:
+                        dismissed_items.append(
+                            f"- \"{d.issue}\" (at {d.location}) — Author's explanation: \"{d.user_explanation}\""
+                        )
+                if dismissed_items:
+                    dismissal_context = f"""
+
+PREVIOUSLY ADDRESSED: The author has explained these are intentional choices — do NOT flag them again:
+{chr(10).join(dismissed_items)}
+"""
+
+            system_prompt = f"""You are a plot consistency analyst reading a SPECIFIC manuscript.
 Your task is to identify plot holes and inconsistencies in the ACTUAL STORY, not provide generic writing advice.
 
 CRITICAL: You must reference specific story elements (character names, events, locations) when identifying problems.
 DO NOT give generic feedback like "The protagonist needs stronger motivation."
 INSTEAD give story-specific feedback like "Why does Jarn offer the protagonist this choice? His motivation is unclear."
 
-If you find no significant plot holes, explain why the story is coherent so far."""
+If you find no significant plot holes, explain why the story is coherent so far.{dismissal_context}"""
 
             # Build outline summary with beat notes and chapter content
             beat_summaries = []
@@ -591,6 +609,133 @@ Respond in JSON format:
 
         except Exception as e:
             logger.error(f"Plot hole detection failed: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    async def generate_plot_hole_fixes(
+        self,
+        outline: Outline,
+        beats: List[PlotBeat],
+        plot_hole: Dict[str, Any],
+        db: Session
+    ) -> Dict[str, Any]:
+        """
+        Generate AI-powered fix suggestions for a specific plot hole.
+
+        Args:
+            outline: Outline object
+            beats: List of plot beats
+            plot_hole: Dict with severity, location, issue, suggestion
+            db: Database session
+
+        Returns:
+            Dict with fix suggestions and usage info
+        """
+        try:
+            manuscript_context = _get_manuscript_context(db, outline)
+
+            system_prompt = """You are a creative writing consultant helping an author fix a specific plot hole.
+Provide 2-3 concrete, actionable fix suggestions. Each should be different approaches to solving the same problem.
+Reference specific characters, events, and locations from the manuscript."""
+
+            beat_summaries = []
+            for beat in sorted(beats, key=lambda b: b.order_index):
+                summary = f"{beat.beat_label} ({int(beat.target_position_percent * 100)}%)"
+                if beat.user_notes:
+                    summary += f": {beat.user_notes[:200]}"
+                beat_summaries.append(summary)
+
+            user_prompt = f"""Help fix this specific plot hole in the author's manuscript:
+
+**Plot Hole:**
+- Severity: {plot_hole.get('severity', 'medium')}
+- Location: {plot_hole.get('location', 'Unknown')}
+- Issue: {plot_hole.get('issue', '')}
+- Initial Suggestion: {plot_hole.get('suggestion', '')}
+
+**Story Context:**
+- Premise: {outline.premise or "See manuscript below"}
+- Genre: {outline.genre or "General fiction"}
+- Structure: {outline.structure_type}
+
+**Plot Structure:**
+{chr(10).join(beat_summaries)}
+
+**Manuscript Excerpt:**
+{manuscript_context[:5000]}
+
+Provide 2-3 different fix suggestions. Each should take a different approach.
+
+Respond in JSON format:
+{{
+  "fixes": [
+    {{
+      "title": "Short title for the fix approach",
+      "description": "2-3 sentence description of the fix",
+      "implementation": "Where in the manuscript this change would go (specific chapter/beat)",
+      "impact": "What other parts of the story this change would affect"
+    }}
+  ]
+}}"""
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.openrouter.BASE_URL}/chat/completions",
+                    headers=self.openrouter.headers,
+                    json={
+                        "model": self.openrouter.DEFAULT_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "max_tokens": 2000,
+                        "temperature": 0.7,
+                        "response_format": {"type": "json_object"}
+                    },
+                    timeout=60.0
+                )
+
+                if response.status_code != 200:
+                    if response.status_code == 402:
+                        return {
+                            "success": False,
+                            "error": "insufficient_credits",
+                            "message": "Your OpenRouter API key has insufficient credits."
+                        }
+                    elif response.status_code == 401:
+                        return {
+                            "success": False,
+                            "error": "invalid_api_key",
+                            "message": "Your OpenRouter API key is invalid."
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"api_error_{response.status_code}",
+                            "message": f"OpenRouter API error: {response.status_code}"
+                        }
+
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+                parsed = json.loads(content)
+
+                usage = data.get("usage", {})
+                cost = OpenRouterService.calculate_cost(usage)
+
+                return {
+                    "success": True,
+                    "fixes": parsed.get("fixes", []),
+                    "usage": usage,
+                    "cost": {
+                        "total_usd": round(cost, 4),
+                        "formatted": f"${cost:.4f}"
+                    }
+                }
+
+        except Exception as e:
+            logger.error(f"Plot hole fix generation failed: {e}")
             return {
                 "success": False,
                 "error": str(e)
@@ -793,7 +938,14 @@ Respond in JSON format:
                     total_usage["total_tokens"] += usage.get("total_tokens", 0)
 
             if "plot_holes" in analysis_types:
-                holes_result = await self.detect_plot_holes(outline, beats, db)
+                # Load dismissed holes to feed into analysis
+                from app.models.outline import PlotHoleDismissal
+                dismissed_holes = db.query(PlotHoleDismissal).filter(
+                    PlotHoleDismissal.outline_id == outline_id,
+                    PlotHoleDismissal.status == "dismissed"
+                ).all()
+
+                holes_result = await self.detect_plot_holes(outline, beats, db, dismissed_holes=dismissed_holes or None)
                 if holes_result["success"]:
                     results["data"]["plot_holes"] = holes_result["plot_holes"]
                     results["data"]["overall_assessment"] = holes_result.get("overall_assessment", "")

@@ -111,12 +111,35 @@ export interface OutlineUpdate {
 
 // === AI Analysis Types ===
 
+export interface PlotHoleFix {
+  title: string;
+  description: string;
+  implementation: string;
+  impact: string;
+}
+
+export interface PlotHoleDismissal {
+  id: string;
+  outline_id: string;
+  plot_hole_hash: string;
+  severity: 'high' | 'medium' | 'low';
+  location: string;
+  issue: string;
+  suggestion: string | null;
+  status: 'dismissed' | 'accepted';
+  user_explanation: string | null;
+  ai_fix_suggestions: PlotHoleFix[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PlotHole {
   severity: 'high' | 'medium' | 'low';
   location: string;
   issue: string;
   suggestion: string;
-  resolved?: boolean;  // Frontend-only flag
+  resolved?: boolean;  // Frontend-only flag (legacy)
+  dismissal?: PlotHoleDismissal;  // Linked dismissal if one exists
 }
 
 export interface PacingAnalysis {

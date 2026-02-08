@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.outline import (
-    Outline, PlotBeat, ITEM_TYPE_BEAT, ITEM_TYPE_SCENE,
+    Outline, PlotBeat, PlotHoleDismissal, compute_plot_hole_hash,
+    ITEM_TYPE_BEAT, ITEM_TYPE_SCENE,
     OUTLINE_SCOPE_MANUSCRIPT, OUTLINE_SCOPE_SERIES, OUTLINE_SCOPE_WORLD
 )
 from app.models.manuscript import Chapter
@@ -195,6 +196,23 @@ class OutlineListResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Plot Hole Dismissal Schemas
+class PlotHoleDismissRequest(BaseModel):
+    severity: str
+    location: str
+    issue: str
+    suggestion: Optional[str] = None
+    user_explanation: str
+
+
+class PlotHoleAcceptRequest(BaseModel):
+    severity: str
+    location: str
+    issue: str
+    suggestion: Optional[str] = None
+    api_key: str
 
 
 # CRUD Endpoints
@@ -1333,6 +1351,218 @@ async def reset_premise(
     db.commit()
 
     return {"success": True, "message": "Premise cleared successfully"}
+
+
+# Plot Hole Dismissal Endpoints
+
+@router.post("/{outline_id}/plot-holes/dismiss")
+async def dismiss_plot_hole(
+    outline_id: str,
+    request: PlotHoleDismissRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Dismiss a plot hole with an explanation (e.g., 'This is intentional — revealed in Act 2').
+    The explanation is fed into future AI analyses so the same issue isn't re-flagged.
+    """
+    outline = db.query(Outline).filter(Outline.id == outline_id).first()
+    if not outline:
+        raise HTTPException(status_code=404, detail="Outline not found")
+
+    plot_hole_hash = compute_plot_hole_hash(request.issue, request.location)
+
+    # Upsert: update if same hash exists, otherwise create
+    existing = db.query(PlotHoleDismissal).filter(
+        PlotHoleDismissal.outline_id == outline_id,
+        PlotHoleDismissal.plot_hole_hash == plot_hole_hash
+    ).first()
+
+    if existing:
+        existing.status = "dismissed"
+        existing.user_explanation = request.user_explanation
+        existing.ai_fix_suggestions = None
+        existing.updated_at = datetime.utcnow()
+        dismissal = existing
+    else:
+        dismissal = PlotHoleDismissal(
+            id=str(uuid.uuid4()),
+            outline_id=outline_id,
+            plot_hole_hash=plot_hole_hash,
+            severity=request.severity,
+            location=request.location,
+            issue=request.issue,
+            suggestion=request.suggestion,
+            status="dismissed",
+            user_explanation=request.user_explanation,
+        )
+        db.add(dismissal)
+
+    db.commit()
+    db.refresh(dismissal)
+
+    return {
+        "success": True,
+        "data": {
+            "id": dismissal.id,
+            "outline_id": dismissal.outline_id,
+            "plot_hole_hash": dismissal.plot_hole_hash,
+            "severity": dismissal.severity,
+            "location": dismissal.location,
+            "issue": dismissal.issue,
+            "suggestion": dismissal.suggestion,
+            "status": dismissal.status,
+            "user_explanation": dismissal.user_explanation,
+            "ai_fix_suggestions": dismissal.ai_fix_suggestions,
+            "created_at": dismissal.created_at.isoformat() if dismissal.created_at else None,
+            "updated_at": dismissal.updated_at.isoformat() if dismissal.updated_at else None,
+        }
+    }
+
+
+@router.post("/{outline_id}/plot-holes/accept")
+async def accept_plot_hole(
+    outline_id: str,
+    request: PlotHoleAcceptRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Accept a plot hole and get AI-generated fix suggestions.
+    """
+    outline = db.query(Outline).filter(Outline.id == outline_id).first()
+    if not outline:
+        raise HTTPException(status_code=404, detail="Outline not found")
+
+    if not request.api_key or len(request.api_key) < 10:
+        raise HTTPException(status_code=400, detail="Invalid API key")
+
+    plot_hole_hash = compute_plot_hole_hash(request.issue, request.location)
+    beats = sorted(outline.plot_beats, key=lambda b: b.order_index)
+
+    # Generate fix suggestions
+    ai_service = AIOutlineService(request.api_key)
+    fix_result = await ai_service.generate_plot_hole_fixes(
+        outline=outline,
+        beats=beats,
+        plot_hole={
+            "severity": request.severity,
+            "location": request.location,
+            "issue": request.issue,
+            "suggestion": request.suggestion,
+        },
+        db=db
+    )
+
+    if not fix_result["success"]:
+        raise HTTPException(
+            status_code=500,
+            detail=fix_result.get("message", "Failed to generate fix suggestions")
+        )
+
+    # Upsert dismissal record
+    existing = db.query(PlotHoleDismissal).filter(
+        PlotHoleDismissal.outline_id == outline_id,
+        PlotHoleDismissal.plot_hole_hash == plot_hole_hash
+    ).first()
+
+    if existing:
+        existing.status = "accepted"
+        existing.user_explanation = None
+        existing.ai_fix_suggestions = fix_result.get("fixes", [])
+        existing.updated_at = datetime.utcnow()
+        dismissal = existing
+    else:
+        dismissal = PlotHoleDismissal(
+            id=str(uuid.uuid4()),
+            outline_id=outline_id,
+            plot_hole_hash=plot_hole_hash,
+            severity=request.severity,
+            location=request.location,
+            issue=request.issue,
+            suggestion=request.suggestion,
+            status="accepted",
+            ai_fix_suggestions=fix_result.get("fixes", []),
+        )
+        db.add(dismissal)
+
+    db.commit()
+    db.refresh(dismissal)
+
+    return {
+        "success": True,
+        "data": {
+            "id": dismissal.id,
+            "outline_id": dismissal.outline_id,
+            "plot_hole_hash": dismissal.plot_hole_hash,
+            "severity": dismissal.severity,
+            "location": dismissal.location,
+            "issue": dismissal.issue,
+            "suggestion": dismissal.suggestion,
+            "status": dismissal.status,
+            "user_explanation": dismissal.user_explanation,
+            "ai_fix_suggestions": dismissal.ai_fix_suggestions,
+            "created_at": dismissal.created_at.isoformat() if dismissal.created_at else None,
+            "updated_at": dismissal.updated_at.isoformat() if dismissal.updated_at else None,
+        },
+        "usage": fix_result.get("usage", {}),
+        "cost": fix_result.get("cost", {}),
+    }
+
+
+@router.get("/{outline_id}/plot-holes/dismissals")
+async def get_plot_hole_dismissals(
+    outline_id: str,
+    db: Session = Depends(get_db)
+):
+    """List all plot hole dismissals for an outline."""
+    outline = db.query(Outline).filter(Outline.id == outline_id).first()
+    if not outline:
+        raise HTTPException(status_code=404, detail="Outline not found")
+
+    dismissals = db.query(PlotHoleDismissal).filter(
+        PlotHoleDismissal.outline_id == outline_id
+    ).order_by(PlotHoleDismissal.created_at.desc()).all()
+
+    return {
+        "success": True,
+        "data": [
+            {
+                "id": d.id,
+                "outline_id": d.outline_id,
+                "plot_hole_hash": d.plot_hole_hash,
+                "severity": d.severity,
+                "location": d.location,
+                "issue": d.issue,
+                "suggestion": d.suggestion,
+                "status": d.status,
+                "user_explanation": d.user_explanation,
+                "ai_fix_suggestions": d.ai_fix_suggestions,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+                "updated_at": d.updated_at.isoformat() if d.updated_at else None,
+            }
+            for d in dismissals
+        ]
+    }
+
+
+@router.delete("/{outline_id}/plot-holes/dismissals/{dismissal_id}")
+async def delete_plot_hole_dismissal(
+    outline_id: str,
+    dismissal_id: str,
+    db: Session = Depends(get_db)
+):
+    """Remove a dismissal so the plot hole can be re-flagged in future analyses."""
+    dismissal = db.query(PlotHoleDismissal).filter(
+        PlotHoleDismissal.id == dismissal_id,
+        PlotHoleDismissal.outline_id == outline_id
+    ).first()
+
+    if not dismissal:
+        raise HTTPException(status_code=404, detail="Dismissal not found")
+
+    db.delete(dismissal)
+    db.commit()
+
+    return {"success": True, "message": "Dismissal removed"}
 
 
 # Plot Beat Endpoints

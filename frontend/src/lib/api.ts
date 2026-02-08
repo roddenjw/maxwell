@@ -41,6 +41,7 @@ import type {
   LinkBeatToManuscriptRequest,
   SeriesStructureWithManuscripts,
   BeatFeedback,
+  PlotHoleDismissal,
 } from '@/types/outline';
 
 import type {
@@ -1226,6 +1227,84 @@ export const outlineApi = {
     }
 
     return response.json();
+  },
+
+  /**
+   * Dismiss a plot hole with an explanation
+   */
+  async dismissPlotHole(outlineId: string, data: {
+    severity: string;
+    location: string;
+    issue: string;
+    suggestion?: string;
+    user_explanation: string;
+  }): Promise<PlotHoleDismissal> {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/plot-holes/dismiss`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to dismiss plot hole');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Accept a plot hole and get AI fix suggestions
+   */
+  async acceptPlotHole(outlineId: string, data: {
+    severity: string;
+    location: string;
+    issue: string;
+    suggestion?: string;
+    api_key: string;
+  }): Promise<{ data: PlotHoleDismissal; usage?: any; cost?: { total_usd: number; formatted: string } }> {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/plot-holes/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to accept plot hole');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Get all plot hole dismissals for an outline
+   */
+  async getPlotHoleDismissals(outlineId: string): Promise<PlotHoleDismissal[]> {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/plot-holes/dismissals`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get dismissals');
+    }
+
+    const result = await response.json();
+    return result.data;
+  },
+
+  /**
+   * Delete a plot hole dismissal
+   */
+  async deletePlotHoleDismissal(outlineId: string, dismissalId: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/plot-holes/dismissals/${dismissalId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to delete dismissal');
+    }
   },
 };
 

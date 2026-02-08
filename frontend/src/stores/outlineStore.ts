@@ -15,6 +15,7 @@ import type {
   SeriesStructureSummary,
   SeriesStructureWithManuscripts,
   BeatFeedback,
+  PlotHoleDismissal,
 } from '@/types/outline';
 import { outlineApi, seriesOutlineApi } from '@/lib/api';
 import { toast } from './toastStore';
@@ -39,6 +40,10 @@ interface OutlineStore {
 
   // Feedback state for AI refinement
   beatFeedback: Map<string, BeatFeedback>;  // beatName -> feedback
+
+  // Plot hole dismissal state
+  plotHoleDismissals: PlotHoleDismissal[];
+  isProcessingPlotHole: boolean;
 
   // Actions
   setOutline: (outline: Outline | null) => void;
@@ -69,6 +74,12 @@ interface OutlineStore {
   getBeatAISuggestions: (beatId: string) => Promise<void>;
   clearAISuggestions: () => void;
   markPlotHoleResolved: (index: number) => void;
+
+  // Plot hole dismissal actions
+  loadPlotHoleDismissals: (outlineId: string) => Promise<void>;
+  dismissPlotHole: (outlineId: string, plotHole: { severity: string; location: string; issue: string; suggestion?: string }, explanation: string) => Promise<PlotHoleDismissal | null>;
+  acceptPlotHole: (outlineId: string, plotHole: { severity: string; location: string; issue: string; suggestion?: string }) => Promise<PlotHoleDismissal | null>;
+  undismissPlotHole: (outlineId: string, dismissalId: string) => Promise<void>;
 
   // Feedback Actions
   setBeatFeedback: (beatName: string, feedback: BeatFeedback) => void;
@@ -122,6 +133,10 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
   isAnalyzing: false,
   apiKey: typeof window !== 'undefined' ? localStorage.getItem('openrouter_api_key') : null,
   beatFeedback: new Map(),
+
+  // Plot hole dismissal initial state
+  plotHoleDismissals: [],
+  isProcessingPlotHole: false,
 
   // Synchronous Actions
   setOutline: (outline) => set({ outline, error: null }),
@@ -294,6 +309,7 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
       error: null,
       aiSuggestions: null,
       beatSuggestions: new Map(),
+      plotHoleDismissals: [],
     });
   },
 
@@ -330,9 +346,23 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     set({ isAnalyzing: true, error: null });
 
     try {
-      // This will be implemented in the API client
+      // Load dismissals in parallel with analysis
       const { aiApi } = await import('@/lib/api');
-      const result = await aiApi.analyzeOutline(outlineId, apiKey, analysisTypes);
+      const [result] = await Promise.all([
+        aiApi.analyzeOutline(outlineId, apiKey, analysisTypes),
+        get().loadPlotHoleDismissals(outlineId),
+      ]);
+
+      // Cross-reference plot holes with dismissals
+      const dismissals = get().plotHoleDismissals;
+      if (result.data.plot_holes && dismissals.length > 0) {
+        result.data.plot_holes = result.data.plot_holes.map(hole => {
+          const matching = dismissals.find(d =>
+            d.issue === hole.issue && d.location === hole.location
+          );
+          return matching ? { ...hole, dismissal: matching } : hole;
+        });
+      }
 
       set({
         aiSuggestions: result.data,
@@ -416,6 +446,103 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     }
 
     set({ aiSuggestions: updated });
+  },
+
+  // Plot hole dismissal actions
+  loadPlotHoleDismissals: async (outlineId: string) => {
+    try {
+      const dismissals = await outlineApi.getPlotHoleDismissals(outlineId);
+      set({ plotHoleDismissals: dismissals });
+    } catch (error: any) {
+      console.error('Failed to load plot hole dismissals:', error);
+    }
+  },
+
+  dismissPlotHole: async (outlineId: string, plotHole, explanation: string) => {
+    set({ isProcessingPlotHole: true });
+    try {
+      const dismissal = await outlineApi.dismissPlotHole(outlineId, {
+        severity: plotHole.severity,
+        location: plotHole.location,
+        issue: plotHole.issue,
+        suggestion: plotHole.suggestion,
+        user_explanation: explanation,
+      });
+
+      // Update local dismissals list
+      const existing = get().plotHoleDismissals;
+      const idx = existing.findIndex(d => d.plot_hole_hash === dismissal.plot_hole_hash);
+      if (idx >= 0) {
+        const updated = [...existing];
+        updated[idx] = dismissal;
+        set({ plotHoleDismissals: updated });
+      } else {
+        set({ plotHoleDismissals: [...existing, dismissal] });
+      }
+
+      set({ isProcessingPlotHole: false });
+      toast.success('Plot hole dismissed');
+      return dismissal;
+    } catch (error: any) {
+      console.error('Failed to dismiss plot hole:', error);
+      set({ isProcessingPlotHole: false });
+      toast.error('Failed to dismiss plot hole');
+      return null;
+    }
+  },
+
+  acceptPlotHole: async (outlineId: string, plotHole) => {
+    const apiKey = get().getApiKey();
+    if (!apiKey) {
+      toast.error('Please set your OpenRouter API key in Settings');
+      return null;
+    }
+
+    set({ isProcessingPlotHole: true });
+    try {
+      const result = await outlineApi.acceptPlotHole(outlineId, {
+        severity: plotHole.severity,
+        location: plotHole.location,
+        issue: plotHole.issue,
+        suggestion: plotHole.suggestion,
+        api_key: apiKey,
+      });
+
+      const dismissal = result.data;
+
+      // Update local dismissals list
+      const existing = get().plotHoleDismissals;
+      const idx = existing.findIndex(d => d.plot_hole_hash === dismissal.plot_hole_hash);
+      if (idx >= 0) {
+        const updated = [...existing];
+        updated[idx] = dismissal;
+        set({ plotHoleDismissals: updated });
+      } else {
+        set({ plotHoleDismissals: [...existing, dismissal] });
+      }
+
+      set({ isProcessingPlotHole: false });
+      toast.success(`Fix suggestions generated! Cost: ${result.cost?.formatted || '$0.00'}`);
+      return dismissal;
+    } catch (error: any) {
+      console.error('Failed to accept plot hole:', error);
+      set({ isProcessingPlotHole: false });
+      toast.error('Failed to generate fix suggestions: ' + (error.message || 'Unknown error'));
+      return null;
+    }
+  },
+
+  undismissPlotHole: async (outlineId: string, dismissalId: string) => {
+    try {
+      await outlineApi.deletePlotHoleDismissal(outlineId, dismissalId);
+      set({
+        plotHoleDismissals: get().plotHoleDismissals.filter(d => d.id !== dismissalId),
+      });
+      toast.success('Dismissal removed — plot hole will be re-flagged on next analysis');
+    } catch (error: any) {
+      console.error('Failed to remove dismissal:', error);
+      toast.error('Failed to remove dismissal');
+    }
   },
 
   // Feedback Actions

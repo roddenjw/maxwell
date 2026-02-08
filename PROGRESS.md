@@ -184,6 +184,32 @@
 ## Recent Completions (Last 2 Weeks)
 
 ### February 8, 2026
+- **Plot Hole Interaction System (FUTURE_ENHANCEMENTS)**
+  - **Problem:** Plot holes detected by AI could only be "Mark Resolved" (frontend-only toggle, lost on refresh). No way to explain intentional choices or get AI help fixing real holes.
+  - **Backend: PlotHoleDismissal Model + Migration**
+    - New `PlotHoleDismissal` model with hash-based identity (`sha256(issue:location)[:16]`) for matching across re-analyses
+    - Fields: `status` (dismissed/accepted), `user_explanation`, `ai_fix_suggestions` (JSON)
+    - Alembic migration for `plot_hole_dismissals` table
+  - **Backend: 4 New API Endpoints**
+    - `POST /{outline_id}/plot-holes/dismiss` — Dismiss with explanation (upserts by hash)
+    - `POST /{outline_id}/plot-holes/accept` — Accept + generate AI fix suggestions
+    - `GET /{outline_id}/plot-holes/dismissals` — List all dismissals
+    - `DELETE /{outline_id}/plot-holes/dismissals/{id}` — Undo a dismissal
+  - **Backend: AI Service Updates**
+    - `generate_plot_hole_fixes()` — New method using manuscript context to generate 2-3 fix suggestions with title, description, implementation location, and impact assessment
+    - `detect_plot_holes()` updated with `dismissed_holes` parameter — injects author explanations into system prompt so AI doesn't re-flag intentional choices
+    - `run_full_analysis()` auto-loads dismissed holes from DB
+  - **Frontend: Types + API + Store**
+    - New `PlotHoleDismissal`, `PlotHoleFix` types; `PlotHole` extended with optional `dismissal` field
+    - 4 new `outlineApi` methods: `dismissPlotHole`, `acceptPlotHole`, `getPlotHoleDismissals`, `deletePlotHoleDismissal`
+    - Store: `plotHoleDismissals` state, `loadPlotHoleDismissals`, `dismissPlotHole`, `acceptPlotHole`, `undismissPlotHole` actions
+    - `runAIAnalysis` now loads dismissals in parallel and cross-references with returned plot holes
+  - **Frontend: AISuggestionsPanel Redesign**
+    - Replaced "Mark Resolved" with two action buttons: "It's Intentional" (inline textarea for explanation) and "Help Me Fix This" (AI-generated fix suggestions with loading state)
+    - Collapsible "Addressed Issues" section showing dismissed/accepted holes with explanations, fix cards, and "Undo" buttons
+    - Fix suggestion cards show title, description, implementation location, and impact
+  - **Files Modified:** `backend/app/models/outline.py`, `backend/app/api/routes/outlines.py`, `backend/app/services/ai_outline_service.py`, `backend/migrations/versions/211d0b85589f_...py`, `frontend/src/types/outline.ts`, `frontend/src/lib/api.ts`, `frontend/src/stores/outlineStore.ts`, `frontend/src/components/Outline/AISuggestionsPanel.tsx`
+
 - **Context-Aware Codex Entity AI Generation (FEEDBACK General #2)**
   - **Problem:** AI field suggestions and AI Fill were hallucinating races/species not in the story (e.g., orcs/dwarves in a world without them)
   - **Root cause:** Both AI generation paths operated with minimal context — no wiki data, no world rules, no genre, no culture
