@@ -146,7 +146,7 @@ class WikiEntry(Base):
     # Relationships
     world = relationship("World", backref="wiki_entries")
     parent = relationship("WikiEntry", remote_side=[id], backref="children")
-    linked_entity = relationship("Entity", backref="wiki_entry")
+    linked_entity = relationship("Entity", foreign_keys=[linked_entity_id], backref="wiki_entries_linked")
 
     # Cross-references (outgoing)
     outgoing_references = relationship(

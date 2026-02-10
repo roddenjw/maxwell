@@ -15,7 +15,7 @@ import re
 import uuid
 
 from app.models.manuscript import Chapter
-from app.models.entity import Entity, EntityRelationship
+from app.models.entity import Entity, Relationship
 from app.models.wiki import WikiEntry, WikiEntryType, WikiCrossReference
 from app.services.wiki_service import WikiService
 
@@ -407,8 +407,8 @@ class RelationshipEvolutionService:
         character_names = [c.name for c in characters]
 
         # Get existing relationships from database
-        relationships = self.db.query(EntityRelationship).filter(
-            EntityRelationship.manuscript_id == manuscript_id
+        relationships = self.db.query(Relationship).filter(
+            Relationship.manuscript_id == manuscript_id
         ).all()
 
         # Track pairs we've analyzed

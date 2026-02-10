@@ -16,7 +16,7 @@ from app.models.wiki import (
 )
 from app.models.world_rule import WorldRule, RuleType, RuleSeverity
 from app.models.manuscript import Manuscript, Chapter
-from app.models.entity import Entity, EntityType
+from app.models.entity import Entity
 from app.models.world import World, Series
 from app.services.wiki_service import WikiService
 from app.services.nlp_service import nlp_service
