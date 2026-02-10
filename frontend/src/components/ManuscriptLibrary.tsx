@@ -4,12 +4,14 @@
  * Features: Tabbed view (Manuscripts/Worlds), Search, Sort, Inline Create, Styled Delete
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useManuscriptStore } from '../stores/manuscriptStore';
+import { useWorldStore } from '../stores/worldStore';
 import { toast } from '../stores/toastStore';
 import analytics from '../lib/analytics';
 import { ImportModal } from './Import';
 import { WorldLibrary } from './WorldLibrary';
+import MoveManuscriptModal from './WorldLibrary/MoveManuscriptModal';
 
 interface ManuscriptLibraryProps {
   onOpenManuscript: (manuscriptId: string) => void;
@@ -35,6 +37,37 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
 
   // Delete confirmation modal state
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+
+  // Kebab menu + move modal state
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [moveManuscriptId, setMoveManuscriptId] = useState<string | null>(null);
+  const [moveWorldId, setMoveWorldId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const { getWorldForManuscript } = useWorldStore();
+
+  // Close kebab menu on outside click
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [openMenuId]);
+
+  const handleMoveClick = useCallback(async (manuscriptId: string) => {
+    setOpenMenuId(null);
+    try {
+      const world = await getWorldForManuscript(manuscriptId, true);
+      setMoveWorldId(world.id);
+      setMoveManuscriptId(manuscriptId);
+    } catch {
+      toast.error('Failed to resolve world for manuscript');
+    }
+  }, [getWorldForManuscript]);
 
   const handleImportComplete = async (manuscriptId: string) => {
     setShowImportModal(false);
@@ -288,39 +321,67 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
               {filteredManuscripts.map((manuscript) => (
                 <div
                   key={manuscript.id}
-                  className="bg-white border border-slate-ui p-6 hover:shadow-book transition-shadow cursor-pointer group"
+                  className="relative bg-white border border-slate-ui p-6 hover:shadow-book transition-shadow cursor-pointer group"
                   style={{ borderRadius: '2px' }}
                   onClick={() => onOpenManuscript(manuscript.id)}
                 >
-                  <h3 className="text-xl font-serif font-bold text-midnight mb-2 group-hover:text-bronze transition-colors">
+                  {/* Kebab menu button */}
+                  <div className="absolute top-3 right-3" ref={openMenuId === manuscript.id ? menuRef : undefined}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuId(openMenuId === manuscript.id ? null : manuscript.id);
+                      }}
+                      className="p-1.5 text-faded-ink hover:text-midnight transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      title="More options"
+                    >
+                      <span className="text-lg leading-none">&#x22EE;</span>
+                    </button>
+                    {openMenuId === manuscript.id && (
+                      <div
+                        className="absolute right-0 top-full mt-1 bg-white border border-slate-ui shadow-book py-1 z-10 min-w-[160px]"
+                        style={{ borderRadius: '2px' }}
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveClick(manuscript.id);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm font-sans text-midnight hover:bg-bronze/10 transition-colors"
+                        >
+                          Move to World/Series
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(null);
+                            handleDelete(manuscript.id, manuscript.title);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm font-sans text-redline hover:bg-redline/10 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <h3 className="text-xl font-serif font-bold text-midnight mb-2 pr-8 group-hover:text-bronze transition-colors">
                     {manuscript.title}
                   </h3>
                   <div className="space-y-1 text-sm font-sans text-faded-ink mb-4">
                     <p>{(manuscript.wordCount || 0).toLocaleString()} words</p>
                     <p>Updated {formatDate(manuscript.updatedAt)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenManuscript(manuscript.id);
-                      }}
-                      className="flex-1 px-4 py-2 bg-bronze hover:bg-bronze-dark text-white font-sans text-sm font-medium uppercase tracking-button transition-colors"
-                      style={{ borderRadius: '2px' }}
-                    >
-                      Open
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(manuscript.id, manuscript.title);
-                      }}
-                      className="px-4 py-2 border border-redline text-redline hover:bg-redline hover:text-white font-sans text-sm font-medium uppercase tracking-button transition-colors"
-                      style={{ borderRadius: '2px' }}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenManuscript(manuscript.id);
+                    }}
+                    className="w-full px-4 py-2 bg-bronze hover:bg-bronze-dark text-white font-sans text-sm font-medium uppercase tracking-button transition-colors"
+                    style={{ borderRadius: '2px' }}
+                  >
+                    Open
+                  </button>
                 </div>
               ))}
             </div>
@@ -508,6 +569,26 @@ export default function ManuscriptLibrary({ onOpenManuscript, onSettingsClick, o
         <ImportModal
           onClose={() => setShowImportModal(false)}
           onImportComplete={handleImportComplete}
+        />
+      )}
+
+      {/* Move Manuscript Modal */}
+      {moveManuscriptId && (
+        <MoveManuscriptModal
+          manuscriptId={moveManuscriptId}
+          currentWorldId={moveWorldId}
+          onClose={() => {
+            setMoveManuscriptId(null);
+            setMoveWorldId(null);
+          }}
+          onMoved={(result) => {
+            setMoveManuscriptId(null);
+            setMoveWorldId(null);
+            fetchManuscripts();
+            toast.success(
+              `Manuscript moved successfully${result.entries_copied > 0 ? ` (${result.entries_copied} wiki entries copied)` : ''}`
+            );
+          }}
         />
       )}
     </div>
