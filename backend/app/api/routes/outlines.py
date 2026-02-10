@@ -954,6 +954,224 @@ async def generate_bridge_scenes(
         )
 
 
+class FillFromManuscriptRequest(BaseModel):
+    """Request for generating outline from existing manuscript content"""
+    manuscript_id: str
+    api_key: str
+    structure_type: Optional[str] = None  # If None, AI suggests best fit
+
+
+@router.post("/{outline_id}/fill-from-manuscript")
+async def fill_outline_from_manuscript(
+    outline_id: str,
+    request: FillFromManuscriptRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Reverse-engineer story structure from existing manuscript content.
+    AI analyzes chapters, suggests a structure, maps chapters to beats,
+    generates scene descriptions, and identifies structural gaps.
+    Creates plot beats and scenes on the outline.
+    """
+    try:
+        outline = db.query(Outline).filter(Outline.id == outline_id).first()
+        if not outline:
+            raise HTTPException(status_code=404, detail="Outline not found")
+
+        if not request.api_key or len(request.api_key) < 10:
+            raise HTTPException(status_code=400, detail="Invalid API key")
+
+        # Check manuscript has content
+        from app.models.manuscript import Manuscript
+        manuscript = db.query(Manuscript).filter(Manuscript.id == request.manuscript_id).first()
+        if not manuscript:
+            raise HTTPException(status_code=404, detail="Manuscript not found")
+
+        ai_service = AIOutlineService(request.api_key)
+        result = await ai_service.generate_outline_from_manuscript(
+            manuscript_id=request.manuscript_id,
+            db=db,
+            structure_type=request.structure_type or outline.structure_type
+        )
+
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("message", result.get("error", "Analysis failed"))
+            )
+
+        # Apply results: create/update beats on the outline
+        beat_mappings = result.get("beat_mappings", [])
+        scenes = result.get("scenes", [])
+
+        # Clear existing beats if outline was empty or user is refilling
+        existing_beats = db.query(PlotBeat).filter(
+            PlotBeat.outline_id == outline_id
+        ).all()
+
+        # Only clear if outline has no user content (no notes, no completions)
+        has_user_content = any(
+            b.user_notes or b.is_completed
+            for b in existing_beats
+        )
+
+        if not has_user_content:
+            for b in existing_beats:
+                db.delete(b)
+            db.flush()
+
+        # Update outline structure type if AI suggested one
+        suggested_structure = result.get("suggested_structure")
+        if suggested_structure and not request.structure_type:
+            outline.structure_type = suggested_structure
+            outline.updated_at = datetime.utcnow()
+
+        # Create beats from AI mappings
+        beat_id_map = {}  # beat_name -> new beat id
+        for idx, mapping in enumerate(beat_mappings):
+            beat = PlotBeat(
+                id=str(uuid.uuid4()),
+                outline_id=outline_id,
+                item_type=ITEM_TYPE_BEAT,
+                beat_name=mapping.get("beat_name", f"beat-{idx}"),
+                beat_label=mapping.get("beat_label", f"Beat {idx + 1}"),
+                beat_description=mapping.get("summary", ""),
+                target_position_percent=mapping.get("position_percent", idx / max(len(beat_mappings), 1)),
+                target_word_count=int(outline.target_word_count * mapping.get("position_percent", 0)),
+                order_index=idx * 2,  # Leave gaps for scenes
+                content_summary=mapping.get("summary", ""),
+            )
+
+            # Link to first chapter if available
+            chapter_ids = mapping.get("chapter_ids", [])
+            if chapter_ids:
+                beat.chapter_id = chapter_ids[0]
+
+            db.add(beat)
+            db.flush()
+            beat_id_map[mapping.get("beat_name", f"beat-{idx}")] = beat.id
+
+        # Create scenes from AI results
+        for scene_data in scenes:
+            after_beat_name = scene_data.get("after_beat", "")
+            parent_beat_id = beat_id_map.get(after_beat_name)
+
+            if not parent_beat_id:
+                continue
+
+            # Find parent beat's order index for positioning
+            parent_beat = db.query(PlotBeat).filter(PlotBeat.id == parent_beat_id).first()
+            if not parent_beat:
+                continue
+
+            scene = PlotBeat(
+                id=str(uuid.uuid4()),
+                outline_id=outline_id,
+                item_type=ITEM_TYPE_SCENE,
+                parent_beat_id=parent_beat_id,
+                beat_name=f"scene-{after_beat_name}-1",
+                beat_label=scene_data.get("title", "Scene"),
+                beat_description=scene_data.get("summary", ""),
+                target_position_percent=parent_beat.target_position_percent + 0.01,
+                target_word_count=1000,
+                order_index=parent_beat.order_index + 1,
+            )
+
+            if scene_data.get("chapter_id"):
+                scene.chapter_id = scene_data["chapter_id"]
+
+            db.add(scene)
+
+        # Reorder all items sequentially
+        all_items = db.query(PlotBeat).filter(
+            PlotBeat.outline_id == outline_id
+        ).order_by(PlotBeat.order_index, PlotBeat.item_type).all()
+
+        for i, item in enumerate(all_items):
+            item.order_index = i
+
+        db.commit()
+        db.refresh(outline)
+        _ = outline.plot_beats
+
+        return {
+            "success": True,
+            "data": {
+                "outline": serialize_outline(outline),
+                "suggested_structure": result.get("suggested_structure"),
+                "structure_rationale": result.get("structure_rationale"),
+                "gaps": result.get("gaps", []),
+                "pacing_notes": result.get("pacing_notes", ""),
+                "beats_created": len(beat_mappings),
+                "scenes_created": len(scenes),
+            },
+            "usage": result.get("usage", {}),
+            "cost": result.get("cost", {})
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fill from manuscript error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Fill from manuscript failed: {str(e)}")
+
+
+class GapAnalysisRequest(BaseModel):
+    """Request for structural gap analysis"""
+    manuscript_id: str
+    api_key: str
+
+
+@router.post("/{outline_id}/gap-analysis")
+async def analyze_outline_gaps(
+    outline_id: str,
+    request: GapAnalysisRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Analyze structural gaps between an outline and manuscript content.
+    Identifies weak/missing beats, thin scenes, and pacing issues.
+    """
+    try:
+        outline = db.query(Outline).filter(Outline.id == outline_id).first()
+        if not outline:
+            raise HTTPException(status_code=404, detail="Outline not found")
+
+        if not request.api_key or len(request.api_key) < 10:
+            raise HTTPException(status_code=400, detail="Invalid API key")
+
+        ai_service = AIOutlineService(request.api_key)
+        result = await ai_service.analyze_structural_gaps(
+            outline_id=outline_id,
+            manuscript_id=request.manuscript_id,
+            db=db
+        )
+
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("message", result.get("error", "Gap analysis failed"))
+            )
+
+        return {
+            "success": True,
+            "data": {
+                "beat_analysis": result.get("beat_analysis", []),
+                "overall_assessment": result.get("overall_assessment", ""),
+                "priority_gaps": result.get("priority_gaps", []),
+            },
+            "usage": result.get("usage", {}),
+            "cost": result.get("cost", {})
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Gap analysis error: {e}")
+        raise HTTPException(status_code=500, detail=f"Gap analysis failed: {str(e)}")
+
+
 class GenerateChaptersRequest(BaseModel):
     """Request model for chapter generation"""
     generation_strategy: str = "one-per-beat"  # "one-per-beat", "act-folders", "custom"

@@ -62,10 +62,11 @@ const CATEGORY_GROUPS = [
 
 interface WorldWikiBrowserProps {
   world: World;
+  manuscriptId?: string;
   onClose?: () => void;
 }
 
-export default function WorldWikiBrowser({ world, onClose }: WorldWikiBrowserProps) {
+export default function WorldWikiBrowser({ world, manuscriptId, onClose }: WorldWikiBrowserProps) {
   // State
   const [entries, setEntries] = useState<WikiEntry[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<WikiEntry | null>(null);
@@ -80,6 +81,8 @@ export default function WorldWikiBrowser({ world, onClose }: WorldWikiBrowserPro
   const [showCultureLinks, setShowCultureLinks] = useState(false);
   const [cultureMembers, setCultureMembers] = useState<any[]>([]);
   const [entityCultures, setEntityCultures] = useState<any[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<{ total_changes: number } | null>(null);
 
   // Fetch entries
   const fetchEntries = useCallback(async () => {
@@ -239,6 +242,31 @@ export default function WorldWikiBrowser({ world, onClose }: WorldWikiBrowserPro
     }
   };
 
+  // Scan manuscript for wiki entries
+  const handleScanManuscript = async () => {
+    if (!manuscriptId) return;
+    setIsScanning(true);
+    setScanResult(null);
+    try {
+      const response = await fetch(`${API_BASE}/wiki/auto-populate/manuscript`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manuscript_id: manuscriptId, world_id: world.id }),
+      });
+      if (!response.ok) throw new Error('Scan failed');
+      const result = await response.json();
+      setScanResult(result);
+      await fetchPendingChanges();
+      if (result.total_changes > 0) {
+        setShowChangeQueue(true);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Scan failed');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   // Filter entries by category
   const getFilteredEntries = () => {
     let filtered = entries;
@@ -342,6 +370,21 @@ export default function WorldWikiBrowser({ world, onClose }: WorldWikiBrowserPro
 
         {/* Bottom Actions */}
         <div className="p-3 border-t border-gray-200 space-y-2">
+          {manuscriptId && (
+            <button
+              onClick={handleScanManuscript}
+              disabled={isScanning}
+              className="w-full px-3 py-2 text-sm text-left flex items-center gap-2 text-amber-700 hover:bg-amber-50 rounded disabled:opacity-50"
+            >
+              <span>{isScanning ? '...' : '🔍'}</span>
+              <span>{isScanning ? 'Scanning...' : 'Scan Manuscript'}</span>
+              {scanResult && scanResult.total_changes > 0 && (
+                <span className="ml-auto bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs">
+                  +{scanResult.total_changes}
+                </span>
+              )}
+            </button>
+          )}
           <button
             onClick={() => setShowChangeQueue(true)}
             className="w-full px-3 py-2 text-sm text-left flex items-center gap-2 text-gray-700 hover:bg-gray-50 rounded"
@@ -648,6 +691,7 @@ export default function WorldWikiBrowser({ world, onClose }: WorldWikiBrowserPro
       {showChangeQueue && (
         <WikiChangeQueue
           worldId={world.id}
+          manuscriptId={manuscriptId}
           onClose={() => {
             setShowChangeQueue(false);
             fetchPendingChanges();

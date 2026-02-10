@@ -9,11 +9,34 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 import logging
 
-from app.models.outline import Outline, PlotBeat
+from app.models.outline import Outline, PlotBeat, ITEM_TYPE_BEAT, ITEM_TYPE_SCENE
 from app.models.manuscript import Manuscript, Chapter
 from app.services.openrouter_service import OpenRouterService
+from app.services.story_structures import get_available_structures
 
 logger = logging.getLogger(__name__)
+
+
+def _get_full_manuscript_text(db: Session, manuscript_id: str) -> tuple[str, list]:
+    """
+    Get all chapter text for a manuscript (for outline-from-manuscript analysis).
+    Returns (combined_text, chapters_list).
+    """
+    chapters = db.query(Chapter).filter(
+        Chapter.manuscript_id == manuscript_id,
+        Chapter.is_folder == 0
+    ).order_by(Chapter.order_index).all()
+
+    if not chapters:
+        return "", []
+
+    chapter_texts = []
+    for ch in chapters:
+        content = ch.content if ch.content else ""
+        if content.strip():
+            chapter_texts.append(f"## Chapter: {ch.title} (ID: {ch.id})\n{content}")
+
+    return "\n\n".join(chapter_texts), chapters
 
 
 def _get_manuscript_context(db: Session, outline: Outline) -> str:
@@ -1121,3 +1144,284 @@ Respond in JSON format:
                 "success": False,
                 "error": str(e)
             }
+
+    async def generate_outline_from_manuscript(
+        self,
+        manuscript_id: str,
+        db: Session,
+        structure_type: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Reverse-engineer an outline from existing manuscript content.
+        Analyzes chapters and maps them to story structure beats.
+
+        Args:
+            manuscript_id: ID of the manuscript to analyze
+            db: Database session
+            structure_type: Optional structure to use; if None, AI suggests best fit
+
+        Returns:
+            Dict with suggested structure, beat mappings, scenes, and gaps
+        """
+        try:
+            manuscript_text, chapters = _get_full_manuscript_text(db, manuscript_id)
+            if not manuscript_text.strip():
+                return {
+                    "success": False,
+                    "error": "No chapter content found in manuscript"
+                }
+
+            # Build structure list for AI
+            structures = get_available_structures()
+            structure_descriptions = "\n".join(
+                f"- {s['id']}: {s['name']} ({s['beat_count']} beats) — {s['description']}"
+                for s in structures
+            )
+
+            structure_constraint = ""
+            if structure_type:
+                structure_constraint = f"\nIMPORTANT: Use the '{structure_type}' structure template. Map the manuscript to its beats."
+
+            # Truncate text for token limits (~40k chars ~ 10k tokens)
+            max_text = manuscript_text[:40000]
+            if len(manuscript_text) > 40000:
+                max_text += "\n\n[... manuscript continues ...]"
+
+            system_prompt = """You are an expert story structure analyst. You read completed or in-progress manuscripts and identify the underlying narrative structure — which beats are present, where they occur, and what gaps exist.
+
+You must be specific: reference actual chapter titles, character names, and events from the manuscript."""
+
+            user_prompt = f"""Analyze this manuscript and map it to a story structure.
+
+**Available Story Structures:**
+{structure_descriptions}
+{structure_constraint}
+
+**Manuscript Content:**
+{max_text}
+
+**Chapters (in order):**
+{json.dumps([{{"id": ch.id, "title": ch.title, "order": ch.order_index, "word_count": len((ch.content or "").split())}} for ch in chapters], indent=2)}
+
+INSTRUCTIONS:
+1. {"Use the specified structure." if structure_type else "Choose the structure that best fits this manuscript from the available options."}
+2. For each beat in the chosen structure, identify which chapter(s) correspond to it
+3. Generate scene descriptions for the transitions between beats
+4. Identify structural gaps — beats that are weak or missing entirely
+5. Include pacing notes
+
+Respond in JSON format:
+{{
+  "suggested_structure": "structure-id from the list above",
+  "structure_rationale": "1-2 sentences on why this structure fits",
+  "beat_mappings": [
+    {{
+      "beat_name": "beat-name from the structure template",
+      "beat_label": "Human-readable label",
+      "chapter_ids": ["list of chapter IDs that map to this beat"],
+      "summary": "What happens at this beat in the manuscript (specific events/characters)",
+      "confidence": 0.85,
+      "position_percent": 0.12
+    }}
+  ],
+  "scenes": [
+    {{
+      "after_beat": "beat-name this scene follows",
+      "title": "Scene title",
+      "summary": "What happens (use character names)",
+      "chapter_id": "chapter ID if content exists, or null",
+      "pov_character": "Character name or null"
+    }}
+  ],
+  "gaps": [
+    {{
+      "beat_name": "beat-name that is weak or missing",
+      "position_percent": 0.5,
+      "description": "What's missing or underdeveloped",
+      "severity": "high|medium|low",
+      "suggestion": "What kind of content could fill this gap"
+    }}
+  ],
+  "pacing_notes": "Overall assessment of the manuscript's pacing"
+}}"""
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.openrouter.BASE_URL}/chat/completions",
+                    headers=self.openrouter.headers,
+                    json={
+                        "model": self.openrouter.DEFAULT_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "max_tokens": 4000,
+                        "temperature": 0.4,
+                        "response_format": {"type": "json_object"}
+                    },
+                    timeout=90.0
+                )
+
+                if response.status_code != 200:
+                    if response.status_code == 402:
+                        return {"success": False, "error": "insufficient_credits", "message": "Insufficient OpenRouter credits."}
+                    elif response.status_code == 401:
+                        return {"success": False, "error": "invalid_api_key", "message": "Invalid API key."}
+                    return {"success": False, "error": f"api_error_{response.status_code}"}
+
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+                parsed = json.loads(content)
+
+                usage = data.get("usage", {})
+                cost = OpenRouterService.calculate_cost(usage)
+
+                return {
+                    "success": True,
+                    **parsed,
+                    "usage": usage,
+                    "cost": {"total_usd": round(cost, 4), "formatted": f"${cost:.4f}"}
+                }
+
+        except Exception as e:
+            logger.error(f"Outline from manuscript generation failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def analyze_structural_gaps(
+        self,
+        outline_id: str,
+        manuscript_id: str,
+        db: Session
+    ) -> Dict[str, Any]:
+        """
+        Analyze gaps between outline beats/scenes and actual manuscript content.
+        Compares outline structure to chapter content for completeness.
+
+        Args:
+            outline_id: ID of the outline to analyze
+            manuscript_id: ID of the manuscript
+            db: Database session
+
+        Returns:
+            Dict with gap analysis per beat/scene
+        """
+        try:
+            outline = db.query(Outline).filter(Outline.id == outline_id).first()
+            if not outline:
+                return {"success": False, "error": "Outline not found"}
+
+            beats = sorted(outline.plot_beats, key=lambda b: b.order_index)
+            manuscript_text, chapters = _get_full_manuscript_text(db, manuscript_id)
+
+            if not manuscript_text.strip():
+                return {"success": False, "error": "No manuscript content to analyze"}
+
+            # Build beat/scene overview
+            beat_info = []
+            for beat in beats:
+                chapter_content = ""
+                if beat.chapter_id:
+                    ch = next((c for c in chapters if c.id == beat.chapter_id), None)
+                    if ch and ch.content:
+                        word_count = len(ch.content.split())
+                        chapter_content = f"Linked to '{ch.title}' ({word_count} words)"
+
+                beat_info.append({
+                    "beat_name": beat.beat_name,
+                    "beat_label": beat.beat_label,
+                    "item_type": beat.item_type or ITEM_TYPE_BEAT,
+                    "description": beat.beat_description or "",
+                    "position": f"{int(beat.target_position_percent * 100)}%",
+                    "target_words": beat.target_word_count,
+                    "actual_words": beat.actual_word_count,
+                    "chapter_linked": chapter_content or "No chapter linked",
+                    "is_completed": beat.is_completed,
+                    "user_notes": beat.user_notes or ""
+                })
+
+            # Truncate manuscript for token limits
+            max_text = manuscript_text[:30000]
+            if len(manuscript_text) > 30000:
+                max_text += "\n\n[... manuscript continues ...]"
+
+            system_prompt = """You are a story structure analyst evaluating how well a manuscript covers its outline.
+For each beat and scene, assess coverage quality and identify gaps.
+Be specific — reference actual character names, events, and chapter titles."""
+
+            user_prompt = f"""Analyze how well this manuscript covers its outline structure.
+
+**Outline Beats and Scenes:**
+{json.dumps(beat_info, indent=2)}
+
+**Manuscript Content:**
+{max_text}
+
+For each beat/scene, assess:
+1. Coverage: Is it well-written, thin, or missing entirely?
+2. Quality: Does the content fulfill the beat's narrative purpose?
+3. Suggestions: What could improve weak areas?
+
+Respond in JSON format:
+{{
+  "beat_analysis": [
+    {{
+      "beat_name": "beat-name",
+      "beat_label": "label",
+      "coverage": "strong|adequate|thin|missing",
+      "word_count_assessment": "over|on-target|under|empty",
+      "notes": "Specific assessment of what works or doesn't",
+      "suggestion": "What could be added or improved (use character names)"
+    }}
+  ],
+  "overall_assessment": "1-2 sentence summary of structural completeness",
+  "priority_gaps": [
+    {{
+      "beat_name": "beat with most critical gap",
+      "severity": "high|medium|low",
+      "description": "What's missing and why it matters",
+      "suggested_scene": "Scene idea that could fill the gap (with character names)"
+    }}
+  ]
+}}"""
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.openrouter.BASE_URL}/chat/completions",
+                    headers=self.openrouter.headers,
+                    json={
+                        "model": self.openrouter.DEFAULT_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "max_tokens": 3000,
+                        "temperature": 0.4,
+                        "response_format": {"type": "json_object"}
+                    },
+                    timeout=60.0
+                )
+
+                if response.status_code != 200:
+                    if response.status_code == 402:
+                        return {"success": False, "error": "insufficient_credits", "message": "Insufficient OpenRouter credits."}
+                    elif response.status_code == 401:
+                        return {"success": False, "error": "invalid_api_key", "message": "Invalid API key."}
+                    return {"success": False, "error": f"api_error_{response.status_code}"}
+
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+                parsed = json.loads(content)
+
+                usage = data.get("usage", {})
+                cost = OpenRouterService.calculate_cost(usage)
+
+                return {
+                    "success": True,
+                    **parsed,
+                    "usage": usage,
+                    "cost": {"total_usd": round(cost, 4), "formatted": f"${cost:.4f}"}
+                }
+
+        except Exception as e:
+            logger.error(f"Structural gap analysis failed: {e}")
+            return {"success": False, "error": str(e)}

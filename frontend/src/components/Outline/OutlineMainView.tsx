@@ -10,7 +10,7 @@ import { useOutlineStore } from '@/stores/outlineStore';
 import { useCodexStore } from '@/stores/codexStore';
 import { toast } from '@/stores/toastStore';
 import { Z_INDEX } from '@/lib/zIndex';
-import { brainstormingApi } from '@/lib/api';
+import { brainstormingApi, outlineApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/retry';
 import PlotBeatCard from './PlotBeatCard';
 import AddSceneButton from './AddSceneButton';
@@ -56,6 +56,24 @@ export default function OutlineMainView({
   const [showStructureInfo, setShowStructureInfo] = useState(false);
   const [structureDetails, setStructureDetails] = useState<any>(null);
   const [isGeneratingFromCharacters, setIsGeneratingFromCharacters] = useState(false);
+  const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
+  const [gapAnalysis, setGapAnalysis] = useState<{
+    beat_analysis: Array<{
+      beat_name: string;
+      beat_label: string;
+      coverage: 'strong' | 'adequate' | 'thin' | 'missing';
+      word_count_assessment: string;
+      notes: string;
+      suggestion: string;
+    }>;
+    overall_assessment: string;
+    priority_gaps: Array<{
+      beat_name: string;
+      severity: string;
+      description: string;
+      suggested_scene: string;
+    }>;
+  } | null>(null);
 
   // Get characters from codex store
   const { entities, loadEntities } = useCodexStore();
@@ -221,6 +239,30 @@ export default function OutlineMainView({
       loadOutline(manuscriptId);
     }
   }, [manuscriptId, loadOutline]);
+
+  const handleAnalyzeGaps = async () => {
+    if (!outline) return;
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      toast.error('Please add your OpenRouter API key in Settings');
+      return;
+    }
+    setIsAnalyzingGaps(true);
+    setGapAnalysis(null);
+    try {
+      const result = await outlineApi.analyzeGaps(outline.id, {
+        manuscript_id: manuscriptId,
+        api_key: apiKey,
+      });
+      if (result.success) {
+        setGapAnalysis(result.data);
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setIsAnalyzingGaps(false);
+    }
+  };
 
   // Loading state
   if (isLoading) {
@@ -543,7 +585,99 @@ export default function OutlineMainView({
 
         {/* Analytics View */}
         {viewMode === 'analytics' && outline && (
-          <ProgressDashboard outline={outline} />
+          <div>
+            <ProgressDashboard outline={outline} />
+
+            {/* Gap Analysis Section */}
+            <div className="max-w-4xl mx-auto px-6 pb-6">
+              <div className="border-2 border-slate-ui bg-white p-6" style={{ borderRadius: '2px' }}>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-serif font-bold text-lg text-midnight">Structure Analysis</h3>
+                    <p className="text-sm font-sans text-faded-ink">
+                      Compare outline beats against actual manuscript content
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleAnalyzeGaps}
+                    disabled={isAnalyzingGaps}
+                    className="px-4 py-2 bg-bronze hover:bg-bronze-dark text-white font-sans text-sm font-medium uppercase tracking-button transition-colors disabled:opacity-50"
+                    style={{ borderRadius: '2px' }}
+                  >
+                    {isAnalyzingGaps ? 'Analyzing...' : gapAnalysis ? 'Refresh Analysis' : 'Analyze Structure'}
+                  </button>
+                </div>
+
+                {isAnalyzingGaps && (
+                  <div className="flex items-center gap-3 py-8 justify-center">
+                    <div className="inline-block w-5 h-5 border-2 border-bronze border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm font-sans text-faded-ink">AI is comparing outline to manuscript...</span>
+                  </div>
+                )}
+
+                {gapAnalysis && (
+                  <div className="space-y-4">
+                    {/* Overall Assessment */}
+                    <div className="p-3 bg-vellum border border-slate-ui" style={{ borderRadius: '2px' }}>
+                      <p className="text-sm font-sans text-midnight">{gapAnalysis.overall_assessment}</p>
+                    </div>
+
+                    {/* Beat Coverage */}
+                    <div className="space-y-2">
+                      {gapAnalysis.beat_analysis.map((beat) => {
+                        const coverageColor = {
+                          strong: 'bg-green-100 text-green-700 border-green-300',
+                          adequate: 'bg-blue-100 text-blue-700 border-blue-300',
+                          thin: 'bg-amber-100 text-amber-700 border-amber-300',
+                          missing: 'bg-red-100 text-red-700 border-red-300',
+                        }[beat.coverage] || 'bg-gray-100 text-gray-700 border-gray-300';
+
+                        return (
+                          <div key={beat.beat_name} className="flex items-start gap-3 p-3 border border-slate-ui" style={{ borderRadius: '2px' }}>
+                            <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium border ${coverageColor}`} style={{ borderRadius: '2px' }}>
+                              {beat.coverage}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-sans font-medium text-midnight">{beat.beat_label}</p>
+                              <p className="text-xs font-sans text-faded-ink mt-0.5">{beat.notes}</p>
+                              {beat.suggestion && (beat.coverage === 'thin' || beat.coverage === 'missing') && (
+                                <p className="text-xs font-sans text-bronze mt-1">Suggestion: {beat.suggestion}</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Priority Gaps */}
+                    {gapAnalysis.priority_gaps.length > 0 && (
+                      <div>
+                        <h4 className="font-sans font-semibold text-sm text-midnight mb-2 uppercase tracking-wider">Priority Gaps</h4>
+                        <div className="space-y-2">
+                          {gapAnalysis.priority_gaps.map((gap, i) => {
+                            const severityColor = {
+                              high: 'border-l-red-500',
+                              medium: 'border-l-amber-500',
+                              low: 'border-l-blue-500',
+                            }[gap.severity] || 'border-l-gray-500';
+
+                            return (
+                              <div key={i} className={`p-3 border border-slate-ui border-l-4 ${severityColor}`} style={{ borderRadius: '2px' }}>
+                                <p className="text-sm font-sans font-medium text-midnight">{gap.description}</p>
+                                {gap.suggested_scene && (
+                                  <p className="text-xs font-sans text-bronze mt-1">Scene idea: {gap.suggested_scene}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 

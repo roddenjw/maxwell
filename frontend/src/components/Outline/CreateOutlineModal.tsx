@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from '@/stores/toastStore';
+import { outlineApi } from '@/lib/api';
 import { Z_INDEX } from '@/lib/zIndex';
 
 interface StoryStructure {
@@ -40,6 +41,7 @@ export default function CreateOutlineModal({
   const [showBrainstorm, setShowBrainstorm] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFilling, setIsFilling] = useState(false);
   const [step, setStep] = useState<'structure' | 'details'>('structure');
 
   useEffect(() => {
@@ -103,6 +105,45 @@ export default function CreateOutlineModal({
       toast.error(error.message || 'Failed to generate premise');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleFillFromManuscript = async () => {
+    const apiKey = localStorage.getItem('openrouter_api_key');
+    if (!apiKey) {
+      toast.error('Please add your OpenRouter API key in Settings to use AI features');
+      return;
+    }
+
+    setIsFilling(true);
+    try {
+      // Create a blank outline first
+      const response = await fetch(
+        `http://localhost:8000/api/outlines/from-template?manuscript_id=${manuscriptId}&structure_type=story-arc-9&genre=${genre}&target_word_count=${targetWordCount}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+      );
+
+      if (!response.ok) throw new Error('Failed to create outline');
+      const result = await response.json();
+      const outline = result.data;
+
+      // Fill it from manuscript
+      const fillResponse = await outlineApi.fillFromManuscript(outline.id, {
+        manuscript_id: manuscriptId,
+        api_key: apiKey,
+        structure_type: selectedStructure || undefined,
+      });
+
+      if (fillResponse.success) {
+        toast.success(`Outline filled: ${fillResponse.data.beats_created} beats, ${fillResponse.data.scenes_created} scenes detected`);
+        onSuccess();
+        handleClose();
+      }
+    } catch (error: any) {
+      console.error('Fill from manuscript failed:', error);
+      toast.error(error.message || 'Failed to fill outline from manuscript');
+    } finally {
+      setIsFilling(false);
     }
   };
 
@@ -199,6 +240,36 @@ export default function CreateOutlineModal({
         {/* Content */}
         <div className="p-6">
           {step === 'structure' && (
+            <div>
+            {/* Fill from Manuscript option */}
+            <div className="mb-6 p-5 border-2 border-amber-300 bg-amber-50/50" style={{ borderRadius: '2px' }}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-serif font-bold text-lg text-midnight mb-1">
+                    Already have content written?
+                  </h3>
+                  <p className="text-sm font-sans text-faded-ink">
+                    AI will analyze your manuscript, detect story structure, and map chapters to beats automatically.
+                  </p>
+                </div>
+                <button
+                  onClick={handleFillFromManuscript}
+                  disabled={isFilling}
+                  className="ml-4 flex-shrink-0 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-sans text-sm font-medium uppercase tracking-button transition-colors disabled:opacity-50"
+                  style={{ borderRadius: '2px' }}
+                >
+                  {isFilling ? 'Analyzing...' : 'Fill from Manuscript'}
+                </button>
+              </div>
+              {isFilling && (
+                <div className="mt-3 flex items-center gap-2 text-sm text-amber-700">
+                  <div className="inline-block w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                  <span>AI is reading your chapters and detecting story structure...</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-sm font-sans text-faded-ink mb-3 uppercase tracking-wider">Or choose a structure template:</p>
             <div className="grid md:grid-cols-2 gap-4">
               {structures.map((structure) => (
                 <button
@@ -237,6 +308,7 @@ export default function CreateOutlineModal({
                   </div>
                 </button>
               ))}
+            </div>
             </div>
           )}
 

@@ -732,7 +732,7 @@ export default function CodexMainView({
                   <div className="inline-block w-8 h-8 border-2 border-bronze border-t-transparent rounded-full animate-spin" />
                 </div>
               }>
-                <LazyWorldWikiBrowser world={currentWorld} />
+                <LazyWorldWikiBrowser world={currentWorld} manuscriptId={manuscriptId} />
               </Suspense>
             ) : (
               <div className="flex items-center justify-center h-full">

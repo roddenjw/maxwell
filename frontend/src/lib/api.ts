@@ -1306,6 +1306,89 @@ export const outlineApi = {
       throw new Error(error.detail || 'Failed to delete dismissal');
     }
   },
+
+  /**
+   * Fill outline from existing manuscript content (reverse-engineer structure)
+   */
+  async fillFromManuscript(outlineId: string, data: {
+    manuscript_id: string;
+    api_key: string;
+    structure_type?: string;
+  }): Promise<{
+    success: boolean;
+    data: {
+      outline: Outline;
+      suggested_structure: string;
+      structure_rationale: string;
+      gaps: Array<{
+        beat_name: string;
+        position_percent: number;
+        description: string;
+        severity: 'high' | 'medium' | 'low';
+        suggestion: string;
+      }>;
+      pacing_notes: string;
+      beats_created: number;
+      scenes_created: number;
+    };
+    usage: any;
+    cost: { total_usd: number; formatted: string };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/fill-from-manuscript`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to fill outline from manuscript');
+    }
+
+    return response.json();
+  },
+
+  /**
+   * Analyze structural gaps between outline and manuscript
+   */
+  async analyzeGaps(outlineId: string, data: {
+    manuscript_id: string;
+    api_key: string;
+  }): Promise<{
+    success: boolean;
+    data: {
+      beat_analysis: Array<{
+        beat_name: string;
+        beat_label: string;
+        coverage: 'strong' | 'adequate' | 'thin' | 'missing';
+        word_count_assessment: 'over' | 'on-target' | 'under' | 'empty';
+        notes: string;
+        suggestion: string;
+      }>;
+      overall_assessment: string;
+      priority_gaps: Array<{
+        beat_name: string;
+        severity: 'high' | 'medium' | 'low';
+        description: string;
+        suggested_scene: string;
+      }>;
+    };
+    usage: any;
+    cost: { total_usd: number; formatted: string };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/outlines/${outlineId}/gap-analysis`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to analyze gaps');
+    }
+
+    return response.json();
+  },
 };
 
 /**
