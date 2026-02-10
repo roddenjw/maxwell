@@ -155,10 +155,10 @@ export default function EditorToolbar(_props: EditorToolbarProps = {}) {
       {/* Undo/Redo */}
       <div className="toolbar-group flex gap-1 border-r border-slate-ui pr-2 mr-2">
         <ToolbarButton onClick={undo} title="Undo (Ctrl+Z)">
-          &larrhk;
+          ↩
         </ToolbarButton>
         <ToolbarButton onClick={redo} title="Redo (Ctrl+Y)">
-          &rarrhk;
+          ↪
         </ToolbarButton>
       </div>
 

@@ -134,35 +134,9 @@ const BeatContextPanel = React.memo(function BeatContextPanel({
     }
   };
 
-  // Show "Create Outline" prompt if no outline exists
+  // No outline and no beat — nothing to show
   if (!outline && !beat) {
-    return (
-      <div className="fixed top-20 right-4 z-20 w-80">
-        <div className="bg-vellum border-2 border-bronze/30 rounded shadow-lg">
-          <div className="p-4 space-y-3">
-            <div className="text-center">
-              <div className="text-4xl mb-3">📋</div>
-              <h3 className="font-serif font-bold text-lg text-midnight mb-2">
-                No Story Structure Yet
-              </h3>
-              <p className="text-sm font-sans text-faded-ink mb-4">
-                Create an outline to track your progress with plot beats while writing.
-              </p>
-              <button
-                onClick={() => {
-                  // User can create outline from the main navigation
-                  alert('Switch to the Outline view in the sidebar to create your story structure!');
-                }}
-                className="w-full px-4 py-2 bg-bronze text-white font-sans font-semibold hover:bg-bronze-dark transition-colors"
-                style={{ borderRadius: '2px' }}
-              >
-                Create Outline
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // Don't render if no beat linked (but outline exists)
