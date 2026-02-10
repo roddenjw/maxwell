@@ -16,6 +16,7 @@ import {
   getTropeById,
 } from '@/lib/characterArchetypes';
 import { CultureLinkManager } from '@/components/Wiki/CultureLinkManager';
+import { CharacterArcDesigner } from '@/components/CharacterArc';
 
 // Template field labels and icons for display
 const TEMPLATE_FIELD_CONFIG: Record<string, { label: string; icon: string }> = {
@@ -560,6 +561,78 @@ function CulturalBackgroundSection({ entityId, manuscriptId }: { entityId: strin
             cultureApi.getEntityCultures(wikiEntryId).then(setCultures).catch(() => {});
           }}
         />
+      )}
+    </>
+  );
+}
+
+// ==================== Arc Designer Section ====================
+
+function ArcDesignerSection({ entityId, entityName, manuscriptId }: { entityId: string; entityName: string; manuscriptId: string }) {
+  const [wikiEntryId, setWikiEntryId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showDesigner, setShowDesigner] = useState(false);
+
+  useEffect(() => {
+    async function findWikiEntry() {
+      setIsLoading(true);
+      try {
+        const msRes = await fetch(`${API_BASE}/manuscripts/${manuscriptId}`);
+        if (!msRes.ok) { setIsLoading(false); return; }
+        const msData = await msRes.json();
+        const ms = msData.data || msData;
+
+        let wId: string | null = null;
+        if (ms.series_id) {
+          const seriesRes = await fetch(`${API_BASE}/worlds/series/${ms.series_id}`);
+          if (seriesRes.ok) {
+            const seriesData = await seriesRes.json();
+            const series = seriesData.data || seriesData;
+            wId = series.world_id || null;
+          }
+        }
+
+        if (!wId) { setIsLoading(false); return; }
+
+        const wikiRes = await fetch(`${API_BASE}/wiki/worlds/${wId}/entries?limit=500`);
+        if (!wikiRes.ok) { setIsLoading(false); return; }
+        const wikiEntries = await wikiRes.json();
+        const linked = wikiEntries.find((e: any) => e.linked_entity_id === entityId);
+
+        if (linked) {
+          setWikiEntryId(linked.id);
+        }
+      } catch {
+        // Silently fail - arc designer section is optional
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    findWikiEntry();
+  }, [entityId, manuscriptId]);
+
+  if (isLoading || !wikiEntryId) return null;
+
+  return (
+    <>
+      <button
+        onClick={() => setShowDesigner(true)}
+        className="px-2 py-1 text-xs font-sans bg-purple-600 text-white hover:bg-purple-700 rounded-sm"
+      >
+        Arc Designer
+      </button>
+      {showDesigner && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-vellum w-[90vw] max-w-5xl h-[85vh] overflow-auto rounded shadow-xl">
+            <CharacterArcDesigner
+              characterWikiId={wikiEntryId}
+              characterName={entityName}
+              manuscriptId={manuscriptId}
+              onClose={() => setShowDesigner(false)}
+            />
+          </div>
+        </div>
       )}
     </>
   );
@@ -1136,12 +1209,15 @@ export default function EntityDetail({
         {/* Character Development Fields (Sanderson Methodology) - Only for CHARACTER type */}
         {(isEditing ? editedType : entity.type) === EntityType.CHARACTER && (
           <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 p-4 space-y-4" style={{ borderRadius: '2px' }}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">🎭</span>
-              <label className="text-sm font-sans font-semibold text-purple-800">
-                Character Development
-              </label>
-              <span className="text-xs text-purple-600">(Sanderson Methodology)</span>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🎭</span>
+                <label className="text-sm font-sans font-semibold text-purple-800">
+                  Character Development
+                </label>
+                <span className="text-xs text-purple-600">(Sanderson Methodology)</span>
+              </div>
+              <ArcDesignerSection entityId={entity.id} entityName={entity.name} manuscriptId={entity.manuscript_id} />
             </div>
 
             {/* Want */}
