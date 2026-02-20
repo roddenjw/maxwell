@@ -347,11 +347,18 @@ class WikiAutoPopulator:
         """Extract world rules from text and create proposals"""
         changes = []
 
-        # Get existing rules to avoid duplicates
+        # Get existing rules to avoid duplicates (check both WorldRule and WikiEntry tables)
         existing_rules = self.db.query(WorldRule).filter(
             WorldRule.world_id == world_id
         ).all()
         existing_rule_names = {r.rule_name.lower() for r in existing_rules}
+
+        existing_wiki_rules = self.db.query(WikiEntry).filter(
+            WikiEntry.world_id == world_id,
+            WikiEntry.entry_type == WikiEntryType.WORLD_RULE.value
+        ).all()
+        for wr in existing_wiki_rules:
+            existing_rule_names.add(wr.title.lower())
 
         for pattern, rule_category in WORLD_RULE_PATTERNS:
             matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
@@ -376,7 +383,7 @@ class WikiAutoPopulator:
 
                 # Skip duplicates in current batch
                 if any(
-                    c.new_value.get("rule_name", "").lower() == rule_name.lower()
+                    c.new_value.get("title", "").lower() == rule_name.lower()
                     for c in changes
                 ):
                     continue
@@ -386,21 +393,25 @@ class WikiAutoPopulator:
                 end = min(len(text), match.end() + 100)
                 context = text[start:end]
 
-                # Create proposed rule
-                proposed_rule = {
-                    "rule_name": rule_name,
-                    "rule_type": self._map_rule_category(rule_category),
-                    "rule_description": rule_content,
-                    "condition": rule_content[:200] if len(rule_content) > 200 else rule_content,
-                    "validation_keywords": self._extract_keywords(rule_content),
+                # Create proposed entry (must have title/entry_type for approval flow)
+                proposed_entry = {
+                    "entry_type": WikiEntryType.WORLD_RULE.value,
+                    "title": rule_name,
+                    "summary": rule_content[:300],
+                    "content": rule_content,
+                    "structured_data": {
+                        "rule_type": self._map_rule_category(rule_category),
+                        "condition": rule_content[:200] if len(rule_content) > 200 else rule_content,
+                        "validation_keywords": self._extract_keywords(rule_content),
+                    },
                 }
 
                 # Create change proposal
                 change = self.wiki_service.create_change(
                     world_id=world_id,
                     change_type=WikiChangeType.CREATE.value,
-                    new_value=proposed_rule,
-                    proposed_entry=proposed_rule,
+                    new_value=proposed_entry,
+                    proposed_entry=proposed_entry,
                     reason=f"World rule detected ({rule_category})",
                     source_text=context,
                     source_chapter_id=chapter_id,

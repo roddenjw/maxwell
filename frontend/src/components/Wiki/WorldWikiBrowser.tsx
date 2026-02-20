@@ -3,17 +3,17 @@
  * Main browser for exploring and managing World Wiki entries
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { World } from '../../types/world';
 import type {
   WikiEntry,
   WikiEntryType,
+  WikiEntryStatus,
   WikiEntryCreate,
-  WikiFilters,
+  WikiEntryUpdate,
   WikiReferenceType,
 } from '../../types/wiki';
 import { WIKI_REFERENCE_TYPE_INFO } from '../../types/wiki';
-import { WikiEntryCard } from './WikiEntryCard';
 import { WikiEntryEditor } from './WikiEntryEditor';
 import { WikiChangeQueue } from './WikiChangeQueue';
 import { CultureLinkManager } from './CultureLinkManager';
@@ -21,7 +21,7 @@ import { cultureApi } from '../../lib/api';
 
 const API_BASE = 'http://localhost:8000';
 
-// Category groups for sidebar
+// Category groups for sidebar tree
 const CATEGORY_GROUPS = [
   {
     name: 'Characters',
@@ -60,6 +60,95 @@ const CATEGORY_GROUPS = [
   },
 ];
 
+// ==================== StatusSelector ====================
+
+const STATUS_CONFIG: Record<WikiEntryStatus, { label: string; bg: string; text: string; dot: string }> = {
+  draft: { label: 'Draft', bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-400' },
+  published: { label: 'Published', bg: 'bg-green-100', text: 'text-green-700', dot: 'bg-green-500' },
+  archived: { label: 'Archived', bg: 'bg-amber-100', text: 'text-amber-700', dot: 'bg-amber-500' },
+};
+
+function StatusSelector({
+  status,
+  onChange,
+}: {
+  status: WikiEntryStatus;
+  onChange: (status: WikiEntryStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const config = STATUS_CONFIG[status];
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text} hover:opacity-80 transition-opacity`}
+      >
+        <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
+        {config.label}
+        <span className="text-[10px] opacity-60">▾</span>
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-[120px]">
+          {(Object.keys(STATUS_CONFIG) as WikiEntryStatus[]).map((s) => {
+            const c = STATUS_CONFIG[s];
+            return (
+              <button
+                key={s}
+                onClick={() => {
+                  onChange(s);
+                  setOpen(false);
+                }}
+                className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 hover:bg-gray-50 ${
+                  s === status ? 'font-medium' : ''
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                {c.label}
+                {s === status && <span className="ml-auto text-blue-500">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== Type icon helper ====================
+
+const TYPE_ICONS: Partial<Record<WikiEntryType, string>> = {
+  character: '👤',
+  character_arc: '📈',
+  character_relationship: '💬',
+  location: '📍',
+  location_history: '🏚️',
+  magic_system: '✨',
+  world_rule: '📜',
+  technology: '⚙️',
+  culture: '🎭',
+  religion: '🕯️',
+  faction: '🏛️',
+  artifact: '💎',
+  creature: '🐉',
+  event: '⚡',
+  timeline_fact: '📅',
+  theme: '💡',
+};
+
+// ==================== Main Component ====================
+
 interface WorldWikiBrowserProps {
   world: World;
   manuscriptId?: string;
@@ -73,32 +162,92 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState<WikiFilters>({});
   const [showEditor, setShowEditor] = useState(false);
   const [showChangeQueue, setShowChangeQueue] = useState(false);
   const [pendingChangesCount, setPendingChangesCount] = useState(0);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    () => new Set(CATEGORY_GROUPS.map((g) => g.name))
+  );
   const [showCultureLinks, setShowCultureLinks] = useState(false);
   const [cultureMembers, setCultureMembers] = useState<any[]>([]);
   const [entityCultures, setEntityCultures] = useState<any[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<{ total_changes: number } | null>(null);
 
-  // Fetch entries
+  // Inline editing state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editSummary, setEditSummary] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editAliases, setEditAliases] = useState<string[]>([]);
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [editNewAlias, setEditNewAlias] = useState('');
+  const [editNewTag, setEditNewTag] = useState('');
+  const [editParentCultureId, setEditParentCultureId] = useState('');
+  const [editAvailableCultures, setEditAvailableCultures] = useState<Array<{ id: string; title: string }>>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const startEditing = () => {
+    if (!selectedEntry) return;
+    setEditTitle(selectedEntry.title);
+    setEditSummary(selectedEntry.summary || '');
+    setEditContent(selectedEntry.content || '');
+    setEditAliases(selectedEntry.aliases || []);
+    setEditTags(selectedEntry.tags || []);
+    setEditNewAlias('');
+    setEditNewTag('');
+    setEditParentCultureId(selectedEntry.parent_id || '');
+    setEditError(null);
+    setIsEditing(true);
+    // Load cultures for parent dropdown
+    cultureApi.getWorldCultures(world.id)
+      .then((cultures: any[]) => setEditAvailableCultures(cultures.map(c => ({ id: c.id, title: c.title }))))
+      .catch(() => setEditAvailableCultures([]));
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditError(null);
+  };
+
+  const saveEditing = async () => {
+    if (!selectedEntry || !editTitle.trim()) {
+      setEditError('Title is required');
+      return;
+    }
+    setIsSaving(true);
+    setEditError(null);
+    try {
+      const updates: WikiEntryUpdate = {
+        title: editTitle.trim(),
+        summary: editSummary.trim() || undefined,
+        content: editContent.trim() || undefined,
+        aliases: editAliases.length > 0 ? editAliases : undefined,
+        tags: editTags.length > 0 ? editTags : undefined,
+        parent_id: editParentCultureId || undefined,
+      };
+      await handleUpdateEntry(selectedEntry.id, updates);
+      setIsEditing(false);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Cancel editing when switching entries
+  useEffect(() => {
+    setIsEditing(false);
+  }, [selectedEntry?.id]);
+
+  // Fetch all entries (no server-side filtering)
   const fetchEntries = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      let url = `${API_BASE}/wiki/worlds/${world.id}/entries?limit=500`;
-
-      if (filters.entryType) {
-        url += `&entry_type=${filters.entryType}`;
-      }
-      if (filters.status) {
-        url += `&status=${filters.status}`;
-      }
-
+      const url = `${API_BASE}/wiki/worlds/${world.id}/entries?limit=500`;
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch wiki entries');
 
@@ -109,7 +258,7 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
     } finally {
       setIsLoading(false);
     }
-  }, [world.id, filters]);
+  }, [world.id]);
 
   // Fetch pending changes count
   const fetchPendingChanges = useCallback(async () => {
@@ -123,29 +272,6 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
       console.error('Failed to fetch pending changes:', err);
     }
   }, [world.id]);
-
-  // Search entries
-  const searchEntries = useCallback(async () => {
-    if (!searchQuery.trim()) {
-      fetchEntries();
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await fetch(
-        `${API_BASE}/wiki/worlds/${world.id}/search?q=${encodeURIComponent(searchQuery)}`
-      );
-      if (!response.ok) throw new Error('Search failed');
-
-      const data = await response.json();
-      setEntries(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [world.id, searchQuery, fetchEntries]);
 
   // Initial fetch
   useEffect(() => {
@@ -170,16 +296,60 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
     cultureApi.getEntityCultures(selectedEntry.id).then(setEntityCultures).catch(() => setEntityCultures([]));
   }, [selectedEntry?.id]);
 
-  // Handle search
-  useEffect(() => {
-    const debounce = setTimeout(() => {
-      if (searchQuery) {
-        searchEntries();
-      }
-    }, 300);
+  // Client-side filtered + grouped category tree
+  const categoryTree = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
 
-    return () => clearTimeout(debounce);
-  }, [searchQuery, searchEntries]);
+    return CATEGORY_GROUPS.map((group) => {
+      // Group entries by entry_type within this category
+      const typeMap = new Map<WikiEntryType, WikiEntry[]>();
+
+      for (const type of group.types) {
+        const matching = entries
+          .filter((e) => {
+            if (e.entry_type !== type) return false;
+            if (!query) return true;
+            return (
+              e.title.toLowerCase().includes(query) ||
+              e.summary?.toLowerCase().includes(query) ||
+              e.aliases?.some((a) => a.toLowerCase().includes(query))
+            );
+          })
+          .sort((a, b) => a.title.localeCompare(b.title));
+
+        if (matching.length > 0) {
+          typeMap.set(type, matching);
+        }
+      }
+
+      const totalCount = Array.from(typeMap.values()).reduce((sum, arr) => sum + arr.length, 0);
+
+      return {
+        ...group,
+        typeMap,
+        totalCount,
+      };
+    }).filter((g) => g.totalCount > 0);
+  }, [entries, searchQuery]);
+
+  // Toggle category expansion
+  const toggleCategory = (name: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next;
+    });
+  };
+
+  // During search, auto-expand all categories with matches
+  const isCategoryExpanded = (name: string) => {
+    if (searchQuery.trim()) return true;
+    return expandedCategories.has(name);
+  };
 
   // Create new entry
   const handleCreateEntry = async (data: WikiEntryCreate) => {
@@ -267,32 +437,9 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
     }
   };
 
-  // Filter entries by category
-  const getFilteredEntries = () => {
-    let filtered = entries;
-
-    if (filters.entryType) {
-      filtered = filtered.filter((e) => e.entry_type === filters.entryType);
-    }
-
-    return filtered;
-  };
-
-  // Get counts by type
-  const getTypeCounts = () => {
-    const counts: Record<string, number> = {};
-    entries.forEach((e) => {
-      counts[e.entry_type] = (counts[e.entry_type] || 0) + 1;
-    });
-    return counts;
-  };
-
-  const filteredEntries = getFilteredEntries();
-  const typeCounts = getTypeCounts();
-
   return (
     <div className="flex h-full bg-gray-50">
-      {/* Sidebar */}
+      {/* ==================== Sidebar Tree ==================== */}
       <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
         {/* Header */}
         <div className="p-4 border-b border-gray-200">
@@ -321,51 +468,78 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
           />
         </div>
 
-        {/* Categories */}
+        {/* Category Tree */}
         <div className="flex-1 overflow-y-auto">
-          <button
-            onClick={() => setFilters({})}
-            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${
-              !filters.entryType
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <span>📚</span>
-            <span>All Entries</span>
-            <span className="ml-auto text-xs text-gray-400">
-              {entries.length}
-            </span>
-          </button>
-
-          {CATEGORY_GROUPS.map((group) => (
-            <div key={group.name} className="border-t border-gray-100">
-              <div className="px-4 py-2 text-xs font-medium text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                <span>{group.icon}</span>
-                <span>{group.name}</span>
-              </div>
-              {group.types.map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setFilters({ entryType: type })}
-                  className={`w-full px-4 py-1.5 pl-8 text-left text-sm flex items-center justify-between ${
-                    filters.entryType === type
-                      ? 'bg-blue-50 text-blue-700 font-medium'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="capitalize">
-                    {type.replace(/_/g, ' ')}
-                  </span>
-                  {typeCounts[type] > 0 && (
-                    <span className="text-xs text-gray-400">
-                      {typeCounts[type]}
-                    </span>
-                  )}
-                </button>
-              ))}
+          {isLoading ? (
+            <div className="p-4 text-sm text-gray-400">Loading...</div>
+          ) : categoryTree.length === 0 ? (
+            <div className="p-4 text-sm text-gray-400">
+              {searchQuery ? 'No matches' : 'No entries yet'}
             </div>
-          ))}
+          ) : (
+            categoryTree.map((group) => {
+              const expanded = isCategoryExpanded(group.name);
+              // If only one entry_type has entries, skip the sub-type header
+              const singleType = group.typeMap.size === 1;
+
+              return (
+                <div key={group.name} className="border-b border-gray-100">
+                  {/* Category header */}
+                  <button
+                    onClick={() => toggleCategory(group.name)}
+                    className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 font-medium text-gray-700"
+                  >
+                    <span className="text-[10px] text-gray-400 w-3">
+                      {expanded ? '▾' : '▸'}
+                    </span>
+                    <span>{group.icon}</span>
+                    <span>{group.name}</span>
+                    <span className="ml-auto text-xs text-gray-400 font-normal">
+                      {group.totalCount}
+                    </span>
+                  </button>
+
+                  {/* Expanded children */}
+                  {expanded && (
+                    <div className="pb-1">
+                      {Array.from(group.typeMap.entries()).map(([type, typeEntries]) => (
+                        <div key={type}>
+                          {/* Sub-type header (skip if only one type in this category) */}
+                          {!singleType && (
+                            <div className="px-8 py-1 text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                              {type.replace(/_/g, ' ')}
+                            </div>
+                          )}
+                          {/* Entry names */}
+                          {typeEntries.map((entry) => (
+                            <button
+                              key={entry.id}
+                              onClick={() => setSelectedEntry(entry)}
+                              className={`w-full text-left text-sm flex items-center gap-1.5 py-1 ${
+                                singleType ? 'px-8' : 'px-10'
+                              } ${
+                                selectedEntry?.id === entry.id
+                                  ? 'bg-blue-50 text-blue-700 font-medium'
+                                  : 'text-gray-600 hover:bg-gray-50'
+                              }`}
+                            >
+                              <span className="truncate flex-1">{entry.title}</span>
+                              {entry.status === 'draft' && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" title="Draft" />
+                              )}
+                              {entry.status === 'archived' && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Archived" />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* Bottom Actions */}
@@ -410,135 +584,303 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Toolbar */}
-        <div className="px-4 py-3 bg-white border-b border-gray-200 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">
-              {filteredEntries.length} entries
-              {filters.entryType && ` in ${filters.entryType.replace(/_/g, ' ')}`}
-            </span>
+      {/* ==================== Main Content Area ==================== */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-gray-500">Loading wiki...</div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded ${
-                viewMode === 'list' ? 'bg-gray-200' : 'hover:bg-gray-100'
-              }`}
-              title="List view"
-            >
-              ☰
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded ${
-                viewMode === 'grid' ? 'bg-gray-200' : 'hover:bg-gray-100'
-              }`}
-              title="Grid view"
-            >
-              ⊞
-            </button>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-red-500">{error}</div>
           </div>
-        </div>
+        ) : !selectedEntry ? (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center h-full text-gray-500">
+            <span className="text-4xl mb-3">📚</span>
+            <p className="text-lg font-medium text-gray-700 mb-1">{world.name}</p>
+            {entries.length === 0 ? (
+              <>
+                <p className="text-sm mb-4">No wiki entries yet</p>
+                <button
+                  onClick={() => setShowEditor(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Create First Entry
+                </button>
+              </>
+            ) : (
+              <p className="text-sm">Select an entry from the sidebar</p>
+            )}
+          </div>
+        ) : isEditing ? (
+          /* Inline edit mode */
+          <div className="max-w-3xl mx-auto p-6">
+            {/* Header row */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{TYPE_ICONS[selectedEntry.entry_type] || '📄'}</span>
+                <span className="text-lg font-medium text-gray-500">Editing</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={cancelEditing}
+                  disabled={isSaving}
+                  className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveEditing}
+                  disabled={isSaving || !editTitle.trim()}
+                  className="px-3 py-1.5 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
 
-        {/* Entry List */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-gray-500">Loading wiki...</div>
-            </div>
-          ) : error ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-red-500">{error}</div>
-            </div>
-          ) : filteredEntries.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500">
-              <span className="text-4xl mb-2">📚</span>
-              <p>No wiki entries yet</p>
-              <button
-                onClick={() => setShowEditor(true)}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Create First Entry
-              </button>
-            </div>
-          ) : (
-            <div
-              className={
-                viewMode === 'grid'
-                  ? 'grid grid-cols-2 lg:grid-cols-3 gap-4'
-                  : 'space-y-3'
-              }
-            >
-              {filteredEntries.map((entry) => (
-                <WikiEntryCard
-                  key={entry.id}
-                  entry={entry}
-                  viewMode={viewMode}
-                  isSelected={selectedEntry?.id === entry.id}
-                  onClick={() => setSelectedEntry(entry)}
-                  onEdit={() => {
-                    setSelectedEntry(entry);
-                    setShowEditor(true);
-                  }}
-                  onDelete={() => handleDeleteEntry(entry.id)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Detail Panel */}
-      {selectedEntry && !showEditor && (
-        <div className="w-96 bg-white border-l border-gray-200 flex flex-col">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="font-medium text-gray-800">{selectedEntry.title}</h3>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowEditor(true)}
-                className="text-blue-600 hover:text-blue-700 text-sm"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => setSelectedEntry(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            {selectedEntry.summary && (
-              <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-400 uppercase mb-1">
-                  Summary
-                </h4>
-                <p className="text-sm text-gray-600">{selectedEntry.summary}</p>
+            {editError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+                {editError}
               </div>
             )}
+
+            {/* Title */}
+            <div className="mb-5">
+              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Title</label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="w-full px-3 py-2 text-lg font-bold border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+            </div>
+
+            {/* Summary */}
+            <div className="mb-5">
+              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Summary</label>
+              <textarea
+                value={editSummary}
+                onChange={(e) => setEditSummary(e.target.value)}
+                placeholder="Brief summary..."
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Content */}
+            <div className="mb-5">
+              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Content</label>
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                placeholder="Detailed content..."
+                rows={10}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              />
+            </div>
+
+            {/* Aliases */}
+            <div className="mb-5">
+              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Aliases</label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={editNewAlias}
+                  onChange={(e) => setEditNewAlias(e.target.value)}
+                  placeholder="Add alias..."
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (editNewAlias.trim() && !editAliases.includes(editNewAlias.trim())) {
+                        setEditAliases([...editAliases, editNewAlias.trim()]);
+                        setEditNewAlias('');
+                      }
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (editNewAlias.trim() && !editAliases.includes(editNewAlias.trim())) {
+                      setEditAliases([...editAliases, editNewAlias.trim()]);
+                      setEditNewAlias('');
+                    }
+                  }}
+                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 text-sm"
+                >
+                  Add
+                </button>
+              </div>
+              {editAliases.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {editAliases.map((alias, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-700 text-sm rounded-md"
+                    >
+                      {alias}
+                      <button
+                        type="button"
+                        onClick={() => setEditAliases(editAliases.filter((a) => a !== alias))}
+                        className="text-gray-400 hover:text-gray-600 ml-0.5"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Tags */}
+            <div className="mb-5">
+              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Tags</label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={editNewTag}
+                  onChange={(e) => setEditNewTag(e.target.value)}
+                  placeholder="Add tag..."
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (editNewTag.trim() && !editTags.includes(editNewTag.trim())) {
+                        setEditTags([...editTags, editNewTag.trim()]);
+                        setEditNewTag('');
+                      }
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (editNewTag.trim() && !editTags.includes(editNewTag.trim())) {
+                      setEditTags([...editTags, editNewTag.trim()]);
+                      setEditNewTag('');
+                    }
+                  }}
+                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 text-sm"
+                >
+                  Add
+                </button>
+              </div>
+              {editTags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {editTags.map((tag, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 text-sm rounded-md"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => setEditTags(editTags.filter((t) => t !== tag))}
+                        className="text-blue-400 hover:text-blue-600 ml-0.5"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Parent Culture */}
+            {selectedEntry.entry_type !== 'culture' && editAvailableCultures.length > 0 && (
+              <div className="mb-5">
+                <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Parent Culture
+                </label>
+                <select
+                  value={editParentCultureId}
+                  onChange={(e) => setEditParentCultureId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                >
+                  <option value="">None</option>
+                  {editAvailableCultures.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Read-only detail view */
+          <div className="max-w-3xl mx-auto p-6">
+            {/* Header row */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{TYPE_ICONS[selectedEntry.entry_type] || '📄'}</span>
+                <h2 className="text-2xl font-bold text-gray-900">{selectedEntry.title}</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={startEditing}
+                  className="px-3 py-1.5 text-sm text-blue-600 border border-blue-300 rounded-md hover:bg-blue-50"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDeleteEntry(selectedEntry.id)}
+                  className="px-3 py-1.5 text-sm text-red-600 border border-red-300 rounded-md hover:bg-red-50"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-header */}
+            <div className="flex items-center gap-3 mb-6 text-sm text-gray-500 flex-wrap">
+              <span className="capitalize">{selectedEntry.entry_type.replace(/_/g, ' ')}</span>
+              <span className="text-gray-300">|</span>
+              <StatusSelector
+                status={selectedEntry.status as WikiEntryStatus}
+                onChange={(status) => handleUpdateEntry(selectedEntry.id, { status })}
+              />
+              <span className="text-gray-300">|</span>
+              <span>Created {new Date(selectedEntry.created_at).toLocaleDateString()}</span>
+              {selectedEntry.confidence_score < 1 && (
+                <>
+                  <span className="text-gray-300">|</span>
+                  <span>Confidence: {Math.round(selectedEntry.confidence_score * 100)}%</span>
+                </>
+              )}
+            </div>
+
+            {/* Summary */}
+            {selectedEntry.summary && (
+              <div className="mb-6">
+                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Summary</h3>
+                <p className="text-base text-gray-700 leading-relaxed">{selectedEntry.summary}</p>
+              </div>
+            )}
+
+            {/* Content */}
             {selectedEntry.content && (
-              <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-400 uppercase mb-1">
-                  Content
-                </h4>
-                <div className="prose prose-sm max-w-none">
+              <div className="mb-6">
+                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Content</h3>
+                <div className="prose prose-gray max-w-none text-gray-700 leading-relaxed whitespace-pre-wrap">
                   {selectedEntry.content}
                 </div>
               </div>
             )}
+
+            {/* Aliases */}
             {selectedEntry.aliases && selectedEntry.aliases.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-400 uppercase mb-1">
-                  Aliases
-                </h4>
-                <div className="flex flex-wrap gap-1">
+              <div className="mb-6">
+                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Aliases</h3>
+                <div className="flex flex-wrap gap-2">
                   {selectedEntry.aliases.map((alias, i) => (
                     <span
                       key={i}
-                      className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded"
+                      className="px-2.5 py-1 bg-gray-100 text-gray-600 text-sm rounded-md"
                     >
                       {alias}
                     </span>
@@ -546,16 +888,16 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
                 </div>
               </div>
             )}
+
+            {/* Tags */}
             {selectedEntry.tags && selectedEntry.tags.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-400 uppercase mb-1">
-                  Tags
-                </h4>
-                <div className="flex flex-wrap gap-1">
+              <div className="mb-6">
+                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Tags</h3>
+                <div className="flex flex-wrap gap-2">
                   {selectedEntry.tags.map((tag, i) => (
                     <span
                       key={i}
-                      className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded"
+                      className="px-2.5 py-1 bg-blue-100 text-blue-700 text-sm rounded-md"
                     >
                       {tag}
                     </span>
@@ -563,13 +905,14 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
                 </div>
               </div>
             )}
+
             {/* Culture Members (shown when viewing a culture entry) */}
             {selectedEntry.entry_type === 'culture' && cultureMembers.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
+              <div className="mb-6">
+                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
                   Members ({cultureMembers.length})
-                </h4>
-                <div className="space-y-1.5">
+                </h3>
+                <div className="space-y-2">
                   {(() => {
                     const grouped: Record<string, any[]> = {};
                     cultureMembers.forEach((m: any) => {
@@ -587,7 +930,7 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
                           return (
                             <div
                               key={m.reference_id}
-                              className="flex items-center gap-2 pl-2 py-0.5 cursor-pointer hover:bg-gray-50 rounded"
+                              className="flex items-center gap-2 pl-2 py-1 cursor-pointer hover:bg-gray-50 rounded"
                               onClick={() => {
                                 const entry = entries.find(e => e.id === m.entity_id);
                                 if (entry) setSelectedEntry(entry);
@@ -609,11 +952,11 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
 
             {/* Culture Links (shown for non-culture entries that have culture links) */}
             {selectedEntry.entry_type !== 'culture' && entityCultures.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
+              <div className="mb-6">
+                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
                   Cultures
-                </h4>
-                <div className="space-y-1.5">
+                </h3>
+                <div className="space-y-2">
                   {entityCultures.map((c: any) => {
                     const refInfo = WIKI_REFERENCE_TYPE_INFO[c.reference_type as WikiReferenceType];
                     return (
@@ -639,51 +982,29 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
 
             {/* Link to Culture button */}
             {selectedEntry.entry_type !== 'culture' && (
-              <div className="mb-4">
+              <div className="mb-6">
                 <button
                   onClick={() => setShowCultureLinks(true)}
-                  className="w-full px-3 py-2 text-sm border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 flex items-center justify-center gap-2"
+                  className="px-4 py-2 text-sm border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 flex items-center gap-2"
                 >
                   <span>🎭</span>
                   <span>Link to Culture</span>
                 </button>
               </div>
             )}
-
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <div className="text-xs text-gray-400 space-y-1">
-                <div>Type: {selectedEntry.entry_type.replace(/_/g, ' ')}</div>
-                <div>Status: {selectedEntry.status}</div>
-                <div>
-                  Created: {new Date(selectedEntry.created_at).toLocaleDateString()}
-                </div>
-                {selectedEntry.confidence_score < 1 && (
-                  <div>
-                    Confidence: {Math.round(selectedEntry.confidence_score * 100)}%
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Editor Modal */}
-      {showEditor && (
+      {/* ==================== Modals ==================== */}
+
+      {/* Editor Modal (new entries only) */}
+      {showEditor && !selectedEntry && (
         <WikiEntryEditor
-          entry={selectedEntry}
+          entry={null}
           worldId={world.id}
-          onSave={
-            selectedEntry
-              ? (updates) => handleUpdateEntry(selectedEntry.id, updates)
-              : handleCreateEntry
-          }
-          onClose={() => {
-            setShowEditor(false);
-            if (!selectedEntry) {
-              setSelectedEntry(null);
-            }
-          }}
+          onSave={handleCreateEntry as (data: WikiEntryCreate | WikiEntryUpdate) => Promise<void>}
+          onClose={() => setShowEditor(false)}
         />
       )}
 
@@ -708,7 +1029,6 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
           entryTitle={selectedEntry.title}
           onClose={() => setShowCultureLinks(false)}
           onLinksChanged={() => {
-            // Reload culture data for the selected entry
             cultureApi.getEntityCultures(selectedEntry.id).then(setEntityCultures).catch(() => {});
           }}
         />

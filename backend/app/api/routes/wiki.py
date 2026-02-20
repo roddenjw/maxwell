@@ -19,7 +19,7 @@ from app.services.wiki_service import WikiService, WikiConsistencyEngine
 from app.services.wiki_codex_bridge import WikiCodexBridge
 from app.services.wiki_auto_populator import WikiAutoPopulator
 from app.services.culture_service import CultureService
-from app.models.wiki import WikiEntryType, WikiEntryStatus, WikiChangeType, WikiReferenceType
+from app.models.wiki import WikiEntry, WikiEntryType, WikiEntryStatus, WikiChangeType, WikiReferenceType
 
 
 router = APIRouter(prefix="/wiki", tags=["wiki"])
@@ -112,6 +112,9 @@ class WikiChangeResponse(BaseModel):
     confidence: float
     status: str
     created_at: datetime
+    # Resolved fields for display
+    entry_title: Optional[str] = None
+    entry_type: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -319,7 +322,21 @@ def get_pending_changes(
         limit=limit
     )
 
-    return changes
+    # Resolve entry titles for display
+    result = []
+    for change in changes:
+        resp = WikiChangeResponse.model_validate(change)
+        if change.change_type == "create" and change.proposed_entry:
+            resp.entry_title = change.proposed_entry.get("title")
+            resp.entry_type = change.proposed_entry.get("entry_type")
+        elif change.wiki_entry_id:
+            entry = db.query(WikiEntry).filter(WikiEntry.id == change.wiki_entry_id).first()
+            if entry:
+                resp.entry_title = entry.title
+                resp.entry_type = entry.entry_type
+        result.append(resp)
+
+    return result
 
 
 @router.post("/changes/{change_id}/approve")
@@ -333,10 +350,13 @@ def approve_change(
 
     result = service.approve_change(change_id, review.reviewer_note)
 
-    if result is None and service.db.query(service.db.query.__class__).filter_by(
-        id=change_id
-    ).first() is None:
-        raise HTTPException(status_code=404, detail="Change not found or already processed")
+    if result is None:
+        # Check if the change existed at all
+        from app.models.wiki import WikiChange as WikiChangeModel
+        change = db.query(WikiChangeModel).filter(WikiChangeModel.id == change_id).first()
+        if change is None:
+            raise HTTPException(status_code=404, detail="Change not found")
+        # Change existed but was already processed or was a delete (no entry returned)
 
     return {
         "status": "approved",

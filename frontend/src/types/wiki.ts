@@ -150,6 +150,8 @@ export interface WikiChange {
   created_at: string;
   reviewed_at: string | null;
   reviewer_note: string | null;
+  entry_title: string | null;
+  entry_type: string | null;
 }
 
 // ==================== UI State ====================

@@ -398,38 +398,62 @@ export function WikiChangeQueue({ worldId, manuscriptId, onClose }: WikiChangeQu
 
                       <div className="flex-1 min-w-0 flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
-                        {/* Change Type Badge */}
-                        <div className="flex items-center gap-2 mb-2">
+                        {/* Title + Type + Badge row */}
+                        <div className="flex items-center gap-2 mb-1">
                           <span
                             className={`px-2 py-0.5 text-xs font-medium rounded ${typeInfo.color}`}
                           >
                             {typeInfo.label}
                           </span>
-                          <span className="text-sm text-gray-500">
+                          <h3 className="font-medium text-gray-800 truncate">
+                            {change.entry_title
+                              || change.proposed_entry?.title
+                              || 'Untitled'}
+                          </h3>
+                        </div>
+
+                        {/* Category + confidence sub-row */}
+                        <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
+                          {(change.entry_type || change.proposed_entry?.entry_type) && (
+                            <span className="capitalize px-1.5 py-0.5 bg-gray-100 rounded">
+                              {(change.entry_type || change.proposed_entry?.entry_type || '').replace(/_/g, ' ')}
+                            </span>
+                          )}
+                          <span>
                             Confidence: {Math.round(change.confidence * 100)}%
                           </span>
                         </div>
 
-                        {/* Change Details */}
+                        {/* Create details: show summary + content preview */}
                         {change.change_type === 'create' && change.proposed_entry && (
                           <div className="mb-3">
-                            <h3 className="font-medium text-gray-800">
-                              {change.proposed_entry.title}
-                            </h3>
-                            <p className="text-sm text-gray-500">
-                              Type: {change.proposed_entry.entry_type?.replace(/_/g, ' ')}
-                            </p>
                             {change.proposed_entry.summary && (
-                              <p className="text-sm text-gray-600 mt-1">
+                              <p className="text-sm text-gray-600">
                                 {change.proposed_entry.summary}
                               </p>
+                            )}
+                            {change.proposed_entry.content && (
+                              <p className="text-sm text-gray-500 mt-1 line-clamp-3">
+                                {change.proposed_entry.content}
+                              </p>
+                            )}
+                            {change.proposed_entry.aliases && change.proposed_entry.aliases.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                <span className="text-xs text-gray-400">Aliases:</span>
+                                {change.proposed_entry.aliases.map((a: string, i: number) => (
+                                  <span key={i} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                                    {a}
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </div>
                         )}
 
+                        {/* Update details */}
                         {change.change_type === 'update' && (
                           <div className="mb-3">
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-gray-600 mb-1">
                               <span className="font-medium">Field: </span>
                               {change.field_changed || 'Multiple fields'}
                             </p>
