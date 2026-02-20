@@ -3,7 +3,7 @@
  * Creates layered conflicts with stakes, escalation, and resolution paths
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 import type { ConflictGenerationRequest } from '@/types/brainstorm';
 
@@ -20,6 +20,7 @@ export default function ConflictBrainstorm() {
     isGenerating,
     addIdeas,
     manuscriptContext,
+    savePremise,
   } = useBrainstormStore();
 
   const [genre, setGenre] = useState('');
@@ -32,6 +33,18 @@ export default function ConflictBrainstorm() {
   const [useCustomContext, setUseCustomContext] = useState(false);
 
   const estimatedCost = numIdeas * 0.018; // ~$0.018 per conflict idea
+
+  // Debounced save of premise when user edits it
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const handlePremiseChange = useCallback((value: string) => {
+    setPremise(value);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (value.trim()) {
+      saveTimerRef.current = setTimeout(() => {
+        savePremise(value, 'user_written');
+      }, 1500);
+    }
+  }, [savePremise]);
 
   // Check for stored API key on mount
   useEffect(() => {
@@ -184,7 +197,7 @@ export default function ConflictBrainstorm() {
           <textarea
             id="premise"
             value={premise}
-            onChange={(e) => setPremise(e.target.value)}
+            onChange={(e) => handlePremiseChange(e.target.value)}
             placeholder="Describe your story's core concept, setting, and any existing tensions..."
             rows={4}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"

@@ -328,8 +328,8 @@ class WikiAutoPopulator:
         mapping = {
             "CHARACTER": WikiEntryType.CHARACTER.value,
             "LOCATION": WikiEntryType.LOCATION.value,
-            "ITEM": WikiEntryType.ITEM.value,
-            "LORE": WikiEntryType.CONCEPT.value,
+            "ITEM": WikiEntryType.ARTIFACT.value,
+            "LORE": WikiEntryType.WORLD_RULE.value,
             "ORGANIZATION": WikiEntryType.FACTION.value,
             "EVENT": WikiEntryType.EVENT.value,
         }
@@ -436,10 +436,10 @@ class WikiAutoPopulator:
     def _map_rule_category(self, category: str) -> str:
         """Map rule category to RuleType"""
         mapping = {
-            "magic_system": RuleType.MAGIC_SYSTEM.value,
-            "law": RuleType.SOCIAL_RULE.value,
-            "prohibition": RuleType.PHYSICAL_LAW.value,
-            "limitation": RuleType.PHYSICAL_LAW.value,
+            "magic_system": RuleType.MAGIC.value,
+            "law": RuleType.SOCIAL.value,
+            "prohibition": RuleType.PHYSICS.value,
+            "limitation": RuleType.PHYSICS.value,
             "cultural": RuleType.CULTURAL.value,
             "tradition": RuleType.CULTURAL.value,
         }

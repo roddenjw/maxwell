@@ -11,7 +11,7 @@ import type {
   BrainstormTechnique,
   BrainstormContext,
 } from '@/types/brainstorm';
-import { brainstormingApi } from '@/lib/api';
+import { brainstormingApi, manuscriptApi } from '@/lib/api';
 
 interface BrainstormStore {
   // State
@@ -61,6 +61,9 @@ interface BrainstormStore {
   // Modal Actions
   openModal: (manuscriptId: string, outlineId?: string, technique?: BrainstormTechnique) => void;
   closeModal: () => void;
+
+  // Premise persistence
+  savePremise: (premise: string, source: 'user_written' | 'ai_generated') => Promise<void>;
 
   // Utility Actions
   clearAll: () => void;
@@ -144,6 +147,29 @@ export const useBrainstormStore = create<BrainstormStore>((set, get) => ({
       console.error('Failed to load manuscript context:', error);
       // Don't throw - context loading is optional, app should still work
       set({ manuscriptContext: null });
+    }
+  },
+
+  savePremise: async (premise, source) => {
+    const manuscriptId = get().modalManuscriptId;
+    if (!manuscriptId || !premise.trim()) return;
+    try {
+      await manuscriptApi.update(manuscriptId, {
+        premise,
+        premise_source: source,
+      } as any);
+      // Update local context so it's available immediately
+      const ctx = get().manuscriptContext;
+      if (ctx) {
+        set({
+          manuscriptContext: {
+            ...ctx,
+            outline: { ...ctx.outline, premise },
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Failed to save premise:', error);
     }
   },
 

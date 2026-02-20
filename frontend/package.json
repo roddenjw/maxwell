@@ -31,6 +31,7 @@
     "posthog-js": "^1.312.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-dropzone": "^14.4.0",
     "react-force-graph": "^1.43.3",
     "react-force-graph-2d": "^1.29.0",
     "react-window": "^2.2.4",

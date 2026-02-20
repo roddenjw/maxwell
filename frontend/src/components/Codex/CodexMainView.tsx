@@ -4,7 +4,7 @@
  * Provides entity list, detail view, and relationship visualization
  */
 
-import { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
 import { useCodexStore } from '@/stores/codexStore';
 import { useBrainstormStore } from '@/stores/brainstormStore';
 import { codexApi, chaptersApi, worldsApi } from '@/lib/api';
@@ -62,11 +62,16 @@ export default function CodexMainView({
   // Initialize activeTab from store (in case user clicked "View in Queue" from entity detection toast)
   const [activeTab, setActiveTab] = useState<CodexTab>(() => {
     if (storeActiveTab === 'intel') return 'intel';
-    return 'entities';
+    return 'world';
   });
   const pendingSuggestionsCount = getPendingSuggestionsCount();
   // Local state for immediate entity selection feedback
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
+
+  // Refs for scroll management
+  const detailPanelRef = useRef<HTMLDivElement>(null);
+  const entityListRef = useRef<HTMLDivElement>(null);
+  const letterRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Quick create form state
   const [newEntityName, setNewEntityName] = useState('');
@@ -234,6 +239,47 @@ export default function CodexMainView({
       entity.aliases.some(alias => alias.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesType && matchesSearch;
   });
+
+  // Sort entities alphabetically and group by first letter
+  const sortedEntities = useMemo(() =>
+    [...filteredEntities].sort((a, b) => a.name.localeCompare(b.name)),
+    [filteredEntities]
+  );
+
+  const entityGroups = useMemo(() => {
+    const groups: { letter: string; entities: typeof sortedEntities }[] = [];
+    let currentLetter = '';
+    for (const entity of sortedEntities) {
+      const letter = (entity.name[0] || '#').toUpperCase();
+      const normalizedLetter = /[A-Z]/.test(letter) ? letter : '#';
+      if (normalizedLetter !== currentLetter) {
+        currentLetter = normalizedLetter;
+        groups.push({ letter: currentLetter, entities: [] });
+      }
+      groups[groups.length - 1].entities.push(entity);
+    }
+    return groups;
+  }, [sortedEntities]);
+
+  const activeLetters = useMemo(() =>
+    entityGroups.map(g => g.letter),
+    [entityGroups]
+  );
+
+  // Reset detail panel scroll when entity selection changes
+  useEffect(() => {
+    if (detailPanelRef.current) {
+      detailPanelRef.current.scrollTop = 0;
+    }
+  }, [localSelectedId]);
+
+  // Scroll entity list to a letter group
+  const scrollToLetter = useCallback((letter: string) => {
+    const el = letterRefs.current[letter];
+    if (el && entityListRef.current) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
 
   // Bulk operations
   const handleToggleSelect = (entityId: string) => {
@@ -654,38 +700,65 @@ export default function CodexMainView({
                 ))}
               </div>
 
-              {/* Entity List */}
-              <div className="flex-1 overflow-y-auto p-4">
-                {filteredEntities.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-8 text-center">
-                    <div className="text-4xl mb-3">📝</div>
-                    <p className="text-midnight font-garamond font-semibold mb-2">
-                      No {filterType === 'ALL' ? 'entities' : filterType.toLowerCase() + 's'} yet
-                    </p>
-                    <p className="text-sm text-faded-ink font-sans max-w-xs">
-                      Create your first entity using the buttons above
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {filteredEntities.map((entity) => (
-                      <div key={entity.id} className="flex items-start gap-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedEntityIds.has(entity.id)}
-                          onChange={() => handleToggleSelect(entity.id)}
-                          className="mt-4 w-4 h-4 text-bronze cursor-pointer"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <div className="flex-1">
-                          <EntityCard
-                            entity={entity}
-                            isSelected={effectiveSelectedId === entity.id}
-                            onSelect={() => handleEntitySelect(entity.id)}
-                            onDelete={() => handleDeleteEntity(entity.id)}
-                          />
+              {/* Entity List with Alphabet Rail */}
+              <div className="flex-1 flex overflow-hidden">
+                {/* Scrollable entity list */}
+                <div ref={entityListRef} className="flex-1 overflow-y-auto p-4">
+                  {sortedEntities.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-8 text-center">
+                      <div className="text-4xl mb-3">📝</div>
+                      <p className="text-midnight font-garamond font-semibold mb-2">
+                        No {filterType === 'ALL' ? 'entities' : filterType.toLowerCase() + 's'} yet
+                      </p>
+                      <p className="text-sm text-faded-ink font-sans max-w-xs">
+                        Create your first entity using the buttons above
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {entityGroups.map(({ letter, entities: groupEntities }) => (
+                        <div key={letter} ref={(el) => { letterRefs.current[letter] = el; }}>
+                          <div className="sticky top-0 z-10 bg-vellum/95 backdrop-blur-sm px-1 py-1 mb-1 border-b border-bronze/20">
+                            <span className="text-xs font-sans font-semibold text-bronze tracking-wider">{letter}</span>
+                          </div>
+                          <div className="space-y-2">
+                            {groupEntities.map((entity) => (
+                              <div key={entity.id} className="flex items-start gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedEntityIds.has(entity.id)}
+                                  onChange={() => handleToggleSelect(entity.id)}
+                                  className="mt-4 w-4 h-4 text-bronze cursor-pointer"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <div className="flex-1">
+                                  <EntityCard
+                                    entity={entity}
+                                    isSelected={effectiveSelectedId === entity.id}
+                                    onSelect={() => handleEntitySelect(entity.id)}
+                                    onDelete={() => handleDeleteEntity(entity.id)}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* Alphabet quick-jump rail */}
+                {sortedEntities.length > 8 && (
+                  <div className="flex-shrink-0 flex flex-col justify-center py-2 px-1 bg-white/50 border-l border-slate-ui/50">
+                    {activeLetters.map((letter) => (
+                      <button
+                        key={letter}
+                        onClick={() => scrollToLetter(letter)}
+                        className="text-[10px] font-sans font-medium text-faded-ink hover:text-bronze hover:bg-bronze/10 px-1 py-0.5 leading-tight transition-colors"
+                        title={`Jump to ${letter}`}
+                      >
+                        {letter}
+                      </button>
                     ))}
                   </div>
                 )}
@@ -693,7 +766,7 @@ export default function CodexMainView({
             </div>
 
             {/* Entity Detail Panel */}
-            <div className="flex-1 bg-vellum overflow-y-auto">
+            <div ref={detailPanelRef} className="flex-1 bg-vellum overflow-y-auto">
               {selectedEntity ? (
                 <EntityDetail
                   entity={selectedEntity}

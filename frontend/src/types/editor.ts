@@ -10,6 +10,8 @@ export interface Manuscript {
   word_count: number;
   active_variant_id?: string;
   lexical_state: string; // JSON serialized Lexical editor state
+  premise?: string | null;
+  premise_source?: string | null;
 }
 
 export interface Scene {
