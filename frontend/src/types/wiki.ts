@@ -105,6 +105,7 @@ export interface WikiEntryUpdate {
   tags?: string[];
   aliases?: string[];
   image_url?: string;
+  entry_type?: WikiEntryType;
 }
 
 // ==================== Cross References ====================

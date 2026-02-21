@@ -450,6 +450,37 @@ class WikiCodexBridge:
             logger.warning(f"Agent merge failed, falling back to simple merge: {e}")
             return self._update_wiki_from_entity(entity, wiki_entry)
 
+    def sync_entry_type_to_codex(self, wiki_entry_id: str) -> int:
+        """
+        Cascade a wiki entry's type change to all linked codex entities.
+
+        Returns the number of entities updated.
+        """
+        wiki_entry = self.db.query(WikiEntry).filter(
+            WikiEntry.id == wiki_entry_id
+        ).first()
+        if not wiki_entry:
+            return 0
+
+        new_entity_type = WIKI_TO_ENTITY_TYPE.get(wiki_entry.entry_type)
+        if not new_entity_type:
+            return 0
+
+        linked_entities = self.db.query(Entity).filter(
+            Entity.linked_wiki_entry_id == wiki_entry_id
+        ).all()
+
+        count = 0
+        for entity in linked_entities:
+            if entity.type != new_entity_type:
+                entity.type = new_entity_type
+                count += 1
+
+        if count > 0:
+            self.db.commit()
+
+        return count
+
     def _update_wiki_from_entity(
         self,
         entity: Entity,

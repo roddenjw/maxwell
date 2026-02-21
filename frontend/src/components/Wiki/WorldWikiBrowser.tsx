@@ -13,11 +13,12 @@ import type {
   WikiEntryUpdate,
   WikiReferenceType,
 } from '../../types/wiki';
-import { WIKI_REFERENCE_TYPE_INFO } from '../../types/wiki';
+import { WIKI_REFERENCE_TYPE_INFO, WIKI_ENTRY_TYPE_INFO } from '../../types/wiki';
 import { WikiEntryEditor } from './WikiEntryEditor';
 import { WikiChangeQueue } from './WikiChangeQueue';
 import { CultureLinkManager } from './CultureLinkManager';
 import { cultureApi } from '../../lib/api';
+import { toast } from '../../stores/toastStore';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -171,14 +172,32 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
   const [showCultureLinks, setShowCultureLinks] = useState(false);
   const [cultureMembers, setCultureMembers] = useState<any[]>([]);
   const [entityCultures, setEntityCultures] = useState<any[]>([]);
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<{ total_changes: number } | null>(null);
+
+  // Background scan state
+  const [activeScanTaskId, setActiveScanTaskId] = useState<string | null>(null);
+  const [scanProgress, setScanProgress] = useState<{
+    status: string;
+    progress_percent: number;
+    current_manuscript_title: string;
+    current_stage: string;
+    manuscripts_completed: number;
+    total_manuscripts: number;
+    total_changes: number;
+    error?: string;
+  } | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Merge state
+  const [showMergePicker, setShowMergePicker] = useState(false);
+  const [mergeSearchQuery, setMergeSearchQuery] = useState('');
+  const [isMerging, setIsMerging] = useState(false);
 
   // Inline editing state
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editSummary, setEditSummary] = useState('');
   const [editContent, setEditContent] = useState('');
+  const [editEntryType, setEditEntryType] = useState<WikiEntryType | ''>('');
   const [editAliases, setEditAliases] = useState<string[]>([]);
   const [editTags, setEditTags] = useState<string[]>([]);
   const [editNewAlias, setEditNewAlias] = useState('');
@@ -193,6 +212,7 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
     setEditTitle(selectedEntry.title);
     setEditSummary(selectedEntry.summary || '');
     setEditContent(selectedEntry.content || '');
+    setEditEntryType(selectedEntry.entry_type);
     setEditAliases(selectedEntry.aliases || []);
     setEditTags(selectedEntry.tags || []);
     setEditNewAlias('');
@@ -226,6 +246,9 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
         aliases: editAliases.length > 0 ? editAliases : undefined,
         tags: editTags.length > 0 ? editTags : undefined,
         parent_id: editParentCultureId || undefined,
+        entry_type: editEntryType && editEntryType !== selectedEntry.entry_type
+          ? editEntryType as WikiEntryType
+          : undefined,
       };
       await handleUpdateEntry(selectedEntry.id, updates);
       setIsEditing(false);
@@ -273,11 +296,69 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
     }
   }, [world.id]);
 
-  // Initial fetch
+  // Poll for scan progress
+  const startPolling = useCallback((taskId: string) => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/wiki/scan-tasks/${taskId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setScanProgress(data);
+        if (data.status === 'completed') {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+          setActiveScanTaskId(null);
+          fetchEntries();
+          fetchPendingChanges();
+          toast.success(`Scan complete: ${data.total_changes} changes found`, {
+            action: data.total_changes > 0
+              ? { label: 'Review Changes', onClick: () => setShowChangeQueue(true) }
+              : undefined,
+          });
+        } else if (data.status === 'failed') {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+          setActiveScanTaskId(null);
+          toast.error(`Scan failed: ${data.error || 'Unknown error'}`);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 2000);
+  }, [fetchEntries, fetchPendingChanges]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
+
+  // Initial fetch + check for active scan
   useEffect(() => {
     fetchEntries();
     fetchPendingChanges();
-  }, [fetchEntries, fetchPendingChanges]);
+    // Reconnect to active scan
+    fetch(`${API_BASE}/wiki/worlds/${world.id}/active-scan`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.active && data.task_id) {
+          setActiveScanTaskId(data.task_id);
+          setScanProgress({
+            status: data.status,
+            progress_percent: data.progress_percent,
+            current_manuscript_title: data.current_manuscript_title || '',
+            current_stage: data.current_stage || '',
+            manuscripts_completed: 0,
+            total_manuscripts: 0,
+            total_changes: 0,
+          });
+          startPolling(data.task_id);
+        }
+      })
+      .catch(() => {});
+  }, [fetchEntries, fetchPendingChanges, world.id, startPolling]);
 
   // Load culture data for selected entry
   useEffect(() => {
@@ -407,33 +488,73 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
       if (selectedEntry?.id === entryId) {
         setSelectedEntry(null);
       }
+      toast.success('Entry deleted');
     } catch (err) {
-      console.error('Delete failed:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to delete entry');
     }
   };
 
-  // Scan manuscript for wiki entries
-  const handleScanManuscript = async () => {
-    if (!manuscriptId) return;
-    setIsScanning(true);
-    setScanResult(null);
+  // Start background scan
+  const handleStartScan = async (type: 'manuscript' | 'world') => {
+    if (activeScanTaskId) return;
     try {
-      const response = await fetch(`${API_BASE}/wiki/auto-populate/manuscript`, {
+      const url = type === 'world'
+        ? `${API_BASE}/wiki/auto-populate/world`
+        : `${API_BASE}/wiki/auto-populate/manuscript-async`;
+      const body = type === 'world'
+        ? { world_id: world.id }
+        : { manuscript_id: manuscriptId, world_id: world.id };
+
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manuscript_id: manuscriptId, world_id: world.id }),
+        body: JSON.stringify(body),
       });
-      if (!response.ok) throw new Error('Scan failed');
-      const result = await response.json();
-      setScanResult(result);
-      await fetchPendingChanges();
-      if (result.total_changes > 0) {
-        setShowChangeQueue(true);
-      }
+      if (!res.ok) throw new Error('Failed to start scan');
+      const data = await res.json();
+      setActiveScanTaskId(data.task_id);
+      setScanProgress({
+        status: 'running',
+        progress_percent: 0,
+        current_manuscript_title: '',
+        current_stage: 'Starting...',
+        manuscripts_completed: 0,
+        total_manuscripts: data.total_manuscripts || 1,
+        total_changes: 0,
+      });
+      startPolling(data.task_id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scan failed');
+      toast.error(err instanceof Error ? err.message : 'Scan failed to start');
+    }
+  };
+
+  // Merge entries
+  const handleMerge = async (targetId: string) => {
+    if (!selectedEntry) return;
+    setIsMerging(true);
+    try {
+      const res = await fetch(`${API_BASE}/wiki/entries/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source_entry_id: selectedEntry.id,
+          target_entry_id: targetId,
+        }),
+      });
+      if (!res.ok) throw new Error('Merge failed');
+      const mergedEntry = await res.json();
+
+      // Remove source from list, update target
+      setEntries((prev) =>
+        prev.filter((e) => e.id !== selectedEntry.id).map((e) => e.id === targetId ? mergedEntry : e)
+      );
+      setSelectedEntry(mergedEntry);
+      setShowMergePicker(false);
+      toast.success(`Merged into "${mergedEntry.title}"`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Merge failed');
     } finally {
-      setIsScanning(false);
+      setIsMerging(false);
     }
   };
 
@@ -542,21 +663,48 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
           )}
         </div>
 
+        {/* Scan Progress */}
+        {activeScanTaskId && scanProgress && (
+          <div className="px-3 py-2 border-t border-gray-200 bg-amber-50">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="animate-spin text-xs">⏳</span>
+              <span className="text-xs font-medium text-amber-800 truncate">
+                {scanProgress.current_manuscript_title || 'Scanning...'}
+              </span>
+            </div>
+            <div className="text-[11px] text-amber-600 mb-1 truncate">
+              {scanProgress.current_stage}
+              {scanProgress.total_manuscripts > 1 && (
+                <> ({scanProgress.manuscripts_completed}/{scanProgress.total_manuscripts})</>
+              )}
+            </div>
+            <div className="w-full bg-amber-200 rounded-full h-1.5">
+              <div
+                className="bg-amber-600 h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(scanProgress.progress_percent, 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Bottom Actions */}
         <div className="p-3 border-t border-gray-200 space-y-2">
+          <button
+            onClick={() => handleStartScan('world')}
+            disabled={!!activeScanTaskId}
+            className="w-full px-3 py-2 text-sm text-left flex items-center gap-2 text-amber-700 hover:bg-amber-50 rounded disabled:opacity-50"
+          >
+            <span>{activeScanTaskId ? '...' : '🌍'}</span>
+            <span>{activeScanTaskId ? 'Scanning...' : 'Scan World'}</span>
+          </button>
           {manuscriptId && (
             <button
-              onClick={handleScanManuscript}
-              disabled={isScanning}
+              onClick={() => handleStartScan('manuscript')}
+              disabled={!!activeScanTaskId}
               className="w-full px-3 py-2 text-sm text-left flex items-center gap-2 text-amber-700 hover:bg-amber-50 rounded disabled:opacity-50"
             >
-              <span>{isScanning ? '...' : '🔍'}</span>
-              <span>{isScanning ? 'Scanning...' : 'Scan Manuscript'}</span>
-              {scanResult && scanResult.total_changes > 0 && (
-                <span className="ml-auto bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs">
-                  +{scanResult.total_changes}
-                </span>
-              )}
+              <span>{activeScanTaskId ? '...' : '🔍'}</span>
+              <span>{activeScanTaskId ? 'Scanning...' : 'Scan Manuscript'}</span>
             </button>
           )}
           <button
@@ -656,6 +804,27 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
                 className="w-full px-3 py-2 text-lg font-bold border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 autoFocus
               />
+            </div>
+
+            {/* Entry Type */}
+            <div className="mb-5">
+              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Type</label>
+              <select
+                value={editEntryType}
+                onChange={(e) => setEditEntryType(e.target.value as WikiEntryType)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                {(Object.keys(WIKI_ENTRY_TYPE_INFO) as WikiEntryType[]).map((t) => (
+                  <option key={t} value={t}>
+                    {WIKI_ENTRY_TYPE_INFO[t].icon} {WIKI_ENTRY_TYPE_INFO[t].label}
+                  </option>
+                ))}
+              </select>
+              {editEntryType && selectedEntry && editEntryType !== selectedEntry.entry_type && (
+                <p className="mt-1 text-xs text-amber-600">
+                  Linked codex entities will be updated to match the new type.
+                </p>
+              )}
             </div>
 
             {/* Summary */}
@@ -826,6 +995,15 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
                   className="px-3 py-1.5 text-sm text-blue-600 border border-blue-300 rounded-md hover:bg-blue-50"
                 >
                   Edit
+                </button>
+                <button
+                  onClick={() => {
+                    setMergeSearchQuery('');
+                    setShowMergePicker(true);
+                  }}
+                  className="px-3 py-1.5 text-sm text-purple-600 border border-purple-300 rounded-md hover:bg-purple-50"
+                >
+                  Merge Into...
                 </button>
                 <button
                   onClick={() => handleDeleteEntry(selectedEntry.id)}
@@ -1032,6 +1210,78 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
             cultureApi.getEntityCultures(selectedEntry.id).then(setEntityCultures).catch(() => {});
           }}
         />
+      )}
+
+      {/* Merge Picker Modal */}
+      {showMergePicker && selectedEntry && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Merge "{selectedEntry.title}" into...
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Select the target entry. The current entry will be deleted and its data merged into the target.
+              </p>
+            </div>
+            <div className="p-4">
+              <input
+                type="text"
+                placeholder="Search entries..."
+                value={mergeSearchQuery}
+                onChange={(e) => setMergeSearchQuery(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 mb-3"
+                autoFocus
+              />
+              <div className="max-h-64 overflow-y-auto space-y-1">
+                {entries
+                  .filter((e) => {
+                    if (e.id === selectedEntry.id) return false;
+                    if (!mergeSearchQuery.trim()) return true;
+                    const q = mergeSearchQuery.toLowerCase();
+                    return (
+                      e.title.toLowerCase().includes(q) ||
+                      e.aliases?.some((a) => a.toLowerCase().includes(q))
+                    );
+                  })
+                  .sort((a, b) => {
+                    // Same type first
+                    const aMatch = a.entry_type === selectedEntry.entry_type ? 0 : 1;
+                    const bMatch = b.entry_type === selectedEntry.entry_type ? 0 : 1;
+                    if (aMatch !== bMatch) return aMatch - bMatch;
+                    return a.title.localeCompare(b.title);
+                  })
+                  .slice(0, 50)
+                  .map((e) => (
+                    <button
+                      key={e.id}
+                      onClick={() => handleMerge(e.id)}
+                      disabled={isMerging}
+                      className="w-full text-left px-3 py-2 text-sm rounded hover:bg-purple-50 flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <span>{TYPE_ICONS[e.entry_type] || '📄'}</span>
+                      <span className="flex-1 truncate">{e.title}</span>
+                      <span className="text-xs text-gray-400 capitalize">
+                        {e.entry_type.replace(/_/g, ' ')}
+                      </span>
+                    </button>
+                  ))}
+                {entries.filter((e) => e.id !== selectedEntry.id).length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-4">No other entries to merge into</p>
+                )}
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setShowMergePicker(false)}
+                disabled={isMerging}
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

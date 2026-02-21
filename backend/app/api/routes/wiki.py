@@ -8,18 +8,24 @@ Endpoints for:
 - Wiki-Codex synchronization
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
+import logging
 
-from app.database import get_db
+from app.database import get_db, SessionLocal
 from app.services.wiki_service import WikiService, WikiConsistencyEngine
 from app.services.wiki_codex_bridge import WikiCodexBridge
 from app.services.wiki_auto_populator import WikiAutoPopulator
 from app.services.culture_service import CultureService
+from app.services.scan_task_registry import scan_registry
+from app.services.world_service import world_service
 from app.models.wiki import WikiEntry, WikiEntryType, WikiEntryStatus, WikiChangeType, WikiReferenceType
+from app.models.manuscript import Manuscript
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/wiki", tags=["wiki"])
@@ -50,6 +56,7 @@ class WikiEntryUpdate(BaseModel):
     tags: Optional[List[str]] = None
     aliases: Optional[List[str]] = None
     image_url: Optional[str] = None
+    entry_type: Optional[str] = None
 
 
 class WikiEntryResponse(BaseModel):
@@ -230,10 +237,19 @@ def update_wiki_entry(
     service = WikiService(db)
 
     update_dict = {k: v for k, v in updates.model_dump().items() if v is not None}
+
+    # Check if entry_type is changing so we can cascade
+    type_changing = "entry_type" in update_dict
+
     updated = service.update_entry(entry_id, update_dict)
 
     if not updated:
         raise HTTPException(status_code=404, detail="Wiki entry not found")
+
+    # Cascade entry_type change to linked codex entities
+    if type_changing:
+        bridge = WikiCodexBridge(db)
+        bridge.sync_entry_type_to_codex(entry_id)
 
     return updated
 
@@ -684,6 +700,248 @@ def get_pending_changes_summary(
     """Get summary of pending changes for a world"""
     populator = WikiAutoPopulator(db)
     return populator.get_pending_changes_summary(world_id)
+
+
+# ==================== Background Scan Endpoints ====================
+
+class WorldScanRequest(BaseModel):
+    world_id: str
+
+
+class ManuscriptScanAsyncRequest(BaseModel):
+    manuscript_id: str
+    world_id: Optional[str] = None
+
+
+class MergeEntriesRequest(BaseModel):
+    source_entry_id: str
+    target_entry_id: str
+
+
+def _run_world_scan(task_id: str, world_id: str):
+    """Background task: scan all manuscripts in a world"""
+    db = SessionLocal()
+    try:
+        manuscripts = world_service.list_manuscripts_in_world(db, world_id, limit=500)
+        total = len(manuscripts)
+        total_changes = 0
+
+        for i, manuscript in enumerate(manuscripts):
+            scan_registry.update_progress(
+                task_id,
+                manuscripts_completed=i,
+                current_manuscript_title=manuscript.title or f"Manuscript {i+1}",
+                current_stage="Starting analysis",
+                progress_percent=(i / max(total, 1)) * 100,
+                changes_so_far=total_changes,
+            )
+
+            populator = WikiAutoPopulator(db)
+
+            def on_stage(stage_name: str, stage_index: int):
+                # 5 stages per manuscript
+                ms_progress = (i + (stage_index / 5)) / max(total, 1) * 100
+                scan_registry.update_progress(
+                    task_id,
+                    manuscripts_completed=i,
+                    current_manuscript_title=manuscript.title or f"Manuscript {i+1}",
+                    current_stage=stage_name,
+                    progress_percent=ms_progress,
+                    changes_so_far=total_changes,
+                )
+
+            result = populator.analyze_manuscript(
+                manuscript_id=manuscript.id,
+                world_id=world_id,
+                progress_callback=on_stage,
+            )
+            total_changes += result.get("total_changes", 0)
+
+        scan_registry.complete_task(task_id, total_changes)
+    except Exception as e:
+        logger.exception(f"World scan failed for task {task_id}")
+        scan_registry.fail_task(task_id, str(e))
+    finally:
+        db.close()
+
+
+def _run_manuscript_scan(task_id: str, manuscript_id: str, world_id: Optional[str]):
+    """Background task: scan a single manuscript"""
+    db = SessionLocal()
+    try:
+        from app.models.manuscript import Manuscript as ManuscriptModel
+        manuscript = db.query(ManuscriptModel).filter_by(id=manuscript_id).first()
+        ms_title = manuscript.title if manuscript else "Unknown"
+
+        scan_registry.update_progress(
+            task_id,
+            manuscripts_completed=0,
+            current_manuscript_title=ms_title,
+            current_stage="Starting analysis",
+            progress_percent=0,
+        )
+
+        populator = WikiAutoPopulator(db)
+
+        def on_stage(stage_name: str, stage_index: int):
+            scan_registry.update_progress(
+                task_id,
+                manuscripts_completed=0,
+                current_manuscript_title=ms_title,
+                current_stage=stage_name,
+                progress_percent=(stage_index / 5) * 100,
+            )
+
+        result = populator.analyze_manuscript(
+            manuscript_id=manuscript_id,
+            world_id=world_id,
+            progress_callback=on_stage,
+        )
+        scan_registry.complete_task(task_id, result.get("total_changes", 0))
+    except Exception as e:
+        logger.exception(f"Manuscript scan failed for task {task_id}")
+        scan_registry.fail_task(task_id, str(e))
+    finally:
+        db.close()
+
+
+@router.post("/auto-populate/world")
+def start_world_scan(
+    request: WorldScanRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Start a background scan of all manuscripts in a world. Returns task_id for polling."""
+    # Check for existing active scan
+    active = scan_registry.get_active_task_for_world(request.world_id)
+    if active:
+        return {"task_id": active.id, "status": "already_running"}
+
+    manuscripts = world_service.list_manuscripts_in_world(db, request.world_id, limit=500)
+    if not manuscripts:
+        raise HTTPException(status_code=400, detail="No manuscripts found in this world")
+
+    task = scan_registry.create_task(request.world_id, len(manuscripts))
+    background_tasks.add_task(_run_world_scan, task.id, request.world_id)
+    return {"task_id": task.id, "total_manuscripts": len(manuscripts)}
+
+
+@router.post("/auto-populate/manuscript-async")
+def start_manuscript_scan(
+    request: ManuscriptScanAsyncRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Start a background scan of a single manuscript. Returns task_id for polling."""
+    # Resolve world_id
+    world_id = request.world_id
+    if not world_id:
+        populator = WikiAutoPopulator(db)
+        world_id = populator.get_world_for_manuscript(request.manuscript_id)
+
+    if not world_id:
+        raise HTTPException(status_code=400, detail="No world found for manuscript")
+
+    active = scan_registry.get_active_task_for_world(world_id)
+    if active:
+        return {"task_id": active.id, "status": "already_running"}
+
+    task = scan_registry.create_task(world_id, 1)
+    background_tasks.add_task(_run_manuscript_scan, task.id, request.manuscript_id, world_id)
+    return {"task_id": task.id, "total_manuscripts": 1}
+
+
+@router.get("/scan-tasks/{task_id}")
+def get_scan_task(task_id: str):
+    """Poll for scan task progress"""
+    task = scan_registry.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Scan task not found")
+
+    return {
+        "task_id": task.id,
+        "status": task.status,
+        "total_manuscripts": task.total_manuscripts,
+        "manuscripts_completed": task.manuscripts_completed,
+        "current_manuscript_title": task.current_manuscript_title,
+        "current_stage": task.current_stage,
+        "progress_percent": round(task.progress_percent, 1),
+        "total_changes": task.total_changes,
+        "error": task.error,
+    }
+
+
+@router.get("/worlds/{world_id}/active-scan")
+def get_active_scan(world_id: str):
+    """Check if a world has an active scan (for reconnecting after navigation)"""
+    task = scan_registry.get_active_task_for_world(world_id)
+    if not task:
+        return {"active": False}
+
+    return {
+        "active": True,
+        "task_id": task.id,
+        "status": task.status,
+        "progress_percent": round(task.progress_percent, 1),
+        "current_manuscript_title": task.current_manuscript_title,
+        "current_stage": task.current_stage,
+    }
+
+
+# ==================== Merge Endpoint ====================
+
+@router.post("/entries/merge", response_model=WikiEntryResponse)
+def merge_wiki_entries(
+    request: MergeEntriesRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Merge source wiki entry into target wiki entry.
+    Source is deleted; target receives merged content, references, and linked entities.
+    """
+    service = WikiService(db)
+
+    source = service.get_entry(request.source_entry_id)
+    target = service.get_entry(request.target_entry_id)
+
+    if not source:
+        raise HTTPException(status_code=404, detail="Source entry not found")
+    if not target:
+        raise HTTPException(status_code=404, detail="Target entry not found")
+
+    # Simple merge: union aliases, add source title as alias
+    merged_aliases = list(set((target.aliases or []) + (source.aliases or [])))
+    if source.title not in merged_aliases and source.title != target.title:
+        merged_aliases.append(source.title)
+
+    merged_data = {
+        "aliases": merged_aliases,
+    }
+
+    # If target has no content but source does, use source content
+    if not target.content and source.content:
+        merged_data["content"] = source.content
+    # If target has no summary but source does, use source summary
+    if not target.summary and source.summary:
+        merged_data["summary"] = source.summary
+
+    # Merge structured_data (source fills gaps in target)
+    target_sd = target.structured_data or {}
+    source_sd = source.structured_data or {}
+    merged_sd = {**source_sd, **target_sd}  # target wins on conflicts
+    if merged_sd != target_sd:
+        merged_data["structured_data"] = merged_sd
+
+    result = service.merge_entries(
+        source_id=request.source_entry_id,
+        target_id=request.target_entry_id,
+        merged_data=merged_data,
+    )
+
+    if not result:
+        raise HTTPException(status_code=500, detail="Merge failed")
+
+    return result
 
 
 @router.post("/changes/bulk-approve")

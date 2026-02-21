@@ -5,7 +5,7 @@ Analyzes manuscripts and suggests Wiki updates.
 All changes go to approval queue for author review.
 """
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Callable
 from datetime import datetime
 from sqlalchemy.orm import Session
 import uuid
@@ -108,11 +108,15 @@ class WikiAutoPopulator:
     def analyze_manuscript(
         self,
         manuscript_id: str,
-        world_id: Optional[str] = None
+        world_id: Optional[str] = None,
+        progress_callback: Optional[Callable[[str, int], None]] = None
     ) -> Dict[str, Any]:
         """
         Full manuscript analysis for wiki updates.
         Returns summary of proposed changes.
+
+        Args:
+            progress_callback: Optional callback(stage_name, stage_index) called before each extraction stage.
         """
         # Get world_id if not provided
         if not world_id:
@@ -147,30 +151,40 @@ class WikiAutoPopulator:
         }
 
         # 1. Extract entities
+        if progress_callback:
+            progress_callback("Extracting entities", 0)
         entity_changes = self.extract_entities_for_wiki(
             full_text, world_id, manuscript_id
         )
         results["extractions"]["entities"] = len(entity_changes)
 
         # 2. Extract world rules
+        if progress_callback:
+            progress_callback("Extracting world rules", 1)
         rule_changes = self.extract_world_rules(
             full_text, world_id, manuscript_id
         )
         results["extractions"]["world_rules"] = len(rule_changes)
 
         # 3. Extract relationships
+        if progress_callback:
+            progress_callback("Extracting relationships", 2)
         relationship_changes = self.extract_relationships(
             full_text, world_id, manuscript_id
         )
         results["extractions"]["relationships"] = len(relationship_changes)
 
         # 4. Extract location details
+        if progress_callback:
+            progress_callback("Extracting locations", 3)
         location_changes = self.extract_location_details(
             full_text, world_id, manuscript_id
         )
         results["extractions"]["locations"] = len(location_changes)
 
         # 5. Extract character traits
+        if progress_callback:
+            progress_callback("Extracting character traits", 4)
         trait_changes = self.extract_character_traits(
             full_text, world_id, manuscript_id
         )

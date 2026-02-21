@@ -151,7 +151,8 @@ class WikiService:
         allowed_fields = [
             'title', 'content', 'structured_data', 'summary', 'status',
             'parent_id', 'tags', 'aliases', 'image_url', 'source_manuscripts',
-            'source_chapters', 'confidence_score', 'last_verified_at'
+            'source_chapters', 'confidence_score', 'last_verified_at',
+            'entry_type'
         ]
 
         for field, value in updates.items():
@@ -168,10 +169,25 @@ class WikiService:
         return entry
 
     def delete_entry(self, entry_id: str) -> bool:
-        """Delete a wiki entry"""
+        """Delete a wiki entry, unlinking codex entities and cleaning up arcs"""
         entry = self.get_entry(entry_id)
         if not entry:
             return False
+
+        from app.models.entity import Entity
+        from app.models.character_arc import CharacterArc
+
+        # Unlink codex entities pointing to this wiki entry
+        linked_entities = self.db.query(Entity).filter(
+            Entity.linked_wiki_entry_id == entry_id
+        ).all()
+        for entity in linked_entities:
+            entity.linked_wiki_entry_id = None
+
+        # Remove character arcs tied to this wiki entry
+        self.db.query(CharacterArc).filter(
+            CharacterArc.wiki_entry_id == entry_id
+        ).delete(synchronize_session="fetch")
 
         self.db.delete(entry)
         self.db.commit()
@@ -341,6 +357,96 @@ class WikiService:
         self.db.delete(ref)
         self.db.commit()
         return True
+
+    def merge_entries(
+        self,
+        source_id: str,
+        target_id: str,
+        merged_data: Optional[Dict[str, Any]] = None,
+    ) -> Optional[WikiEntry]:
+        """
+        Merge source entry into target entry.
+
+        - Applies merged_data to the target (content, structured_data, summary, aliases)
+        - Rewrites cross-references from source to target
+        - Re-links codex entities from source to target
+        - Transfers character arcs from source to target
+        - Merges source_manuscripts lists
+        - Deletes source entry
+        """
+        from app.models.entity import Entity
+        from app.models.character_arc import CharacterArc
+
+        source = self.get_entry(source_id)
+        target = self.get_entry(target_id)
+        if not source or not target:
+            return None
+
+        # 1. Apply merged data to target
+        if merged_data:
+            update_fields = {}
+            for field in ["content", "structured_data", "summary", "aliases"]:
+                if field in merged_data:
+                    update_fields[field] = merged_data[field]
+            if update_fields:
+                for field, value in update_fields.items():
+                    setattr(target, field, value)
+        else:
+            # Simple merge: union aliases
+            source_aliases = set(source.aliases or [])
+            target_aliases = set(target.aliases or [])
+            combined = list(target_aliases | source_aliases)
+            if source.title not in combined and source.title != target.title:
+                combined.append(source.title)
+            target.aliases = combined
+
+        # 2. Merge source_manuscripts
+        target_sources = set(target.source_manuscripts or [])
+        source_sources = set(source.source_manuscripts or [])
+        target.source_manuscripts = list(target_sources | source_sources)
+
+        # 3. Rewrite cross-references: source -> target
+        # Outgoing refs from source
+        outgoing = self.db.query(WikiCrossReference).filter(
+            WikiCrossReference.source_entry_id == source_id
+        ).all()
+        for ref in outgoing:
+            if ref.target_entry_id == target_id:
+                # Self-reference after merge, remove
+                self.db.delete(ref)
+            else:
+                ref.source_entry_id = target_id
+
+        # Incoming refs to source
+        incoming = self.db.query(WikiCrossReference).filter(
+            WikiCrossReference.target_entry_id == source_id
+        ).all()
+        for ref in incoming:
+            if ref.source_entry_id == target_id:
+                self.db.delete(ref)
+            else:
+                ref.target_entry_id = target_id
+
+        # 4. Re-link codex entities
+        linked_entities = self.db.query(Entity).filter(
+            Entity.linked_wiki_entry_id == source_id
+        ).all()
+        for entity in linked_entities:
+            entity.linked_wiki_entry_id = target_id
+
+        # 5. Transfer character arcs
+        arcs = self.db.query(CharacterArc).filter(
+            CharacterArc.wiki_entry_id == source_id
+        ).all()
+        for arc in arcs:
+            arc.wiki_entry_id = target_id
+
+        # 6. Delete source entry (pending_changes cascade via ORM)
+        target.updated_at = datetime.utcnow()
+        self.db.delete(source)
+        self.db.commit()
+        self.db.refresh(target)
+        return target
 
 
 class WikiConsistencyEngine:
