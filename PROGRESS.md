@@ -1,6 +1,6 @@
 # Maxwell Project Progress
 
-**Last Updated:** 2026-02-08
+**Last Updated:** 2026-02-20
 **Overall Completion:** 96% across all phases
 **Current Focus:** Desktop Distribution + Maxwell Unified Polish
 
@@ -182,6 +182,23 @@
 ---
 
 ## Recent Completions (Last 2 Weeks)
+
+### February 20, 2026
+- **Sync Entity Types Across Extraction Settings, Codex, and Wiki**
+  - Made Codex `EntityType` enum the canonical set of 9 types by adding ORGANIZATION and EVENT (previously only 7)
+  - **Frontend:**
+    - Added ORGANIZATION and EVENT to `EntityType` enum with colors (violet/teal) and icons (🏰/📅)
+    - Expanded QuickEntityModal from 4 to 9 entity types in a 3-column grid
+    - Expanded Settings → Entity Extraction checkboxes from 4 to 9 types in a 3-column grid
+    - Widened `ExtractionSettings.entity_types` and `DetectedEntity.type` from narrow union to `string`
+    - Updated EntityHoverCard badge styles and labels for ORGANIZATION and EVENT
+  - **Backend:**
+    - Fixed spaCy NLP mappings: `ORG → ORGANIZATION`, `EVENT → EVENT` (were both incorrectly mapped to LORE)
+    - Updated both `nlp_service.py` and `realtime_nlp_service.py` mappers
+    - Expanded WebSocket default `entity_types` to all 9 types
+    - Added CULTURE, CREATURE, RACE mappings to wiki auto-populator
+    - Expanded wiki-codex bridge to all 9 types with explicit reverse mapping (CREATURE wins over RACE for `creature` wiki type)
+  - **Files Modified:** `codex.ts`, `QuickEntityModal.tsx`, `SettingsModal.tsx`, `useRealtimeNLP.ts`, `EntityHoverCard.tsx`, `nlp_service.py`, `realtime_nlp_service.py`, `realtime.py`, `wiki_auto_populator.py`, `wiki_codex_bridge.py`
 
 ### February 8, 2026
 - **Frontend UX Polish — Complete Reorganization**
@@ -1660,7 +1677,7 @@
 
 ---
 
-**Last Updated:** 2026-02-08 by Claude Code
+**Last Updated:** 2026-02-20 by Claude Code
 **Next Scheduled Review:** 2026-01-22 (daily updates)
 **Next Milestone Review:** 2026-01-28 (Beta Launch Week)
 
