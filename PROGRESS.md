@@ -19,7 +19,7 @@
 | **Phase 7: PLG Features** | ⏳ Planned | 0% | Feb 2026 | Viral mechanics |
 | **Phase 8: Library & World Management** | ✅ Complete | 100% | Jan 18, 2026 | World/Series hierarchy |
 | **Phase 10: Desktop Distribution** | 🚧 In Progress | 33% | Feb 2026 | Docker + Electron |
-| **Phase 11: Quality & Polish** | 🚧 In Progress | 20% | Mar 2026 | Agent tools, UX, tests |
+| **Phase 11: Quality & Polish** | 🚧 In Progress | 25% | Mar 2026 | Agent tools, UX, refinement system |
 
 ---
 
@@ -68,6 +68,13 @@
   - Event hover tooltips with descriptions
   - Gantt data computation in TimelineStore (loadOutline, computeGanttData)
   - New "Gantt" tab in TimelineSidebar with 📊 icon
+
+- **Outline tool & AI refinement improvements** (Feb 20)
+  - AddSceneButton always visible (was invisible until hover)
+  - BeatSuggestionCard descriptions default to expanded with truncated preview when collapsed
+  - Reusable AI refinement system: generic `POST /api/ai/refine` endpoint + `RefinementPanel` component supporting 8 domains
+  - Refinement wired into BeatSuggestionCard ("Refine" button) and AISuggestionsPanel beat descriptions ("Refine This" link)
+  - Fill from Manuscript button + review modal (`FillFromManuscriptModal`) with per-mapping refinement
 
 **⏳ Next Up:**
 - Automatic chapter generation from outline
@@ -185,6 +192,29 @@
 ## Recent Completions (Last 2 Weeks)
 
 ### February 20, 2026
+- **Outline Tool & AI Refinement System Improvements (Phase 4/11)**
+  - **AddSceneButton Visibility:** Replaced invisible `opacity-0 group-hover:opacity-100` collapsed button with always-visible dashed line + centered pill button (`+ Add Scene`), subtle at rest, highlighted on hover
+  - **BeatSuggestionCard Default Expansion:** Changed `useState(false)` → `useState(true)` so AI suggestion descriptions are visible by default; added truncated 80-char preview when collapsed
+  - **Reusable AI Refinement System (Backend):**
+    - New `RefinementService` in `backend/app/services/refinement_service.py` with 8 domain-specific prompt templates (beat_suggestion, beat_description, beat_mapping, brainstorm_idea, entity_suggestion, wiki_entry, plot_hole_fix, writing_feedback)
+    - New `POST /api/ai/refine` endpoint in `backend/app/api/routes/ai.py` accepting `{api_key, domain, original, feedback, context, history}`
+    - Builds conversation from history + feedback, calls OpenRouter, returns refined JSON in same schema as original
+  - **Reusable RefinementPanel Component (Frontend):**
+    - New `frontend/src/components/shared/RefinementPanel.tsx` — manages `currentSuggestion`, `refinementHistory`, `feedbackInput`, loading state
+    - Displays current version via `renderSuggestion`, scrollable history of previous turns, textarea with Cmd+Enter, Refine/Accept/Cancel buttons
+    - Styled with Maxwell design system (purple-50 bg, purple-300 border)
+  - **Refinement Integrations:**
+    - `BeatSuggestionCard`: Added purple "Refine" button (cycle icon) next to like/dislike; opens `RefinementPanel` inline with `domain="beat_suggestion"`
+    - `PlotBeatCard`: Passes `onRefineAccept` and `beatContext` to BeatSuggestionCard
+    - `AISuggestionsPanel`: Added "Refine This" link on each beat description in beat_ideas tab; opens `RefinementPanel` inline with `domain="beat_description"`
+  - **Fill from Manuscript UI:**
+    - New `FillFromManuscriptModal.tsx` review modal showing AI-mapped beats with coverage info, structural gaps (severity-colored), pacing notes, and per-mapping "Refine" buttons (`domain="beat_mapping"`)
+    - Added purple gradient "Fill from Manuscript" button in OutlineMainView footer bar with loading spinner
+    - Calls existing `outlineApi.fillFromManuscript()` backend endpoint
+  - **API Client:** Added `refinementApi.refine()` to `frontend/src/lib/api.ts`
+  - **Files Created:** `refinement_service.py`, `ai.py` (route), `RefinementPanel.tsx`, `FillFromManuscriptModal.tsx`
+  - **Files Modified:** `main.py`, `api.ts`, `AddSceneButton.tsx`, `BeatSuggestionCard.tsx`, `PlotBeatCard.tsx`, `AISuggestionsPanel.tsx`, `OutlineMainView.tsx`
+
 - **Fix Agent Tool Execution (Phase 11.1)**
   - Replaced all stub/no-op tool execution with real LangChain `model.bind_tools()` + tool-call loop
   - `BaseMaxwellAgent._run_with_tools()`: Full rewrite — agents now dynamically invoke tools via native API function calling
