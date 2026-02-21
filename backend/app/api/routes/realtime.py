@@ -105,7 +105,7 @@ async def websocket_nlp_endpoint(
         'enabled': True,
         'debounce_delay': 2.0,  # seconds
         'confidence_threshold': 'medium',  # low, medium, high
-        'entity_types': ['CHARACTER', 'LOCATION', 'ITEM', 'LORE']  # types to detect
+        'entity_types': ['CHARACTER', 'LOCATION', 'ITEM', 'LORE', 'CULTURE', 'CREATURE', 'RACE', 'ORGANIZATION', 'EVENT']  # types to detect
     }
 
     try:

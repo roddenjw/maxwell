@@ -179,10 +179,10 @@ class NLPService:
             "GPE": "LOCATION",      # Countries, cities, states
             "LOC": "LOCATION",      # Non-GPE locations (mountains, bodies of water)
             "FAC": "LOCATION",      # Buildings, airports, highways
-            "ORG": "LORE",          # Companies, agencies, institutions
+            "ORG": "ORGANIZATION",  # Companies, agencies, institutions
             "PRODUCT": "ITEM",      # Objects, vehicles, foods
             "WORK_OF_ART": "ITEM",  # Titles of books, songs
-            "EVENT": "LORE",        # Named hurricanes, battles, wars
+            "EVENT": "EVENT",       # Named hurricanes, battles, wars
         }
         return mapping.get(spacy_label)
 

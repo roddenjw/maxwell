@@ -12,6 +12,8 @@ export enum EntityType {
   CULTURE = "CULTURE",
   CREATURE = "CREATURE",
   RACE = "RACE",
+  ORGANIZATION = "ORGANIZATION",
+  EVENT = "EVENT",
 }
 
 // Template Types for structured entity creation
@@ -478,6 +480,10 @@ export function getEntityTypeColor(type: EntityType): string {
       return "#EF4444"; // red
     case EntityType.RACE:
       return "#EC4899"; // pink
+    case EntityType.ORGANIZATION:
+      return "#8B5CF6"; // violet
+    case EntityType.EVENT:
+      return "#14B8A6"; // teal
     default:
       return "#94A3B8"; // slate
   }
@@ -518,6 +524,10 @@ export function getEntityTypeIcon(type: EntityType): string {
       return "🐉";
     case EntityType.RACE:
       return "👥";
+    case EntityType.ORGANIZATION:
+      return "🏰";
+    case EntityType.EVENT:
+      return "📅";
     default:
       return "•";
   }

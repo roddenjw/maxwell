@@ -29,9 +29,24 @@ ENTITY_TO_WIKI_TYPE = {
     "LOCATION": WikiEntryType.LOCATION.value,
     "ITEM": WikiEntryType.ARTIFACT.value,
     "LORE": WikiEntryType.WORLD_RULE.value,
+    "CULTURE": WikiEntryType.CULTURE.value,
+    "CREATURE": WikiEntryType.CREATURE.value,
+    "RACE": WikiEntryType.CREATURE.value,
+    "ORGANIZATION": WikiEntryType.FACTION.value,
+    "EVENT": WikiEntryType.EVENT.value,
 }
 
-WIKI_TO_ENTITY_TYPE = {v: k for k, v in ENTITY_TO_WIKI_TYPE.items()}
+# Explicit reverse mapping (CREATURE wins over RACE since both map to creature)
+WIKI_TO_ENTITY_TYPE = {
+    WikiEntryType.CHARACTER.value: "CHARACTER",
+    WikiEntryType.LOCATION.value: "LOCATION",
+    WikiEntryType.ARTIFACT.value: "ITEM",
+    WikiEntryType.WORLD_RULE.value: "LORE",
+    WikiEntryType.CULTURE.value: "CULTURE",
+    WikiEntryType.CREATURE.value: "CREATURE",
+    WikiEntryType.FACTION.value: "ORGANIZATION",
+    WikiEntryType.EVENT.value: "EVENT",
+}
 
 
 class WikiCodexBridge:

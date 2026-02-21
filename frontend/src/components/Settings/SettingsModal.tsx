@@ -25,7 +25,7 @@ const DEFAULT_EXTRACTION_SETTINGS: ExtractionSettings = {
   enabled: true,
   debounce_delay: 2,
   confidence_threshold: 'medium',
-  entity_types: ['CHARACTER', 'LOCATION', 'ITEM', 'LORE'],
+  entity_types: ['CHARACTER', 'LOCATION', 'ITEM', 'LORE', 'CULTURE', 'CREATURE', 'RACE', 'ORGANIZATION', 'EVENT'],
 };
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
@@ -72,7 +72,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   }, [isOpen]);
 
   // Toggle entity type in extraction settings
-  const toggleEntityType = (type: 'CHARACTER' | 'LOCATION' | 'ITEM' | 'LORE') => {
+  const toggleEntityType = (type: string) => {
     setExtractionSettings(prev => {
       const types = prev.entity_types.includes(type)
         ? prev.entity_types.filter(t => t !== type)
@@ -391,12 +391,17 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <p className="text-xs font-sans text-faded-ink mb-3">
                   Choose which types of entities to look for in your writing
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {[
-                    { type: 'CHARACTER' as const, label: 'Characters', icon: '👤' },
-                    { type: 'LOCATION' as const, label: 'Locations', icon: '📍' },
-                    { type: 'ITEM' as const, label: 'Items', icon: '⚔️' },
-                    { type: 'LORE' as const, label: 'Lore', icon: '📜' },
+                    { type: 'CHARACTER', label: 'Characters', icon: '👤' },
+                    { type: 'LOCATION', label: 'Locations', icon: '📍' },
+                    { type: 'ITEM', label: 'Items', icon: '⚔️' },
+                    { type: 'LORE', label: 'Lore', icon: '📜' },
+                    { type: 'CULTURE', label: 'Cultures', icon: '🏛️' },
+                    { type: 'CREATURE', label: 'Creatures', icon: '🐉' },
+                    { type: 'RACE', label: 'Races', icon: '👥' },
+                    { type: 'ORGANIZATION', label: 'Organizations', icon: '🏰' },
+                    { type: 'EVENT', label: 'Events', icon: '📅' },
                   ].map(({ type, label, icon }) => (
                     <label
                       key={type}

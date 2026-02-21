@@ -11,7 +11,7 @@ import analytics from '../lib/analytics';
 
 interface DetectedEntity {
   name: string;
-  type: 'CHARACTER' | 'LOCATION' | 'ITEM' | 'LORE';
+  type: string;
   context: string;
   confidence: string;
   suggestion_id?: string;
@@ -30,7 +30,7 @@ export interface ExtractionSettings {
   enabled: boolean;
   debounce_delay: number;  // seconds: 2, 5, or 10
   confidence_threshold: 'low' | 'medium' | 'high';
-  entity_types: ('CHARACTER' | 'LOCATION' | 'ITEM' | 'LORE')[];
+  entity_types: string[];
 }
 
 interface UseRealtimeNLPOptions {
@@ -44,7 +44,7 @@ const DEFAULT_SETTINGS: ExtractionSettings = {
   enabled: true,
   debounce_delay: 2,
   confidence_threshold: 'medium',
-  entity_types: ['CHARACTER', 'LOCATION', 'ITEM', 'LORE'],
+  entity_types: ['CHARACTER', 'LOCATION', 'ITEM', 'LORE', 'CULTURE', 'CREATURE', 'RACE', 'ORGANIZATION', 'EVENT'],
 };
 
 // Load settings from localStorage

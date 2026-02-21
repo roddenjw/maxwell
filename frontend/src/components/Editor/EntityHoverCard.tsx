@@ -24,6 +24,8 @@ const TYPE_BADGE_STYLES: Record<EntityType, string> = {
   CULTURE: 'bg-amber-100 text-amber-800',
   CREATURE: 'bg-red-100 text-red-700',
   RACE: 'bg-pink-100 text-pink-700',
+  ORGANIZATION: 'bg-violet-100 text-violet-700',
+  EVENT: 'bg-teal-100 text-teal-700',
 };
 
 const TYPE_LABELS: Record<EntityType, string> = {
@@ -34,6 +36,8 @@ const TYPE_LABELS: Record<EntityType, string> = {
   CULTURE: 'Culture',
   CREATURE: 'Creature',
   RACE: 'Race',
+  ORGANIZATION: 'Organization',
+  EVENT: 'Event',
 };
 
 export function EntityHoverCard({

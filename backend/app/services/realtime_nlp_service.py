@@ -166,8 +166,8 @@ class RealtimeNLPService:
             'GPE': 'LOCATION',  # Geopolitical entity
             'LOC': 'LOCATION',
             'FAC': 'LOCATION',  # Facility
-            'ORG': 'LORE',      # Organizations as lore
-            'EVENT': 'LORE',
+            'ORG': 'ORGANIZATION',
+            'EVENT': 'EVENT',
             'WORK_OF_ART': 'ITEM',
             'PRODUCT': 'ITEM',
         }

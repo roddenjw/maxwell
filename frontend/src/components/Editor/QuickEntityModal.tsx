@@ -29,6 +29,11 @@ const ENTITY_TYPES: { value: EntityType; label: string; icon: string }[] = [
   { value: EntityType.LOCATION, label: 'Location', icon: '📍' },
   { value: EntityType.ITEM, label: 'Item', icon: '🔮' },
   { value: EntityType.LORE, label: 'Lore', icon: '📜' },
+  { value: EntityType.CULTURE, label: 'Culture', icon: '🏛️' },
+  { value: EntityType.CREATURE, label: 'Creature', icon: '🐉' },
+  { value: EntityType.RACE, label: 'Race', icon: '👥' },
+  { value: EntityType.ORGANIZATION, label: 'Organization', icon: '🏰' },
+  { value: EntityType.EVENT, label: 'Event', icon: '📅' },
 ];
 
 export default function QuickEntityModal({
@@ -316,7 +321,7 @@ export default function QuickEntityModal({
             <label className="block text-sm font-sans font-semibold text-midnight mb-1">
               Type
             </label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {ENTITY_TYPES.map((entityType) => (
                 <button
                   key={entityType.value}

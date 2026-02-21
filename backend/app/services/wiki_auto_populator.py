@@ -332,6 +332,9 @@ class WikiAutoPopulator:
             "LORE": WikiEntryType.WORLD_RULE.value,
             "ORGANIZATION": WikiEntryType.FACTION.value,
             "EVENT": WikiEntryType.EVENT.value,
+            "CULTURE": WikiEntryType.CULTURE.value,
+            "CREATURE": WikiEntryType.CREATURE.value,
+            "RACE": WikiEntryType.CREATURE.value,
         }
         return mapping.get(entity_type)
 
