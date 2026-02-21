@@ -5,6 +5,9 @@
 
 import { useState, useEffect } from 'react';
 import { versioningApi, type Snapshot } from '../../lib/api';
+import { toast } from '@/stores/toastStore';
+import { confirm } from '@/stores/confirmStore';
+import { promptInput } from '@/stores/inputModalStore';
 import HistorySlider from './HistorySlider';
 import SnapshotCard from './SnapshotCard';
 import DiffViewer from './DiffViewer';
@@ -62,7 +65,7 @@ export default function TimeMachine({
       const olderSnapshot = snapshots[currentIndex + 1];
 
       if (!olderSnapshot) {
-        alert('No older version to compare with');
+        toast.info('No older version to compare with');
         return;
       }
 
@@ -73,7 +76,7 @@ export default function TimeMachine({
       });
 
       if (!diff.diff_html || diff.diff_html.trim().length === 0) {
-        alert('No changes detected between these versions');
+        toast.info('No changes detected between these versions');
         return;
       }
 
@@ -81,12 +84,12 @@ export default function TimeMachine({
       setShowDiff(true);
       setSelectedSnapshot(snapshot);
     } catch (err) {
-      alert('Failed to generate diff: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to generate diff: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 
   const handleRestore = async (snapshot: Snapshot) => {
-    if (!confirm(`Restore to "${snapshot.label || 'snapshot'}"? All chapters will be restored to this point. Your current work will be backed up.`)) {
+    if (!(await confirm({ title: 'Restore Snapshot', message: `Restore to "${snapshot.label || 'snapshot'}"? All chapters will be restored to this point. Your current work will be backed up.`, variant: 'warning', confirmLabel: 'Restore' }))) {
       return;
     }
 
@@ -97,12 +100,12 @@ export default function TimeMachine({
       // Reload snapshots to show new backup that was created
       await loadSnapshots();
     } catch (err) {
-      alert('Failed to restore: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to restore: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 
   const handleCreateSnapshot = async () => {
-    const label = prompt('Enter a label for this snapshot:');
+    const label = await promptInput({ title: 'Create Snapshot', placeholder: 'Enter a label for this snapshot...', confirmLabel: 'Create' });
     if (!label) return;
 
     try {
@@ -115,9 +118,9 @@ export default function TimeMachine({
       });
 
       await loadSnapshots();
-      alert('✅ Snapshot created! All chapters have been saved.');
+      toast.success('Snapshot created! All chapters have been saved.');
     } catch (err) {
-      alert('Failed to create snapshot: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to create snapshot: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 

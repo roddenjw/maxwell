@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { chaptersApi, codexApi, type Chapter } from '@/lib/api';
 import type { Entity } from '@/types/codex';
 import { toast } from '@/stores/toastStore';
+import { confirm } from '@/stores/confirmStore';
 import { getErrorMessage } from '@/lib/retry';
 import EntityPickerModal from './EntityPickerModal';
 
@@ -303,7 +304,7 @@ export default function CharacterSheetEditor({ chapterId, manuscriptId, onTitleC
 
   // Handle unlinking from entity
   const handleUnlinkEntity = async () => {
-    if (!confirm('Unlink this character sheet from the Codex entity? The sheet data will be preserved.')) {
+    if (!(await confirm({ title: 'Unlink Entity', message: 'Unlink this character sheet from the Codex entity? The sheet data will be preserved.', variant: 'warning', confirmLabel: 'Unlink' }))) {
       return;
     }
 

@@ -3,18 +3,19 @@ import ManuscriptEditor from './components/Editor/ManuscriptEditor'
 import { CharacterSheetEditor, NotesEditor, TitlePageForm } from './components/Editor'
 import type { Chapter } from './lib/api'
 import ManuscriptLibrary from './components/ManuscriptLibrary'
-import { CodexMainView } from './components/Codex'
+// CodexMainView lazy-loaded from ./views
 import TimelineSidebar from './components/Timeline/TimelineSidebar'
 import DocumentNavigator from './components/Document/DocumentNavigator'
 import FastCoachSidebar from './components/FastCoach/FastCoachSidebar'
-import { MaxwellPanel } from './components/Maxwell'
+// MaxwellPanel lazy-loaded from ./views
 import UnifiedSidebar from './components/Navigation/UnifiedSidebar'
 import ToastContainer from './components/Common/ToastContainer'
+import ConfirmationModal from './components/Common/ConfirmationModal'
+import InputModal from './components/Common/InputModal'
 import KeyboardShortcutsModal from './components/Common/KeyboardShortcutsModal'
 import ViewLoadingSpinner from './components/Common/ViewLoadingSpinner'
 import { FeatureErrorBoundary, BalanceWidget } from './components/Common'
-import { OutlineMainView } from './components/Outline'
-import { BrainstormingModal } from './components/Brainstorming'
+// OutlineMainView and BrainstormingModal lazy-loaded from ./views
 import { useManuscriptStore } from './stores/manuscriptStore'
 import { useOnboardingStore } from './stores/onboardingStore'
 import { useCodexStore } from './stores/codexStore'
@@ -42,6 +43,10 @@ import {
   LazyWelcomeModal,
   LazyFeatureTour,
   LazySettingsModal,
+  LazyCodexMainView,
+  LazyMaxwellPanel,
+  LazyOutlineMainView,
+  LazyBrainstormingModal,
 } from './views'
 import { AchievementDashboard } from './components/Achievements'
 
@@ -237,8 +242,8 @@ function App() {
     }
   }
 
-  const handleCloseEditor = () => {
-    if (!checkNavigateAway()) {
+  const handleCloseEditor = async () => {
+    if (!(await checkNavigateAway())) {
       return
     }
     setCurrentManuscript(null)
@@ -403,7 +408,7 @@ function App() {
 
   const handleChapterSelect = async (chapterId: string) => {
     // Check for unsaved changes before switching chapters
-    if (!checkNavigateAway()) {
+    if (!(await checkNavigateAway())) {
       return
     }
 
@@ -813,12 +818,14 @@ function App() {
 
             {/* Codex View - Full-page entity browser */}
             {activeView === 'codex' && (
-              <div className="flex-1 flex bg-vellum">
-                <CodexMainView
-                  manuscriptId={currentManuscript.id}
-                  onOpenChapter={handleChapterSelect}
-                />
-              </div>
+              <Suspense fallback={<ViewLoadingSpinner />}>
+                <div className="flex-1 flex bg-vellum">
+                  <LazyCodexMainView
+                    manuscriptId={currentManuscript.id}
+                    onOpenChapter={handleChapterSelect}
+                  />
+                </div>
+              </Suspense>
             )}
 
             {/* Timeline View */}
@@ -919,11 +926,13 @@ function App() {
                     loadOutline(currentManuscript.id)
                   }}
                 >
-                  <OutlineMainView
-                    manuscriptId={currentManuscript.id}
-                    onCreateChapter={handleCreateChapterFromBeat}
-                    onOpenChapter={handleChapterSelect}
-                  />
+                  <Suspense fallback={<ViewLoadingSpinner />}>
+                    <LazyOutlineMainView
+                      manuscriptId={currentManuscript.id}
+                      onCreateChapter={handleCreateChapterFromBeat}
+                      onOpenChapter={handleChapterSelect}
+                    />
+                  </Suspense>
                 </FeatureErrorBoundary>
               </div>
             )}
@@ -951,17 +960,21 @@ function App() {
 
         {/* Toast Notifications */}
         <ToastContainer />
+        <ConfirmationModal />
+        <InputModal />
 
         {/* Maxwell AI Writing Coach Panel */}
-        <MaxwellPanel
-          manuscriptId={currentManuscriptId || undefined}
-          chapterId={currentChapterId || undefined}
-          chapterTitle={currentChapterData?.title}
-          selectedText={selectedText}
-          userId={userId}
-          apiKey={apiKey}
-          onClose={() => setCoachPanelOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <LazyMaxwellPanel
+            manuscriptId={currentManuscriptId || undefined}
+            chapterId={currentChapterId || undefined}
+            chapterTitle={currentChapterData?.title}
+            selectedText={selectedText}
+            userId={userId}
+            apiKey={apiKey}
+            onClose={() => setCoachPanelOpen(false)}
+          />
+        </Suspense>
 
         {/* Achievement Dashboard */}
         <AchievementDashboard
@@ -982,7 +995,9 @@ function App() {
         )}
 
         {/* Brainstorming Modal */}
-        <BrainstormingModal />
+        <Suspense fallback={null}>
+          <LazyBrainstormingModal />
+        </Suspense>
       </div>
     )
   }
@@ -997,6 +1012,8 @@ function App() {
       />
 
       <ToastContainer />
+      <ConfirmationModal />
+      <InputModal />
 
       {/* Achievement Dashboard */}
       <AchievementDashboard
@@ -1037,7 +1054,9 @@ function App() {
       )}
 
       {/* Brainstorming Modal */}
-      <BrainstormingModal />
+      <Suspense fallback={null}>
+        <LazyBrainstormingModal />
+      </Suspense>
     </>
   )
 }

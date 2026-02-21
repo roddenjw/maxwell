@@ -10,6 +10,7 @@ import {
   FORESHADOWING_TYPE_DESCRIPTIONS,
 } from '@/types/foreshadowing';
 import { useTimelineStore } from '@/stores/timelineStore';
+import { confirm } from '@/stores/confirmStore';
 
 interface ForeshadowingPairCardProps {
   pair: ForeshadowingPair;
@@ -160,8 +161,8 @@ export default function ForeshadowingPairCard({
 
         {onDelete && (
           <button
-            onClick={() => {
-              if (confirm('Delete this foreshadowing pair?')) {
+            onClick={async () => {
+              if (await confirm({ title: 'Delete Pair', message: 'Delete this foreshadowing pair?', variant: 'danger', confirmLabel: 'Delete' })) {
                 onDelete(pair.id);
               }
             }}

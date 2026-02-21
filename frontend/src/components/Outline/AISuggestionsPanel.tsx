@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
+import { confirm } from '@/stores/confirmStore';
 import type { Outline, PlotHole, PlotHoleDismissal } from '@/types/outline';
 import { Z_INDEX } from '@/lib/zIndex';
 import RefinementPanel from '../shared/RefinementPanel';
@@ -1078,8 +1079,8 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
       {hasResults && (
         <div className="flex-shrink-0 border-t-2 border-slate-ui bg-vellum p-4 text-center">
           <button
-            onClick={() => {
-              if (confirm('Clear all AI suggestions? This cannot be undone.')) {
+            onClick={async () => {
+              if (await confirm({ title: 'Clear Suggestions', message: 'Clear all AI suggestions? This cannot be undone.', variant: 'danger', confirmLabel: 'Clear All' })) {
                 clearAISuggestions();
                 setActiveTab('settings');
               }

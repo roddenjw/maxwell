@@ -11,6 +11,7 @@
 import { useState, useEffect } from 'react';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { foreshadowingApi } from '@/lib/api';
+import { toast } from '@/stores/toastStore';
 import type {
   ForeshadowingPair,
   ForeshadowingType,
@@ -115,7 +116,7 @@ export default function ForeshadowingTracker({ manuscriptId }: ForeshadowingTrac
   // Handle create
   const handleCreate = async () => {
     if (!createForm.foreshadowing_event_id || !createForm.foreshadowing_text) {
-      alert('Please select an event and enter description');
+      toast.warning('Please select an event and enter description');
       return;
     }
 
@@ -141,14 +142,14 @@ export default function ForeshadowingTracker({ manuscriptId }: ForeshadowingTrac
       const statsData = await foreshadowingApi.getStats(manuscriptId);
       setStats(statsData);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to create foreshadowing pair');
+      toast.error(err instanceof Error ? err.message : 'Failed to create foreshadowing pair');
     }
   };
 
   // Handle link payoff
   const handleLinkPayoff = async () => {
     if (!selectedPairId || !linkForm.payoff_event_id || !linkForm.payoff_text) {
-      alert('Please select an event and enter description');
+      toast.warning('Please select an event and enter description');
       return;
     }
 
@@ -165,7 +166,7 @@ export default function ForeshadowingTracker({ manuscriptId }: ForeshadowingTrac
       const statsData = await foreshadowingApi.getStats(manuscriptId);
       setStats(statsData);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to link payoff');
+      toast.error(err instanceof Error ? err.message : 'Failed to link payoff');
     }
   };
 
@@ -178,7 +179,7 @@ export default function ForeshadowingTracker({ manuscriptId }: ForeshadowingTrac
       const statsData = await foreshadowingApi.getStats(manuscriptId);
       setStats(statsData);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to unlink payoff');
+      toast.error(err instanceof Error ? err.message : 'Failed to unlink payoff');
     }
   };
 
@@ -191,7 +192,7 @@ export default function ForeshadowingTracker({ manuscriptId }: ForeshadowingTrac
       const statsData = await foreshadowingApi.getStats(manuscriptId);
       setStats(statsData);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete pair');
+      toast.error(err instanceof Error ? err.message : 'Failed to delete pair');
     }
   };
 

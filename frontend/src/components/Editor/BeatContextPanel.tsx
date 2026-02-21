@@ -7,6 +7,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
 import { toast } from '@/stores/toastStore';
+import { confirm } from '@/stores/confirmStore';
 
 interface BeatContextPanelProps {
   manuscriptId: string;
@@ -121,9 +122,12 @@ const BeatContextPanel = React.memo(function BeatContextPanel({
   const handleUnlink = async () => {
     if (!beat) return;
 
-    const confirmed = window.confirm(
-      `Unlink this chapter from "${beat.beat_label}"?\n\nThis chapter will no longer track progress for this plot beat. You can re-link it later.`
-    );
+    const confirmed = await confirm({
+      title: 'Unlink Chapter',
+      message: `Unlink this chapter from "${beat.beat_label}"? This chapter will no longer track progress for this plot beat. You can re-link it later.`,
+      variant: 'warning',
+      confirmLabel: 'Unlink',
+    });
 
     if (!confirmed) return;
 
@@ -297,7 +301,7 @@ const BeatContextPanel = React.memo(function BeatContextPanel({
                   This chapter has no scenes yet. Add scene breaks to track progress within this beat.
                 </p>
                 <button
-                  onClick={() => alert('Scene breaks: Type "---" on a new line to insert a scene divider')}
+                  onClick={() => toast.info('Scene breaks: Type "---" on a new line to insert a scene divider')}
                   className="px-3 py-1.5 text-xs bg-blue-500/10 text-blue-600 border border-blue-500/30 hover:bg-blue-500/20 font-sans font-medium"
                   style={{ borderRadius: '2px' }}
                 >

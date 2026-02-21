@@ -6,6 +6,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
 import { toast } from '@/stores/toastStore';
+import { confirm } from '@/stores/confirmStore';
 import type { PlotBeat, BeatSuggestion } from '@/types/outline';
 import BeatSuggestionCard from './BeatSuggestionCard';
 
@@ -211,7 +212,7 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
   const handleDeleteScene = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isScene) return;
-    if (!confirm(`Delete scene "${beat.beat_label}"?`)) return;
+    if (!(await confirm({ title: 'Delete Scene', message: `Delete scene "${beat.beat_label}"?`, variant: 'danger', confirmLabel: 'Delete' }))) return;
 
     setIsDeleting(true);
     try {

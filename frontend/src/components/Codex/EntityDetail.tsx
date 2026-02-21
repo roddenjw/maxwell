@@ -8,6 +8,7 @@ import { EntityType, getEntityTypeColor, getEntityTypeIcon } from '@/types/codex
 import { codexApi, cultureApi } from '@/lib/api';
 import { WIKI_REFERENCE_TYPE_INFO, type WikiReferenceType } from '@/types/wiki';
 import { toast } from '@/stores/toastStore';
+import { confirm } from '@/stores/confirmStore';
 import { getErrorMessage } from '@/lib/retry';
 import {
   CHARACTER_ROLES,
@@ -787,8 +788,8 @@ export default function EntityDetail({
     setIsEditing(false);
   };
 
-  const handleDelete = () => {
-    if (confirm(`Delete "${entity.name}"? This cannot be undone.`)) {
+  const handleDelete = async () => {
+    if (await confirm({ title: 'Delete Entity', message: `Delete "${entity.name}"? This cannot be undone.`, variant: 'danger', confirmLabel: 'Delete' })) {
       onDelete?.(entity.id);
       onClose();
     }

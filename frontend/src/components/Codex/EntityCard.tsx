@@ -4,6 +4,7 @@
 
 import type { Entity } from '@/types/codex';
 import { getEntityTypeColor, getEntityTypeIcon } from '@/types/codex';
+import { confirm } from '@/stores/confirmStore';
 
 interface EntityCardProps {
   entity: Entity;
@@ -68,9 +69,9 @@ export default function EntityCard({
 
           {/* Delete Button */}
           <button
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              if (confirm(`Delete entity "${entity.name}"?`)) {
+              if (await confirm({ title: 'Delete Entity', message: `Delete entity "${entity.name}"?`, variant: 'danger', confirmLabel: 'Delete' })) {
                 onDelete();
               }
             }}

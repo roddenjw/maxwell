@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { useTimelineStore } from '@/stores/timelineStore';
+import { toast } from '@/stores/toastStore';
 
 interface TimelineControlsProps {
   manuscriptId: string;
@@ -33,7 +34,7 @@ export default function TimelineControls({
       onValidate?.();
     } catch (error) {
       console.error('Validation failed:', error);
-      alert('Failed to run validation: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error('Failed to run validation: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setValidating(false);
     }

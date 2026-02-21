@@ -36,6 +36,8 @@ import SelectionToolbar from './SelectionToolbar';
 import QuickEntityModal from './QuickEntityModal';
 import ThesaurusPopup from './ThesaurusPopup';
 import { versioningApi, chaptersApi } from '@/lib/api';
+import { toast } from '@/stores/toastStore';
+import { promptInput } from '@/stores/inputModalStore';
 import { useOutlineStore } from '@/stores/outlineStore';
 
 interface ManuscriptEditorProps {
@@ -190,7 +192,7 @@ export default function ManuscriptEditor({
     if (!manuscriptId) return;
 
     try {
-      const label = prompt('Enter a label for this snapshot:');
+      const label = await promptInput({ title: 'Create Snapshot', placeholder: 'Enter a label for this snapshot...', confirmLabel: 'Create' });
       if (!label) return;
 
       await versioningApi.createSnapshot({
@@ -200,10 +202,10 @@ export default function ManuscriptEditor({
         word_count: wordCount,
       });
 
-      alert('✅ Snapshot created! All chapters have been saved.');
+      toast.success('Snapshot created! All chapters have been saved.');
     } catch (error) {
       console.error('Failed to create snapshot:', error);
-      alert('Failed to create snapshot: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error('Failed to create snapshot: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 

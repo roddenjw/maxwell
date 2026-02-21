@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { confirm } from '@/stores/confirmStore';
 
 export function useUnsavedChanges(hasUnsavedChanges: boolean) {
   const hasChangesRef = useRef(hasUnsavedChanges);
@@ -33,14 +34,17 @@ export function useUnsavedChanges(hasUnsavedChanges: boolean) {
    * Check if navigation should be allowed
    * Returns true if safe to navigate, false if user cancels
    */
-  const checkNavigateAway = (): boolean => {
+  const checkNavigateAway = async (): Promise<boolean> => {
     if (!hasChangesRef.current) {
       return true;
     }
 
-    return confirm(
-      'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.'
-    );
+    return confirm({
+      title: 'Unsaved Changes',
+      message: 'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.',
+      variant: 'warning',
+      confirmLabel: 'Leave',
+    });
   };
 
   return { checkNavigateAway, hasUnsavedChanges };

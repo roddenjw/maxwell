@@ -8,6 +8,7 @@ import { useCodexStore } from '@/stores/codexStore';
 import { EventType } from '@/types/timeline';
 import type { TimelineEvent } from '@/types/timeline';
 import { timelineApi } from '@/lib/api';
+import { toast } from '@/stores/toastStore';
 
 interface TimelineEventFormProps {
   manuscriptId: string;
@@ -65,7 +66,7 @@ export default function TimelineEventForm({
     e.preventDefault();
 
     if (!description.trim()) {
-      alert('Please enter a description');
+      toast.warning('Please enter a description');
       return;
     }
 
@@ -102,7 +103,7 @@ export default function TimelineEventForm({
       onSave();
     } catch (error) {
       console.error('Failed to save event:', error);
-      alert('Failed to save event: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error('Failed to save event: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setSaving(false);
     }

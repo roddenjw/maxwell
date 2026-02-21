@@ -14,6 +14,8 @@ import EntityTemplateWizard from './EntityTemplateWizard';
 import { codexApi } from '@/lib/api';
 import { useCodexStore } from '@/stores/codexStore';
 import { useBrainstormStore } from '@/stores/brainstormStore';
+import { toast } from '@/stores/toastStore';
+import { confirm } from '@/stores/confirmStore';
 import { EntityType, TemplateType } from '@/types/codex';
 
 interface EntityListProps {
@@ -141,7 +143,7 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
       await codexApi.deleteEntity(entityId);
       removeEntity(entityId);
     } catch (err) {
-      alert('Failed to delete entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to delete entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 
@@ -150,7 +152,7 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
       const updated = await codexApi.updateEntity(entityId, updates);
       updateEntity(entityId, updated);
     } catch (err) {
-      alert('Failed to update entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to update entity: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 
@@ -189,7 +191,7 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
   const handleBulkDelete = async () => {
     if (selectedEntityIds.size === 0) return;
 
-    if (!confirm(`Delete ${selectedEntityIds.size} selected entities? This cannot be undone.`)) {
+    if (!(await confirm({ title: 'Delete Entities', message: `Delete ${selectedEntityIds.size} selected entities? This cannot be undone.`, variant: 'danger', confirmLabel: 'Delete' }))) {
       return;
     }
 
@@ -203,13 +205,13 @@ export default function EntityList({ manuscriptId }: EntityListProps) {
       selectedEntityIds.forEach(id => removeEntity(id));
       setSelectedEntityIds(new Set());
     } catch (err) {
-      alert('Failed to delete entities: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to delete entities: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 
   const handleMergeEntities = () => {
     if (selectedEntityIds.size < 2) {
-      alert('Select at least 2 entities to merge');
+      toast.warning('Select at least 2 entities to merge');
       return;
     }
 

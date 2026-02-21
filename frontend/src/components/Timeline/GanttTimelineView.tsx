@@ -6,6 +6,7 @@
 
 import { useEffect } from 'react';
 import { useTimelineStore } from '@/stores/timelineStore';
+import { toast } from '@/stores/toastStore';
 import type { GanttBeat } from '@/types/timeline';
 
 interface GanttTimelineViewProps {
@@ -206,7 +207,7 @@ export default function GanttTimelineView({
             style={{ borderRadius: '2px' }}
             onClick={() => {
               // Navigate to outline creation (you can implement this)
-              alert('Navigate to Outline view to create a story structure');
+              toast.info('Navigate to Outline view to create a story structure');
             }}
           >
             Create Outline

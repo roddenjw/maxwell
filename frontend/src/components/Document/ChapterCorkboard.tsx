@@ -22,6 +22,7 @@ function getDocumentIcon(node: ChapterTree): string {
   return DOCUMENT_TYPE_ICONS[docType] || '📄';
 }
 import { toast } from '@/stores/toastStore';
+import { confirm } from '@/stores/confirmStore';
 import { retry, getErrorMessage } from '@/lib/retry';
 import {
   DndContext,
@@ -379,7 +380,7 @@ export default function ChapterCorkboard({
       ? `Delete "${node.title}" and all its contents?`
       : `Delete "${node.title}"?`;
 
-    if (!confirm(confirmMessage)) return;
+    if (!(await confirm({ title: 'Delete', message: confirmMessage, variant: 'danger', confirmLabel: 'Delete' }))) return;
 
     try {
       await chaptersApi.deleteChapter(chapterId);

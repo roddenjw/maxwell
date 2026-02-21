@@ -19,6 +19,7 @@ import { WikiChangeQueue } from './WikiChangeQueue';
 import { CultureLinkManager } from './CultureLinkManager';
 import { cultureApi } from '../../lib/api';
 import { toast } from '../../stores/toastStore';
+import { confirm } from '../../stores/confirmStore';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -475,7 +476,7 @@ export default function WorldWikiBrowser({ world, manuscriptId, onClose }: World
 
   // Delete entry
   const handleDeleteEntry = async (entryId: string) => {
-    if (!confirm('Are you sure you want to delete this entry?')) return;
+    if (!(await confirm({ title: 'Delete Entry', message: 'Are you sure you want to delete this entry?', variant: 'danger', confirmLabel: 'Delete' }))) return;
 
     try {
       const response = await fetch(`${API_BASE}/wiki/entries/${entryId}`, {

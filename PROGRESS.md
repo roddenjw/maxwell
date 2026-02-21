@@ -19,7 +19,7 @@
 | **Phase 7: PLG Features** | ⏳ Planned | 0% | Feb 2026 | Viral mechanics |
 | **Phase 8: Library & World Management** | ✅ Complete | 100% | Jan 18, 2026 | World/Series hierarchy |
 | **Phase 10: Desktop Distribution** | 🚧 In Progress | 33% | Feb 2026 | Docker + Electron |
-| **Phase 11: Quality & Polish** | 🚧 In Progress | 25% | Mar 2026 | Agent tools, UX, refinement system |
+| **Phase 11: Quality & Polish** | 🚧 In Progress | 85% | Mar 2026 | Agent tools, UX, toast/modals, tests, bundle splitting |
 
 ---
 
@@ -214,6 +214,28 @@
   - **API Client:** Added `refinementApi.refine()` to `frontend/src/lib/api.ts`
   - **Files Created:** `refinement_service.py`, `ai.py` (route), `RefinementPanel.tsx`, `FillFromManuscriptModal.tsx`
   - **Files Modified:** `main.py`, `api.ts`, `AddSceneButton.tsx`, `BeatSuggestionCard.tsx`, `PlotBeatCard.tsx`, `AISuggestionsPanel.tsx`, `OutlineMainView.tsx`
+
+- **Toast + Confirmation Modal System (Phase 11.2)**
+  - Replaced all 47 browser `alert()`/`confirm()`/`prompt()` calls across 27 component files with styled alternatives
+  - New `confirmStore.ts` — Zustand store exposing `confirm()` returning `Promise<boolean>` with danger/warning/info variants
+  - New `inputModalStore.ts` — Zustand store exposing `promptInput()` returning `Promise<string|null>` with text/select modes
+  - New `ConfirmationModal.tsx` and `InputModal.tsx` global modal components (rendered in App.tsx)
+  - `useUnsavedChanges.checkNavigateAway()` converted from sync to async with `await confirm()`
+  - Zero browser dialog calls remaining in frontend codebase
+
+- **VoiceAnalysis Wired into Codex (Phase 11.3)**
+  - Added "Voice" as 5th tab in CodexMainView alongside Entities, World, Relationships, Intel
+  - Lazy-loaded VoiceProfilePanel renders with manuscript context and selected character
+
+- **Frontend Bundle Splitting (Phase 11.4)**
+  - Lazy-loaded 4 heavy components: CodexMainView, MaxwellPanel, OutlineMainView, BrainstormingModal
+  - Added lazy exports in `views/index.ts`, wrapped usage sites in `<Suspense>` in App.tsx
+
+- **Backend Test Coverage (Phase 11.5)**
+  - Added 84 new tests across 5 service test files: wiki (22), codex (16), world (22), culture (9), character_arc (15)
+  - Added conftest fixtures for World, Series, WikiEntry, CharacterArc
+  - Moved 4 broken colocated test files to proper `tests/` structure
+  - All 84 new tests passing, 479 total passing (up from ~395)
 
 - **Fix Agent Tool Execution (Phase 11.1)**
   - Replaced all stub/no-op tool execution with real LangChain `model.bind_tools()` + tool-call loop
@@ -1469,25 +1491,17 @@
   - Impact: Not truly "real-time" experience
   - Target: Implement debounced auto-extraction by Jan 20
 
-- ⚠️ **Test coverage below 60% target (currently ~35%)**
-  - Status: Adding tests with each new feature (Phase 11.5)
-  - Impact: Risk of regressions
-  - Target: 45% by Jan 30, 60% by Feb 28
+- ✅ **~~Test coverage below 60% target~~ — 84 new service tests added (Phase 11.5)**
+  - Status: 479 tests passing; wiki, codex, world, culture, character_arc services covered
 
-- ⚠️ **Frontend bundle size > 500KB**
-  - Status: No code splitting yet (Phase 11.4)
-  - Impact: Slower initial page load
-  - Target: Implement code splitting by Feb 15
+- ✅ **~~Frontend bundle size > 500KB~~ — Code splitting implemented (Phase 11.4)**
+  - Status: 4 heavy components lazy-loaded (CodexMainView, MaxwellPanel, OutlineMainView, BrainstormingModal)
 
-- ⚠️ **35+ components use browser `alert()`/`prompt()` dialogs**
-  - Status: Planned (Phase 11.2)
-  - Impact: Poor UX, inconsistent with design system
-  - Target: Replace with toast/notification system
+- ✅ **~~35+ components use browser `alert()`/`prompt()` dialogs~~ — Replaced (Phase 11.2)**
+  - Status: All 47 browser dialog calls replaced with toast/confirm/promptInput system
 
-- ⚠️ **VoiceAnalysis component not wired into navigation**
-  - Status: Component exists but inaccessible (Phase 11.3)
-  - Impact: Feature is unreachable by users
-  - Target: Wire into activeView system
+- ✅ **~~VoiceAnalysis component not wired into navigation~~ — Wired (Phase 11.3)**
+  - Status: Voice tab added to Codex as 5th tab
 
 - ⚠️ **Timeline validation can be slow for large manuscripts**
   - Status: Optimization opportunities identified

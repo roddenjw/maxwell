@@ -7,6 +7,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Severity, getSeverityColor, getSeverityIcon, TimelineInconsistency } from '@/types/timeline';
 import { timelineApi } from '@/lib/api';
 import { useTimelineStore } from '@/stores/timelineStore';
+import { toast } from '@/stores/toastStore';
 
 interface InconsistencyListProps {
   manuscriptId: string;
@@ -69,7 +70,7 @@ export default function InconsistencyList({ manuscriptId, onNavigateToChapter }:
       newNotes.delete(inconsistencyId);
       setResolutionNotes(newNotes);
     } catch (err) {
-      alert('Failed to resolve inconsistency: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to resolve inconsistency: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setResolvingId(null);
     }

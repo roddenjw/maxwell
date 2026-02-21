@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { useTimelineStore } from '@/stores/timelineStore';
+import { toast } from '@/stores/toastStore';
 import { getSeverityColor, getSeverityIcon, Severity } from '@/types/timeline';
 import type { TimelineInconsistency } from '@/types/timeline';
 
@@ -37,7 +38,7 @@ export default function TimelineIssuesPanel({ }: TimelineIssuesPanelProps) {
       setSelectedIssue(null);
       setResolutionNotes('');
     } catch (error) {
-      alert('Failed to resolve issue: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error('Failed to resolve issue: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setResolving(false);
     }

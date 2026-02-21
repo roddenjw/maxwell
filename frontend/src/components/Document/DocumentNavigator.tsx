@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useChapterStore } from '@/stores/chapterStore';
 import { chaptersApi, type ChapterTree, type DocumentType } from '@/lib/api';
 import { toast } from '@/stores/toastStore';
+import { confirm } from '@/stores/confirmStore';
 import { ChapterTreeSkeleton } from '@/components/Common/SkeletonLoader';
 import { retry, getErrorMessage } from '@/lib/retry';
 import {
@@ -561,7 +562,7 @@ export default function DocumentNavigator({ manuscriptId, onChapterSelect, defau
       ? `Delete "${node.title}" and all its contents?`
       : `Delete "${node.title}"?`;
 
-    if (!confirm(confirmMessage)) return;
+    if (!(await confirm({ title: 'Delete', message: confirmMessage, variant: 'danger', confirmLabel: 'Delete' }))) return;
 
     try {
       await chaptersApi.deleteChapter(chapterId);

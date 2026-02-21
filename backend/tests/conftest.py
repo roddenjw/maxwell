@@ -17,6 +17,9 @@ from app.models.entity import Entity
 from app.models.timeline import TimelineEvent
 from app.models.outline import Outline, PlotBeat
 from app.models.coach import WritingProfile, CoachingHistory, FeedbackPattern
+from app.models.world import World, Series
+from app.models.wiki import WikiEntry, WikiEntryType, WikiEntryStatus
+from app.models.character_arc import CharacterArc, ArcTemplate
 
 
 # Create test database engine
@@ -119,6 +122,85 @@ def multiple_chapters(test_db, sample_manuscript):
         test_db.refresh(chapter)
 
     return chapters
+
+
+@pytest.fixture
+def sample_world(test_db):
+    """Create a sample world for testing"""
+    world = World(
+        id=str(uuid.uuid4()),
+        name="Test World",
+        description="A test world",
+        settings={"genre": "fantasy"},
+    )
+    test_db.add(world)
+    test_db.commit()
+    test_db.refresh(world)
+    return world
+
+
+@pytest.fixture
+def sample_series(test_db, sample_world):
+    """Create a sample series in the test world"""
+    series = Series(
+        id=str(uuid.uuid4()),
+        world_id=sample_world.id,
+        name="Test Series",
+        description="A test series",
+        order_index=0,
+    )
+    test_db.add(series)
+    test_db.commit()
+    test_db.refresh(series)
+    return series
+
+
+@pytest.fixture
+def sample_wiki_entry(test_db, sample_world):
+    """Create a sample wiki entry for testing"""
+    entry = WikiEntry(
+        id=str(uuid.uuid4()),
+        world_id=sample_world.id,
+        entry_type=WikiEntryType.CHARACTER.value,
+        title="Test Character",
+        slug="test-character",
+        content="A brave hero",
+        summary="Hero of the story",
+        structured_data={"age": 25, "hair_color": "brown"},
+        status=WikiEntryStatus.DRAFT.value,
+        confidence_score=1.0,
+        tags=["hero", "protagonist"],
+        aliases=["The Hero"],
+        source_manuscripts=[],
+        source_chapters=[],
+        created_by="author",
+    )
+    test_db.add(entry)
+    test_db.commit()
+    test_db.refresh(entry)
+    return entry
+
+
+@pytest.fixture
+def sample_character_arc(test_db, sample_wiki_entry, sample_manuscript):
+    """Create a sample character arc for testing"""
+    arc = CharacterArc(
+        id=str(uuid.uuid4()),
+        wiki_entry_id=sample_wiki_entry.id,
+        manuscript_id=sample_manuscript.id,
+        arc_template=ArcTemplate.REDEMPTION.value,
+        arc_name="Hero's Redemption",
+        planned_arc={"stages": ["flawed_state", "catalyst", "transformation"]},
+        detected_arc={},
+        arc_beats=[],
+        custom_stages=[],
+        arc_completion=0.0,
+        arc_health="healthy",
+    )
+    test_db.add(arc)
+    test_db.commit()
+    test_db.refresh(arc)
+    return arc
 
 
 # ========================================

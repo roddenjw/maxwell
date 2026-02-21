@@ -14,6 +14,7 @@ import { useCodexStore } from '@/stores/codexStore';
 import { useChapterStore } from '@/stores/chapterStore';
 import type { TimelineEvent } from '@/types/timeline';
 import { getEventTypeColor, getEventTypeIcon, EventType } from '@/types/timeline';
+import { toast } from '@/stores/toastStore';
 
 interface InteractiveTimelineProps {
   manuscriptId: string;
@@ -36,7 +37,7 @@ export default function InteractiveTimeline({ manuscriptId }: InteractiveTimelin
     if (chapterId) {
       setCurrentChapter(chapterId);
       // Show toast notification
-      alert(`📍 Chapter selected! Switch to the "Chapters" tab to view it.`);
+      toast.info('Chapter selected! Switch to the "Chapters" tab to view it.');
     }
   };
 

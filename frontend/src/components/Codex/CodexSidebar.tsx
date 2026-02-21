@@ -5,6 +5,7 @@
 
 import type { CodexTab } from '@/types/codex';
 import { useCodexStore } from '@/stores/codexStore';
+import { toast } from '@/stores/toastStore';
 import { useTimelineStore } from '@/stores/timelineStore';
 import EntityList from './EntityList';
 import SuggestionQueue from './SuggestionQueue';
@@ -87,7 +88,7 @@ export default function CodexSidebar({
       const url = `/api/codex/export/${manuscriptId}?format=${format}`;
       window.open(`http://localhost:8000${url}`, '_blank');
     } catch (err) {
-      alert('Failed to export: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to export: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 

@@ -8,6 +8,7 @@ import { EventType, getEventTypeColor, getEventTypeIcon } from '@/types/timeline
 import { timelineApi } from '@/lib/api';
 import { useCodexStore } from '@/stores/codexStore';
 import { useTimelineStore } from '@/stores/timelineStore';
+import { toast } from '@/stores/toastStore';
 
 interface EventDetailProps {
   event: TimelineEvent;
@@ -65,7 +66,7 @@ export default function EventDetail({
       setIsEditing(false);
       onUpdate();
     } catch (err) {
-      alert('Failed to update event: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to update event: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setSaving(false);
     }

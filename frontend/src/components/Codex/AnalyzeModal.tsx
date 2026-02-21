@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { codexApi, timelineApi, chaptersApi, type Chapter } from '@/lib/api';
 import { useCodexStore } from '@/stores/codexStore';
+import { toast } from '@/stores/toastStore';
 
 interface AnalyzeModalProps {
   manuscriptId: string;
@@ -56,7 +57,7 @@ export default function AnalyzeModal({
       if (scope === 'current') {
         // Analyze current chapter only
         if (!currentChapterContent.trim()) {
-          alert('No text to analyze. Start writing first!');
+          toast.warning('No text to analyze. Start writing first!');
           setAnalyzing(false);
           return;
         }
@@ -99,7 +100,7 @@ export default function AnalyzeModal({
         const allChapters = collectChapters(chapterTree as unknown as Chapter[]);
 
         if (allChapters.length === 0) {
-          alert('No chapters found in manuscript.');
+          toast.warning('No chapters found in manuscript.');
           setAnalyzing(false);
           setProgress({ status: 'idle', currentChapter: 0, totalChapters: 0, message: '' });
           return;
@@ -131,7 +132,7 @@ export default function AnalyzeModal({
         const combinedText = chapterContents.join('\n\n---\n\n');
 
         if (!combinedText.trim()) {
-          alert('No text found in any chapters. Start writing first!');
+          toast.warning('No text found in any chapters. Start writing first!');
           setAnalyzing(false);
           setProgress({ status: 'idle', currentChapter: 0, totalChapters: 0, message: '' });
           return;

@@ -15,6 +15,8 @@ import { $createEntityMentionNode } from '../nodes/EntityMentionNode';
 import { codexApi } from '@/lib/api';
 import type { Entity } from '@/types/codex';
 import { EntityType } from '@/types/codex';
+import { promptInput } from '@/stores/inputModalStore';
+import { toast } from '@/stores/toastStore';
 
 class EntityMentionOption extends MenuOption {
   entity: Entity;
@@ -113,28 +115,28 @@ export default function EntityMentionsPlugin({ manuscriptId }: EntityMentionsPlu
       if (selectedOption.isCreateNew && manuscriptId) {
         try {
           // Prompt for entity type
-          const typeChoice = prompt(
-            `Create new entity "${selectedOption.entity.name}".\n\nSelect type (1-7):\n1. CHARACTER (person)\n2. LOCATION (place)\n3. ITEM (object)\n4. LORE (concept)\n5. CULTURE (society/customs)\n6. CREATURE (species/monster)\n7. RACE (people/species)`,
-            '1'
-          );
+          const typeChoice = await promptInput({
+            title: `Create Entity: "${selectedOption.entity.name}"`,
+            message: 'Select entity type:',
+            inputType: 'select',
+            selectOptions: [
+              { label: 'Character (person)', value: 'CHARACTER' },
+              { label: 'Location (place)', value: 'LOCATION' },
+              { label: 'Item (object)', value: 'ITEM' },
+              { label: 'Lore (concept)', value: 'LORE' },
+              { label: 'Culture (society/customs)', value: 'CULTURE' },
+              { label: 'Creature (species/monster)', value: 'CREATURE' },
+              { label: 'Race (people/species)', value: 'RACE' },
+            ],
+            confirmLabel: 'Create',
+          });
 
           if (!typeChoice) {
             closeMenu();
             return;
           }
 
-          // Map choice to entity type
-          const typeMap: Record<string, EntityType> = {
-            '1': EntityType.CHARACTER,
-            '2': EntityType.LOCATION,
-            '3': EntityType.ITEM,
-            '4': EntityType.LORE,
-            '5': EntityType.CULTURE,
-            '6': EntityType.CREATURE,
-            '7': EntityType.RACE,
-          };
-
-          const entityType = typeMap[typeChoice] || EntityType.CHARACTER;
+          const entityType = (typeChoice as EntityType) || EntityType.CHARACTER;
 
           // Create the entity in Codex
           const newEntity = await codexApi.createEntity({
@@ -167,7 +169,7 @@ export default function EntityMentionsPlugin({ manuscriptId }: EntityMentionsPlu
           });
         } catch (error) {
           console.error('Failed to create entity:', error);
-          alert('Failed to create entity: ' + (error instanceof Error ? error.message : 'Unknown error'));
+          toast.error('Failed to create entity: ' + (error instanceof Error ? error.message : 'Unknown error'));
           closeMenu();
         }
       } else {

@@ -9,6 +9,7 @@ import { useCodexStore } from '@/stores/codexStore';
 import { useBrainstormStore } from '@/stores/brainstormStore';
 import { codexApi, chaptersApi, worldsApi } from '@/lib/api';
 import { toast } from '@/stores/toastStore';
+import { confirm } from '@/stores/confirmStore';
 import type { Entity, EntityType } from '@/types/codex';
 import type { World } from '@/types/world';
 import EntityCard from './EntityCard';
@@ -26,7 +27,11 @@ interface CodexMainViewProps {
   onOpenChapter?: (chapterId: string) => void;
 }
 
-type CodexTab = 'entities' | 'world' | 'relationships' | 'intel';
+const LazyVoiceProfilePanel = lazy(() =>
+  import('@/components/VoiceAnalysis/VoiceProfilePanel').then(m => ({ default: m.VoiceProfilePanel }))
+);
+
+type CodexTab = 'entities' | 'world' | 'relationships' | 'intel' | 'voice';
 
 export default function CodexMainView({
   manuscriptId,
@@ -302,7 +307,7 @@ export default function CodexMainView({
 
   const handleBulkDelete = async () => {
     if (selectedEntityIds.size === 0) return;
-    if (!window.confirm(`Delete ${selectedEntityIds.size} selected entities? This cannot be undone.`)) return;
+    if (!(await confirm({ title: 'Delete Entities', message: `Delete ${selectedEntityIds.size} selected entities? This cannot be undone.`, variant: 'danger', confirmLabel: 'Delete' }))) return;
 
     try {
       await Promise.all(
@@ -601,6 +606,17 @@ export default function CodexMainView({
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab('voice')}
+            className={`flex-1 px-4 py-2 font-sans text-sm font-medium uppercase tracking-button transition-colors ${
+              activeTab === 'voice'
+                ? 'bg-bronze text-white'
+                : 'bg-slate-ui/20 text-faded-ink hover:bg-slate-ui/40'
+            }`}
+            style={{ borderRadius: '2px' }}
+          >
+            Voice
+          </button>
         </div>
       </div>
 
@@ -840,6 +856,21 @@ export default function CodexMainView({
               </div>
               <SuggestionQueue manuscriptId={manuscriptId} />
             </div>
+          </div>
+        )}
+
+        {activeTab === 'voice' && (
+          <div className="flex-1 overflow-y-auto bg-vellum">
+            <Suspense fallback={
+              <div className="flex items-center justify-center h-full">
+                <div className="inline-block w-8 h-8 border-2 border-bronze border-t-transparent rounded-full animate-spin" />
+              </div>
+            }>
+              <LazyVoiceProfilePanel
+                manuscriptId={manuscriptId}
+                selectedCharacterId={effectiveSelectedId || undefined}
+              />
+            </Suspense>
           </div>
         )}
       </div>
