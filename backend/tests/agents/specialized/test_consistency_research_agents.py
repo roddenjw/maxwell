@@ -225,9 +225,10 @@ class TestConsistencyAgent:
         agent = ConsistencyAgent(config=config, api_key="test-key")
 
         with patch.object(agent, '_context_loader') as mock_loader, \
-             patch.object(agent, '_load_entity_context', return_value="Entity context"), \
-             patch.object(agent, '_load_timeline_context', return_value="Timeline context"), \
-             patch.object(agent, '_load_world_context', return_value="World context"), \
+             patch.object(agent, '_load_entity_context', new_callable=AsyncMock, return_value="Entity context"), \
+             patch.object(agent, '_load_timeline_context', new_callable=AsyncMock, return_value="Timeline context"), \
+             patch.object(agent, '_load_world_context', new_callable=AsyncMock, return_value="World context"), \
+             patch.object(agent, '_load_culture_context', new_callable=AsyncMock, return_value="Culture context"), \
              patch('app.agents.base.agent_base.llm_service') as mock_service:
 
             mock_context = MagicMock()
@@ -253,9 +254,10 @@ class TestConsistencyAgent:
         agent = ConsistencyAgent(config=config, api_key="test-key")
 
         with patch.object(agent, '_context_loader') as mock_loader, \
-             patch.object(agent, '_load_entity_context', return_value="Entity context"), \
-             patch.object(agent, '_load_timeline_context', return_value="Timeline context"), \
-             patch.object(agent, '_load_world_context', return_value="World context"), \
+             patch.object(agent, '_load_entity_context', new_callable=AsyncMock, return_value="Entity context"), \
+             patch.object(agent, '_load_timeline_context', new_callable=AsyncMock, return_value="Timeline context"), \
+             patch.object(agent, '_load_world_context', new_callable=AsyncMock, return_value="World context"), \
+             patch.object(agent, '_load_culture_context', new_callable=AsyncMock, return_value="Culture context"), \
              patch('app.agents.base.agent_base.llm_service') as mock_service:
 
             mock_context = MagicMock()
@@ -296,11 +298,12 @@ class TestConsistencyAgent:
         agent = ConsistencyAgent(config=config, api_key="test-key")
 
         with patch.object(agent, '_context_loader') as mock_loader, \
-             patch.object(agent, '_load_character_profiles', return_value="Character profiles"), \
-             patch.object(agent, '_load_full_timeline', return_value="Timeline"), \
-             patch.object(agent, '_load_world_context', return_value="World"), \
-             patch.object(agent, '_load_relationships', return_value="Relationships"), \
-             patch.object(agent, '_load_chapters', return_value=[{"id": "ch1", "title": "Chapter 1", "content": "Test content"}]), \
+             patch.object(agent, '_load_character_profiles', new_callable=AsyncMock, return_value="Character profiles"), \
+             patch.object(agent, '_load_full_timeline', new_callable=AsyncMock, return_value="Timeline"), \
+             patch.object(agent, '_load_world_context', new_callable=AsyncMock, return_value="World"), \
+             patch.object(agent, '_load_relationships', new_callable=AsyncMock, return_value="Relationships"), \
+             patch.object(agent, '_load_culture_context', new_callable=AsyncMock, return_value="Culture"), \
+             patch.object(agent, '_load_chapters', new_callable=AsyncMock, return_value=[{"id": "ch1", "title": "Chapter 1", "content": "Test content"}]), \
              patch('app.agents.base.agent_base.llm_service') as mock_service:
 
             mock_context = MagicMock()

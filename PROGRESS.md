@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-02-20
 **Overall Completion:** 96% across all phases
-**Current Focus:** Desktop Distribution + Maxwell Unified Polish
+**Current Focus:** Desktop Distribution + Quality & Polish (Phase 11)
 
 ---
 
@@ -19,6 +19,7 @@
 | **Phase 7: PLG Features** | ⏳ Planned | 0% | Feb 2026 | Viral mechanics |
 | **Phase 8: Library & World Management** | ✅ Complete | 100% | Jan 18, 2026 | World/Series hierarchy |
 | **Phase 10: Desktop Distribution** | 🚧 In Progress | 33% | Feb 2026 | Docker + Electron |
+| **Phase 11: Quality & Polish** | 🚧 In Progress | 20% | Mar 2026 | Agent tools, UX, tests |
 
 ---
 
@@ -184,6 +185,16 @@
 ## Recent Completions (Last 2 Weeks)
 
 ### February 20, 2026
+- **Fix Agent Tool Execution (Phase 11.1)**
+  - Replaced all stub/no-op tool execution with real LangChain `model.bind_tools()` + tool-call loop
+  - `BaseMaxwellAgent._run_with_tools()`: Full rewrite — agents now dynamically invoke tools via native API function calling
+  - Added `max_tool_iterations` guard (default 3) to prevent runaway tool calls, with fallback for unsupported models
+  - `ConsistencyAgent`: 8 stub context loaders replaced with real DB queries via `query_entities`, `query_timeline`, `query_world_rules`, `query_relationships`, `CultureService`, and direct Chapter DB queries
+  - `ResearchAgent`: 2 stub context loaders replaced with real `query_world_settings` and `search_entities` invocations
+  - `SmartCoachAgent`: Real LLM-driven tool calling in chat; removed 3 no-op methods (`_get_tool_descriptions`, `_extract_tool_usage`, `_enhance_with_tool_results`)
+  - `LLMService`: Exposed `get_langchain_model()` and `convert_messages()` public wrappers
+  - All 180 agent tests updated and passing; added 5 new tool-calling tests for base agent
+  - **Files Modified:** `llm_service.py`, `agent_config.py`, `agent_base.py`, `consistency_agent.py`, `research_agent.py`, `smart_coach_agent.py`, `test_agent_base.py`, `test_smart_coach.py`, `test_consistency_research_agents.py`, `test_specialized_agents.py`
 - **Sync Entity Types Across Extraction Settings, Codex, and Wiki**
   - Made Codex `EntityType` enum the canonical set of 9 types by adding ORGANIZATION and EVENT (previously only 7)
   - **Frontend:**
@@ -1429,14 +1440,24 @@
   - Target: Implement debounced auto-extraction by Jan 20
 
 - ⚠️ **Test coverage below 60% target (currently ~35%)**
-  - Status: Adding tests with each new feature
+  - Status: Adding tests with each new feature (Phase 11.5)
   - Impact: Risk of regressions
   - Target: 45% by Jan 30, 60% by Feb 28
 
 - ⚠️ **Frontend bundle size > 500KB**
-  - Status: No code splitting yet
+  - Status: No code splitting yet (Phase 11.4)
   - Impact: Slower initial page load
   - Target: Implement code splitting by Feb 15
+
+- ⚠️ **35+ components use browser `alert()`/`prompt()` dialogs**
+  - Status: Planned (Phase 11.2)
+  - Impact: Poor UX, inconsistent with design system
+  - Target: Replace with toast/notification system
+
+- ⚠️ **VoiceAnalysis component not wired into navigation**
+  - Status: Component exists but inaccessible (Phase 11.3)
+  - Impact: Feature is unreachable by users
+  - Target: Wire into activeView system
 
 - ⚠️ **Timeline validation can be slow for large manuscripts**
   - Status: Optimization opportunities identified

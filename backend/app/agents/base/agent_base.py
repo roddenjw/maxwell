@@ -15,18 +15,19 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 
+import logging
+
 from langchain_core.tools import BaseTool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import SystemMessage, HumanMessage
-
-# These will be imported at runtime if tools are used
-# to avoid issues with LangChain version differences
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 
 from app.agents.base.agent_config import AgentConfig, AgentType, ModelProvider
 from app.agents.base.context_loader import ContextLoader, AgentContext
-from app.services.llm_service import llm_service, LLMConfig, LLMResponse, LLMProvider
+from app.services.llm_service import llm_service, LLMConfig, LLMResponse, LLMProvider, calculate_cost
 from app.services.privacy_middleware import PrivacyMiddleware, PrivacyBlockedException, check_ai_allowed
 from app.database import get_db
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -340,29 +341,119 @@ Respond with valid JSON matching this schema:
         tools: List[BaseTool]
     ) -> LLMResponse:
         """
-        Run agent with tools.
+        Run agent with real LangChain tool calling.
 
-        For now, we run tools upfront to gather context, then pass
-        that context to the LLM for analysis. This avoids complex
-        agent loops while still leveraging tool data.
+        Uses model.bind_tools() + iterative tool-call loop:
+        1. Send messages to LLM with tools bound
+        2. If LLM returns tool_calls, execute each tool and append ToolMessage
+        3. Re-invoke until no more tool calls or max_tool_iterations reached
+        4. Falls back to text-in-prompt approach if bind_tools() isn't supported
         """
-        # Gather tool context by running relevant tools
+        config = self._build_llm_config()
+        max_iterations = self.config.max_tool_iterations
+
+        try:
+            model = llm_service.get_langchain_model(config)
+            model_with_tools = model.bind_tools(tools)
+        except Exception as e:
+            logger.warning(
+                "bind_tools() failed (%s), falling back to text-in-prompt approach", e
+            )
+            return await self._run_with_tools_fallback(messages, tools)
+
+        # Convert dict messages to LangChain message objects
+        lc_messages = llm_service.convert_messages(messages)
+
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+
+        for iteration in range(max_iterations + 1):
+            response = await model_with_tools.ainvoke(lc_messages)
+
+            # Accumulate usage from response metadata
+            if hasattr(response, "response_metadata"):
+                meta = response.response_metadata
+                usage = meta.get("usage") or meta.get("token_usage") or {}
+                total_prompt_tokens += usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0)
+                total_completion_tokens += usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
+
+            # If no tool calls, we're done
+            if not hasattr(response, "tool_calls") or not response.tool_calls:
+                break
+
+            # Don't execute tools on the last allowed iteration
+            if iteration >= max_iterations:
+                logger.info("Max tool iterations (%d) reached, returning last response", max_iterations)
+                break
+
+            # Execute each tool call
+            lc_messages.append(response)  # Append the AIMessage with tool_calls
+
+            for tool_call in response.tool_calls:
+                tool_name = tool_call["name"]
+                tool_args = tool_call["args"]
+                tool_id = tool_call.get("id", tool_name)
+
+                logger.info("Executing tool: %s with args: %s", tool_name, tool_args)
+
+                # Find the matching tool
+                matching_tool = next(
+                    (t for t in tools if t.name == tool_name), None
+                )
+
+                if matching_tool:
+                    try:
+                        tool_result = matching_tool.invoke(tool_args)
+                        # Convert non-string results to string
+                        if not isinstance(tool_result, str):
+                            tool_result = json.dumps(tool_result, default=str)
+                    except Exception as tool_err:
+                        logger.warning("Tool %s raised error: %s", tool_name, tool_err)
+                        tool_result = f"Error executing {tool_name}: {str(tool_err)}"
+                else:
+                    tool_result = f"Tool '{tool_name}' not found"
+
+                lc_messages.append(
+                    ToolMessage(content=tool_result, tool_call_id=tool_id)
+                )
+
+        # Build final LLMResponse
+        content = response.content if hasattr(response, "content") else str(response)
+        total_tokens = total_prompt_tokens + total_completion_tokens
+        cost = calculate_cost(
+            config.model, total_prompt_tokens, total_completion_tokens
+        )
+
+        return LLMResponse(
+            content=content,
+            model=config.model,
+            provider=LLMProvider(config.provider.value),
+            usage={
+                "prompt_tokens": total_prompt_tokens,
+                "completion_tokens": total_completion_tokens,
+                "total_tokens": total_tokens,
+            },
+            cost=cost,
+            raw_response=response,
+        )
+
+    async def _run_with_tools_fallback(
+        self,
+        messages: List[Dict[str, str]],
+        tools: List[BaseTool]
+    ) -> LLMResponse:
+        """
+        Fallback: append tool descriptions as text in system prompt.
+        Used when the model doesn't support bind_tools().
+        """
         tool_context = []
+        for tool in tools[:5]:
+            tool_context.append(f"- **{tool.name}**: {tool.description}")
 
-        for tool in tools[:5]:  # Limit tools per call
-            try:
-                # Tools that need manuscript_id - extract from messages
-                # This is a simplified approach; production would parse properly
-                tool_context.append(f"[Tool: {tool.name}]\n{tool.description}")
-            except Exception as e:
-                tool_context.append(f"[Tool: {tool.name}] Error: {str(e)}")
-
-        # Add tool context to system message
         if tool_context:
-            tool_info = "\n\n## Available Context Tools\n" + "\n".join(tool_context)
+            tool_info = "\n\n## Available Tools\n" + "\n".join(tool_context)
             messages[0]["content"] += tool_info
 
-        # Run direct LLM call with enhanced context
         return await self._run_direct(messages)
 
     def _parse_response(

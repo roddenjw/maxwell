@@ -31,6 +31,7 @@ Usage:
     )
 """
 
+import logging
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -44,7 +45,10 @@ from app.agents.tools import (
     query_world_rules,
     search_entities,
 )
+from app.services.llm_service import LLMResponse
 from langchain_core.tools import BaseTool
+
+logger = logging.getLogger(__name__)
 
 
 class WorldbuildingCategory(str, Enum):
@@ -435,13 +439,39 @@ class ResearchAgent(BaseMaxwellAgent):
                 pass
         return result.teaching_points
 
+    async def _run_with_tools(
+        self,
+        messages: List[Dict[str, str]],
+        tools: List
+    ) -> LLMResponse:
+        """
+        Override: ResearchAgent pre-loads context before calling analyze(),
+        so we skip LLM tool calling and use direct invocation instead.
+        """
+        return await self._run_direct(messages)
+
     async def _load_world_context(self, manuscript_id: str) -> str:
-        """Load world context for the manuscript"""
-        return f"[World context for manuscript {manuscript_id}]"
+        """Load world context for the manuscript using real DB queries."""
+        try:
+            result = query_world_settings.invoke({
+                "manuscript_id": manuscript_id,
+            })
+            return result if result else "No world context available."
+        except Exception as e:
+            logger.warning("Failed to load world context: %s", e)
+            return "World context unavailable."
 
     async def _load_relevant_entities(self, manuscript_id: str, topic: str) -> str:
-        """Load entities relevant to the topic"""
-        return f"[Entities related to '{topic}' in manuscript {manuscript_id}]"
+        """Load entities relevant to the topic using real DB queries."""
+        try:
+            result = search_entities.invoke({
+                "manuscript_id": manuscript_id,
+                "query": topic,
+            })
+            return result if result else f"No entities related to '{topic}' found."
+        except Exception as e:
+            logger.warning("Failed to load relevant entities: %s", e)
+            return "Entity context unavailable."
 
 
 def create_research_agent(

@@ -1,7 +1,7 @@
 # Maxwell Implementation Plan v2.0
 ## Integrated Roadmap: MVP → PLG Growth Engine
 
-**Last Updated:** February 8, 2026
+**Last Updated:** February 20, 2026
 **Vision:** The world's most intuitive fiction writing IDE with invisible engineering and viral growth mechanics
 
 ---
@@ -14,6 +14,7 @@ This plan integrates the full development roadmap from MVP launch to PLG growth 
 - **Phase 7:** PLG Features and Viral Mechanics (PLANNED)
 - **Phase 8:** Library & World Management (COMPLETE)
 - **Phase 10:** Desktop Distribution & Packaging (IN PROGRESS)
+- **Phase 11:** Quality & Polish (IN PROGRESS)
 
 **Key Principle:** Each phase must ship a feature that drives the next phase's growth.
 
@@ -789,6 +790,47 @@ maxwell/
 
 ---
 
+## Phase 11: Quality & Polish
+**Timeline:** February-March 2026
+**Status:** 🚧 In Progress
+**Goal:** Improve code quality, fix known issues, and polish the user experience
+
+### 11.1 Fix Agent Tool Execution ✅
+**Status:** Complete (Feb 20, 2026)
+
+Agents previously had stub `_run_with_tools()` that only appended tool descriptions as text. Now uses real LangChain `model.bind_tools()` + tool-call loop so agents can dynamically invoke tools.
+
+**Changes:**
+- `LLMService`: Exposed `get_langchain_model()` and `convert_messages()` public methods
+- `AgentConfig`: Added `max_tool_iterations` field (default 3)
+- `BaseMaxwellAgent._run_with_tools()`: Full rewrite with `bind_tools()` + iterative tool execution loop, fallback for unsupported models
+- `ConsistencyAgent`: 8 stub context loaders replaced with real DB queries via tool `.invoke()`
+- `ResearchAgent`: 2 stub context loaders replaced with real tool invocations
+- `SmartCoachAgent`: Real LLM-driven tool calling in `_chat_conversational()`, removed 3 no-op stub methods
+- All 180 agent tests updated and passing
+
+### 11.2 Replace `alert()`/`prompt()` with Toast System
+**Status:** Planned
+
+35+ components use browser `alert()` and `prompt()` dialogs. Replace with a proper toast/notification system for better UX.
+
+### 11.3 Wire VoiceAnalysis into Navigation
+**Status:** Planned
+
+VoiceAnalysis component exists but isn't accessible from the sidebar navigation. Wire it into the activeView system.
+
+### 11.4 Frontend Bundle Splitting
+**Status:** Planned
+
+Implement code splitting and route-level lazy loading to reduce initial bundle size.
+
+### 11.5 Test Coverage Improvement
+**Status:** Planned
+
+Increase backend test coverage from ~35% to 60%+. Focus on services, routes, and agent integration tests.
+
+---
+
 ## Success Metrics by Phase
 
 | Phase | Users | Revenue | Retention (6mo) | NPS | Key Metric | Status |
@@ -801,6 +843,7 @@ maxwell/
 | **Phase 9** | - | - | - | - | Agent framework | ✅ Complete |
 | **Phase 7** | 15,000 | $750,000 | 85% | 75 | Viral coefficient | ⏳ Planned |
 | **Phase 10** | 500 | - | 80% | 70 | Desktop downloads | 🚧 In Progress |
+| **Phase 11** | - | - | - | - | Code quality | 🚧 In Progress |
 
 **Target by End of 2027:**
 - 15,000+ active users
@@ -920,7 +963,7 @@ maxwell/
 
 ---
 
-**Last Updated:** February 8, 2026
+**Last Updated:** February 20, 2026
 **Next Review:** End of Phase 7 (Q2 2027)
 **Document Owner:** Implementation Team
 

@@ -22,17 +22,22 @@ Usage:
     )
 """
 
+import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 import json
 
+from langchain_core.messages import ToolMessage
+
 from app.agents.base.agent_config import ModelConfig, ModelProvider, AgentType
 from app.agents.base.context_loader import ContextLoader
 from app.agents.tools import ALL_TOOLS
-from app.services.llm_service import llm_service, LLMConfig, LLMProvider
+from app.services.llm_service import llm_service, LLMConfig, LLMProvider, calculate_cost
 from app.database import SessionLocal
 from app.models.agent import CoachSession, CoachMessage
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -390,31 +395,91 @@ class SmartCoachAgent:
         message: str,
         context: Optional[Dict[str, Any]]
     ) -> CoachResponse:
-        """Handle pure conversational chat without agent analysis."""
+        """
+        Handle conversational chat with real LLM tool calling.
+
+        Uses model.bind_tools() so the LLM can dynamically invoke
+        query_entities, query_timeline, etc. based on user questions.
+        """
         # Build conversation history
         messages = await self._build_messages(db, session, message, context)
 
-        # Get tools info for context
-        tool_descriptions = self._get_tool_descriptions()
-
-        # Generate response
         llm_config = self._build_llm_config()
-        response = await llm_service.generate(llm_config, messages)
+        max_iterations = 3
+        tools_used = []
+        tool_results = {}
 
-        # Parse tool usage from response (simplified)
-        tools_used, tool_results = self._extract_tool_usage(response.content)
+        try:
+            model = llm_service.get_langchain_model(llm_config)
+            model_with_tools = model.bind_tools(self._tools)
 
-        # If we identified a tool request, execute it and enhance response
-        if tools_used:
-            enhanced_content = await self._enhance_with_tool_results(
-                response.content,
-                tools_used,
-                session.manuscript_id,
-                context
+            # Convert to LangChain messages
+            lc_messages = llm_service.convert_messages(messages)
+
+            total_prompt_tokens = 0
+            total_completion_tokens = 0
+
+            for iteration in range(max_iterations + 1):
+                response = await model_with_tools.ainvoke(lc_messages)
+
+                # Accumulate usage
+                if hasattr(response, "response_metadata"):
+                    meta = response.response_metadata
+                    usage = meta.get("usage") or meta.get("token_usage") or {}
+                    total_prompt_tokens += usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0)
+                    total_completion_tokens += usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
+
+                # If no tool calls, we're done
+                if not hasattr(response, "tool_calls") or not response.tool_calls:
+                    break
+
+                if iteration >= max_iterations:
+                    break
+
+                # Execute tool calls
+                lc_messages.append(response)
+
+                for tool_call in response.tool_calls:
+                    tool_name = tool_call["name"]
+                    tool_args = tool_call["args"]
+                    tool_id = tool_call.get("id", tool_name)
+
+                    logger.info("Coach executing tool: %s", tool_name)
+
+                    matching_tool = next(
+                        (t for t in self._tools if t.name == tool_name), None
+                    )
+
+                    if matching_tool:
+                        try:
+                            result = matching_tool.invoke(tool_args)
+                            if not isinstance(result, str):
+                                result = json.dumps(result, default=str)
+                            tools_used.append(tool_name)
+                            tool_results[tool_name] = result[:500]  # Truncate for storage
+                        except Exception as tool_err:
+                            logger.warning("Tool %s error: %s", tool_name, tool_err)
+                            result = f"Error executing {tool_name}: {str(tool_err)}"
+                    else:
+                        result = f"Tool '{tool_name}' not found"
+
+                    lc_messages.append(
+                        ToolMessage(content=result, tool_call_id=tool_id)
+                    )
+
+            response_content = response.content if hasattr(response, "content") else str(response)
+            total_tokens = total_prompt_tokens + total_completion_tokens
+            cost = calculate_cost(
+                llm_config.model, total_prompt_tokens, total_completion_tokens
             )
-            response_content = enhanced_content
-        else:
-            response_content = response.content
+
+        except Exception as e:
+            # Fallback: direct call without tools
+            logger.warning("Tool-calling failed (%s), falling back to direct call", e)
+            llm_response = await llm_service.generate(llm_config, messages)
+            response_content = llm_response.content
+            cost = llm_response.cost
+            total_tokens = llm_response.usage.get("total_tokens", 0)
 
         # Save assistant message
         assistant_message = CoachMessage(
@@ -423,15 +488,15 @@ class SmartCoachAgent:
             content=response_content,
             tools_used=tools_used,
             tool_results=tool_results,
-            cost=response.cost,
-            tokens=response.usage.get("total_tokens", 0)
+            cost=cost,
+            tokens=total_tokens
         )
         db.add(assistant_message)
 
         # Update session stats
         session.message_count += 2
-        session.total_cost += response.cost
-        session.total_tokens += response.usage.get("total_tokens", 0)
+        session.total_cost += cost
+        session.total_tokens += total_tokens
         session.last_message_at = datetime.utcnow()
         db.commit()
 
@@ -439,8 +504,8 @@ class SmartCoachAgent:
             content=response_content,
             tools_used=tools_used,
             tool_results=tool_results,
-            cost=response.cost,
-            tokens=response.usage.get("total_tokens", 0),
+            cost=cost,
+            tokens=total_tokens,
             agents_consulted=[],
             analysis_performed=False
         )
@@ -484,9 +549,8 @@ class SmartCoachAgent:
             if context.get("chapter_title"):
                 context_parts.append(f"Current chapter: {context['chapter_title']}")
 
-        # Add tool descriptions
-        tool_info = self._get_tool_descriptions()
-        context_parts.append(f"\n## Available Tools\n{tool_info}")
+        # Note: tool descriptions are NOT added to prompt when using bind_tools().
+        # The LLM receives tool schemas natively via the API.
 
         # Build system message
         context_str = "\n\n".join(context_parts) if context_parts else ""
@@ -516,63 +580,6 @@ class SmartCoachAgent:
             max_tokens=self.model_config.max_tokens,
             api_key=self.api_key
         )
-
-    def _get_tool_descriptions(self) -> str:
-        """Get descriptions of available tools."""
-        tool_info = []
-        for tool in self._tools:
-            tool_info.append(f"- **{tool.name}**: {tool.description[:200]}")
-        return "\n".join(tool_info)
-
-    def _extract_tool_usage(self, content: str) -> tuple:
-        """
-        Extract tool usage hints from response content.
-
-        In a production system, this would use actual tool calling.
-        For now, we detect when the coach references tools.
-        """
-        tools_used = []
-        tool_results = {}
-
-        # Simple heuristic: detect tool mentions
-        tool_keywords = {
-            "query_entities": ["codex", "character", "entity", "entities"],
-            "query_timeline": ["timeline", "events", "when did"],
-            "query_outline": ["outline", "structure", "beat"],
-            "query_chapters": ["chapters", "chapter list"],
-            "search_manuscript": ["search", "find in manuscript"],
-        }
-
-        content_lower = content.lower()
-        for tool_name, keywords in tool_keywords.items():
-            for keyword in keywords:
-                if keyword in content_lower:
-                    if tool_name not in tools_used:
-                        tools_used.append(tool_name)
-                    break
-
-        return tools_used, tool_results
-
-    async def _enhance_with_tool_results(
-        self,
-        content: str,
-        tools_used: List[str],
-        manuscript_id: Optional[str],
-        context: Optional[Dict[str, Any]]
-    ) -> str:
-        """
-        Execute tools and potentially enhance the response.
-
-        In a full implementation, this would:
-        1. Execute the identified tools
-        2. Incorporate results into the response
-
-        For now, this is a placeholder that returns the original content.
-        Tool execution would require the specific query parameters
-        which would need to be extracted from the conversation.
-        """
-        # Placeholder - actual tool execution would go here
-        return content
 
     async def archive_session(self, session_id: str) -> bool:
         """Archive a coaching session."""

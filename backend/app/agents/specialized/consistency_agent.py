@@ -22,6 +22,7 @@ Usage:
     result = await agent.full_scan(manuscript_id, include_resolved=False)
 """
 
+import logging
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -37,7 +38,10 @@ from app.agents.tools import (
     query_world_rules,
     query_chapters,
 )
+from app.services.llm_service import LLMResponse
 from langchain_core.tools import BaseTool
+
+logger = logging.getLogger(__name__)
 
 
 class ConsistencyFocus(str, Enum):
@@ -378,47 +382,213 @@ class ConsistencyAgent(BaseMaxwellAgent):
             ))
         return issues
 
+    async def _run_with_tools(
+        self,
+        messages: List[Dict[str, str]],
+        tools: List
+    ) -> LLMResponse:
+        """
+        Override: ConsistencyAgent pre-loads all context before calling analyze(),
+        so we skip LLM tool calling and use direct invocation instead.
+        """
+        return await self._run_direct(messages)
+
+    def _get_world_id(self, manuscript_id: str) -> Optional[str]:
+        """Traverse manuscript -> series -> world to get world_id."""
+        from app.database import SessionLocal
+        from app.models.manuscript import Manuscript
+        from app.models.world import Series
+
+        db = SessionLocal()
+        try:
+            manuscript = db.query(Manuscript).filter(
+                Manuscript.id == manuscript_id
+            ).first()
+            if not manuscript or not manuscript.series_id:
+                return None
+            series = db.query(Series).filter(
+                Series.id == manuscript.series_id
+            ).first()
+            return series.world_id if series else None
+        finally:
+            db.close()
+
     async def _load_entity_context(
         self,
         manuscript_id: str,
         focus: ConsistencyFocus
     ) -> str:
-        """Load relevant entity context for quick check"""
-        # Simplified context loading - would use actual tools in production
-        return f"[Entity context for {focus.value} in manuscript {manuscript_id}]"
+        """Load relevant entity context for quick check using real DB queries."""
+        try:
+            entity_type = None
+            if focus == ConsistencyFocus.CHARACTER:
+                entity_type = "CHARACTER"
+            elif focus == ConsistencyFocus.LOCATION:
+                entity_type = "LOCATION"
+
+            result = query_entities.invoke({
+                "manuscript_id": manuscript_id,
+                "entity_type": entity_type,
+                "include_world_entities": True,
+                "include_series_entities": True,
+            })
+            return result if result else "No entities found."
+        except Exception as e:
+            logger.warning("Failed to load entity context: %s", e)
+            return "Entity context unavailable."
 
     async def _load_timeline_context(self, manuscript_id: str) -> str:
-        """Load timeline context"""
-        return f"[Timeline context for manuscript {manuscript_id}]"
+        """Load timeline context using real DB queries."""
+        try:
+            result = query_timeline.invoke({
+                "manuscript_id": manuscript_id,
+                "limit": 20,
+            })
+            return result if result else "No timeline events found."
+        except Exception as e:
+            logger.warning("Failed to load timeline context: %s", e)
+            return "Timeline context unavailable."
 
     async def _load_world_context(self, manuscript_id: str) -> str:
-        """Load world rules context"""
-        return f"[World rules for manuscript {manuscript_id}]"
+        """Load world rules context using real DB queries."""
+        try:
+            result = query_world_rules.invoke({
+                "manuscript_id": manuscript_id,
+            })
+            return result if result else "No world rules defined."
+        except Exception as e:
+            logger.warning("Failed to load world context: %s", e)
+            return "World context unavailable."
 
     async def _load_character_profiles(self, manuscript_id: str) -> str:
-        """Load all character profiles for full scan"""
-        return f"[Character profiles for manuscript {manuscript_id}]"
+        """Load all character profiles for full scan using real DB queries."""
+        try:
+            # First get all character entities
+            entities_result = query_entities.invoke({
+                "manuscript_id": manuscript_id,
+                "entity_type": "CHARACTER",
+                "include_world_entities": True,
+                "include_series_entities": True,
+            })
+
+            # Extract character names and get detailed profiles
+            profiles = [entities_result]
+
+            # Parse character names from entities result
+            from app.database import SessionLocal
+            from app.models.entity import Entity
+
+            db = SessionLocal()
+            try:
+                characters = db.query(Entity).filter(
+                    Entity.manuscript_id == manuscript_id,
+                    Entity.type == "CHARACTER"
+                ).limit(10).all()
+
+                for char in characters:
+                    try:
+                        profile = query_character_profile.invoke({
+                            "manuscript_id": manuscript_id,
+                            "character_name": char.name,
+                        })
+                        profiles.append(profile)
+                    except Exception:
+                        pass
+            finally:
+                db.close()
+
+            return "\n\n".join(profiles)
+        except Exception as e:
+            logger.warning("Failed to load character profiles: %s", e)
+            return "Character profiles unavailable."
 
     async def _load_full_timeline(self, manuscript_id: str) -> str:
-        """Load complete timeline for full scan"""
-        return f"[Complete timeline for manuscript {manuscript_id}]"
+        """Load complete timeline for full scan using real DB queries."""
+        try:
+            result = query_timeline.invoke({
+                "manuscript_id": manuscript_id,
+                "limit": 100,
+            })
+            return result if result else "No timeline events found."
+        except Exception as e:
+            logger.warning("Failed to load full timeline: %s", e)
+            return "Timeline unavailable."
 
     async def _load_relationships(self, manuscript_id: str) -> str:
-        """Load relationship data for full scan"""
-        return f"[Relationships for manuscript {manuscript_id}]"
+        """Load relationship data for full scan using real DB queries."""
+        try:
+            result = query_relationships.invoke({
+                "manuscript_id": manuscript_id,
+            })
+            return result if result else "No relationships found."
+        except Exception as e:
+            logger.warning("Failed to load relationships: %s", e)
+            return "Relationships unavailable."
 
     async def _load_culture_context(self, manuscript_id: str) -> str:
-        """Load cultural context for consistency checking"""
-        return f"[Cultural context for manuscript {manuscript_id}]"
+        """Load cultural context for consistency checking using CultureService."""
+        try:
+            world_id = self._get_world_id(manuscript_id)
+            if not world_id:
+                return "No world associated — cultural context unavailable."
+
+            from app.database import SessionLocal
+            from app.services.culture_service import CultureService
+
+            db = SessionLocal()
+            try:
+                service = CultureService(db)
+                cultures = service.get_world_cultures(world_id)
+                if not cultures:
+                    return "No cultures defined in this world."
+
+                lines = [f"Found {len(cultures)} cultures:"]
+                for culture in cultures:
+                    lines.append(f"\n## {culture.get('title', 'Unknown')}")
+                    if culture.get("summary"):
+                        lines.append(culture["summary"])
+                return "\n".join(lines)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning("Failed to load culture context: %s", e)
+            return "Cultural context unavailable."
 
     async def _load_chapters(
         self,
         manuscript_id: str,
         chapter_ids: Optional[List[str]]
     ) -> List[Dict[str, Any]]:
-        """Load chapter content for analysis"""
-        # Would load actual chapters in production
-        return [{"id": "ch1", "title": "Chapter 1", "content": "Sample content"}]
+        """Load chapter content for analysis using real DB queries."""
+        from app.database import SessionLocal
+        from app.models.manuscript import Chapter
+
+        db = SessionLocal()
+        try:
+            query = db.query(Chapter).filter(
+                Chapter.manuscript_id == manuscript_id,
+                Chapter.is_folder == 0
+            )
+
+            if chapter_ids:
+                query = query.filter(Chapter.id.in_(chapter_ids))
+
+            query = query.order_by(Chapter.order_index)
+            chapters = query.all()
+
+            return [
+                {
+                    "id": ch.id,
+                    "title": ch.title,
+                    "content": ch.content or "",
+                }
+                for ch in chapters
+            ]
+        except Exception as e:
+            logger.warning("Failed to load chapters: %s", e)
+            return []
+        finally:
+            db.close()
 
 
 def create_consistency_agent(

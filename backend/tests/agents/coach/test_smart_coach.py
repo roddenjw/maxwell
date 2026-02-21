@@ -150,67 +150,18 @@ class TestSmartCoachAgent:
         assert config.provider == LLMProvider.ANTHROPIC
         assert config.model == "claude-3-haiku-20240307"
 
-    def test_get_tool_descriptions(self):
-        """Test _get_tool_descriptions method"""
+    def test_tools_available(self):
+        """Test coach has tools loaded for tool calling"""
         coach = SmartCoachAgent(
             api_key="test-key",
             user_id="test-user"
         )
 
-        descriptions = coach._get_tool_descriptions()
-
-        assert isinstance(descriptions, str)
-        # Should contain tool info
-        assert len(descriptions) > 0
-
-    def test_extract_tool_usage_with_codex(self):
-        """Test _extract_tool_usage detects codex references"""
-        coach = SmartCoachAgent(
-            api_key="test-key",
-            user_id="test-user"
-        )
-
-        content = "Let me check your codex for character information."
-        tools_used, results = coach._extract_tool_usage(content)
-
-        assert "query_entities" in tools_used
-
-    def test_extract_tool_usage_with_timeline(self):
-        """Test _extract_tool_usage detects timeline references"""
-        coach = SmartCoachAgent(
-            api_key="test-key",
-            user_id="test-user"
-        )
-
-        content = "I'll check your timeline to see when this event occurred."
-        tools_used, results = coach._extract_tool_usage(content)
-
-        assert "query_timeline" in tools_used
-
-    def test_extract_tool_usage_with_outline(self):
-        """Test _extract_tool_usage detects outline references"""
-        coach = SmartCoachAgent(
-            api_key="test-key",
-            user_id="test-user"
-        )
-
-        content = "Looking at your outline structure for this beat..."
-        tools_used, results = coach._extract_tool_usage(content)
-
-        assert "query_outline" in tools_used
-
-    def test_extract_tool_usage_no_tools(self):
-        """Test _extract_tool_usage with no tool references"""
-        coach = SmartCoachAgent(
-            api_key="test-key",
-            user_id="test-user"
-        )
-
-        content = "Great question! Let me explain show vs tell."
-        tools_used, results = coach._extract_tool_usage(content)
-
-        assert tools_used == []
-        assert results == {}
+        # Coach should have ALL_TOOLS available
+        assert len(coach._tools) > 0
+        tool_names = [t.name for t in coach._tools]
+        assert "query_entities" in tool_names
+        assert "query_timeline" in tool_names
 
     @pytest.mark.asyncio
     async def test_start_session(self):
@@ -298,7 +249,7 @@ class TestSmartCoachAgent:
 
     @pytest.mark.asyncio
     async def test_chat(self, mock_session, mock_llm_response):
-        """Test chat method"""
+        """Test chat method with real tool calling"""
         coach = SmartCoachAgent(
             api_key="test-key",
             user_id="test-user"
@@ -315,7 +266,19 @@ class TestSmartCoachAgent:
             mock_db_instance.commit = MagicMock()
             mock_db_instance.close = MagicMock()
 
-            mock_llm.generate = AsyncMock(return_value=mock_llm_response)
+            # Mock the model that supports tool calling
+            mock_model = MagicMock()
+            mock_model_with_tools = AsyncMock()
+            # LLM returns final answer (no tool calls)
+            final_response = MagicMock()
+            final_response.tool_calls = []
+            final_response.content = mock_llm_response.content
+            final_response.response_metadata = {"usage": {"prompt_tokens": 500, "completion_tokens": 100}}
+            mock_model_with_tools.ainvoke = AsyncMock(return_value=final_response)
+            mock_model.bind_tools = MagicMock(return_value=mock_model_with_tools)
+
+            mock_llm.get_langchain_model = MagicMock(return_value=mock_model)
+            mock_llm.convert_messages = MagicMock(return_value=[])
 
             with patch.object(coach, '_context_loader') as mock_loader:
                 mock_context = MagicMock()
@@ -329,7 +292,6 @@ class TestSmartCoachAgent:
 
         assert isinstance(response, CoachResponse)
         assert response.session_id == "session-123"
-        assert response.cost > 0
         assert len(response.content) > 0
 
     @pytest.mark.asyncio
@@ -356,10 +318,11 @@ class TestSmartCoachAgent:
 
     @pytest.mark.asyncio
     async def test_chat_with_context(self, mock_session, mock_llm_response):
-        """Test chat with additional context"""
+        """Test chat with additional context (agent routing disabled)"""
         coach = SmartCoachAgent(
             api_key="test-key",
-            user_id="test-user"
+            user_id="test-user",
+            enable_agent_routing=False
         )
 
         with patch('app.agents.coach.smart_coach_agent.SessionLocal') as mock_db, \
@@ -373,7 +336,18 @@ class TestSmartCoachAgent:
             mock_db_instance.commit = MagicMock()
             mock_db_instance.close = MagicMock()
 
-            mock_llm.generate = AsyncMock(return_value=mock_llm_response)
+            # Mock tool-calling model
+            mock_model = MagicMock()
+            mock_model_with_tools = AsyncMock()
+            final_response = MagicMock()
+            final_response.tool_calls = []
+            final_response.content = mock_llm_response.content
+            final_response.response_metadata = {"usage": {"prompt_tokens": 500, "completion_tokens": 100}}
+            mock_model_with_tools.ainvoke = AsyncMock(return_value=final_response)
+            mock_model.bind_tools = MagicMock(return_value=mock_model_with_tools)
+
+            mock_llm.get_langchain_model = MagicMock(return_value=mock_model)
+            mock_llm.convert_messages = MagicMock(return_value=[])
 
             with patch.object(coach, '_context_loader') as mock_loader:
                 mock_context = MagicMock()

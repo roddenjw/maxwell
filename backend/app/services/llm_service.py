@@ -196,6 +196,14 @@ class LLMService:
         else:
             raise ValueError(f"Unsupported provider: {config.provider}")
 
+    def get_langchain_model(self, config: LLMConfig) -> BaseChatModel:
+        """Public wrapper for _get_langchain_model - used by agents for tool calling"""
+        return self._get_langchain_model(config)
+
+    def convert_messages(self, messages: List[Dict[str, str]]):
+        """Public wrapper for _convert_messages - used by agents for tool calling"""
+        return self._convert_messages(messages)
+
     def _get_local_model(self, config: LLMConfig):
         """Get or initialize local llama-cpp model"""
         from app.services.local_llm_service import LocalLLMService

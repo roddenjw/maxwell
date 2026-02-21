@@ -120,6 +120,7 @@ class AgentConfig:
 
     # Tool configuration
     enabled_tools: List[str] = field(default_factory=list)
+    max_tool_iterations: int = 3  # Max tool-call rounds per LLM invocation
 
     @classmethod
     def for_agent_type(
