@@ -4585,6 +4585,33 @@ export const cultureApi = {
 };
 
 /**
+ * Refinement API - Generic AI refinement loop
+ */
+export const refinementApi = {
+  async refine(data: {
+    api_key: string;
+    domain: string;
+    original: any;
+    feedback: string;
+    context: Record<string, string>;
+    history: Array<{ role: string; content: string }>;
+  }): Promise<{ success: boolean; data: any; error?: string; cost?: { formatted: string } }> {
+    const response = await fetch(`${API_BASE_URL}/ai/refine`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Refinement failed');
+    }
+
+    return response.json();
+  },
+};
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{ status: string; service: string }> {
@@ -4614,5 +4641,6 @@ export default {
   thesaurus: thesaurusApi,
   writingFeedback: writingFeedbackApi,
   culture: cultureApi,
+  refinement: refinementApi,
   healthCheck,
 };

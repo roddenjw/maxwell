@@ -105,17 +105,20 @@ export default function AddSceneButton({ afterBeat, nextBeat }: AddSceneButtonPr
 
   if (!isOpen) {
     return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="w-full py-1.5 px-3 flex items-center justify-center gap-2 text-sm text-faded-ink/60 hover:text-bronze hover:bg-bronze/5 transition-colors border-2 border-dashed border-transparent hover:border-bronze/30 group"
-        style={{ borderRadius: '2px' }}
-        title={`Add a scene between "${afterBeat.beat_label}" and "${nextBeat?.beat_label || 'end'}"`}
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-        </svg>
-        <span className="opacity-0 group-hover:opacity-100 transition-opacity">Add Scene</span>
-      </button>
+      <div className="relative py-2 flex items-center justify-center">
+        <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-slate-ui/40" />
+        <button
+          onClick={() => setIsOpen(true)}
+          className="relative z-10 px-3 py-1 flex items-center gap-1.5 text-xs font-sans font-medium text-faded-ink/60 hover:text-bronze bg-vellum border border-slate-ui/40 hover:border-bronze/50 transition-colors"
+          style={{ borderRadius: '2px' }}
+          title={`Add a scene between "${afterBeat.beat_label}" and "${nextBeat?.beat_label || 'end'}"`}
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          <span>Add Scene</span>
+        </button>
+      </div>
     );
   }
 

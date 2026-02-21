@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { useOutlineStore } from '@/stores/outlineStore';
 import type { Outline, PlotHole, PlotHoleDismissal } from '@/types/outline';
 import { Z_INDEX } from '@/lib/zIndex';
+import RefinementPanel from '../shared/RefinementPanel';
 
 interface AISuggestionsPanelProps {
   outline: Outline;
@@ -27,6 +28,7 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
   ]);
   const [severityFilter, setSeverityFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null);
+  const [refiningBeat, setRefiningBeat] = useState<string | null>(null);
 
   // Plot hole interaction state
   const [dismissingIndex, setDismissingIndex] = useState<number | null>(null);
@@ -551,6 +553,42 @@ export default function AISuggestionsPanel({ outline, isOpen, onClose }: AISugge
                             </div>
                           </div>
                           <p className="text-sm font-sans text-midnight leading-relaxed">{aiDescription}</p>
+
+                          {/* Refine This link */}
+                          {refiningBeat !== beat.beat_name && (
+                            <button
+                              onClick={() => setRefiningBeat(beat.beat_name)}
+                              className="mt-2 text-xs font-sans font-medium text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                              Refine This
+                            </button>
+                          )}
+
+                          {/* Inline Refinement Panel */}
+                          {refiningBeat === beat.beat_name && (
+                            <RefinementPanel
+                              suggestion={{ description: aiDescription }}
+                              domain="beat_description"
+                              context={{
+                                beat_name: beat.beat_name,
+                                beat_label: beat.beat_label,
+                                beat_description: beat.beat_description || '',
+                              }}
+                              renderSuggestion={(s) => (
+                                <p className="text-sm font-sans text-midnight leading-relaxed">
+                                  {s.description}
+                                </p>
+                              )}
+                              onAccept={async (refined) => {
+                                await handleApplyBeatDescription(beat.beat_name, refined.description);
+                                setRefiningBeat(null);
+                              }}
+                              onCancel={() => setRefiningBeat(null)}
+                            />
+                          )}
 
                           {/* Expanded feedback notes */}
                           {isFeedbackExpanded && (

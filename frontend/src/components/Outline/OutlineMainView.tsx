@@ -21,6 +21,7 @@ import TimelineView from './TimelineView';
 import ProgressDashboard from './ProgressDashboard';
 import AISuggestionsPanel from './AISuggestionsPanel';
 import OutlineGanttView from './OutlineGanttView';
+import FillFromManuscriptModal from './FillFromManuscriptModal';
 import type { PlotBeat } from '@/types/outline';
 
 interface OutlineMainViewProps {
@@ -56,6 +57,10 @@ export default function OutlineMainView({
   const [showStructureInfo, setShowStructureInfo] = useState(false);
   const [structureDetails, setStructureDetails] = useState<any>(null);
   const [isGeneratingFromCharacters, setIsGeneratingFromCharacters] = useState(false);
+  const [isFillingFromManuscript, setIsFillingFromManuscript] = useState(false);
+  const [fillResult, setFillResult] = useState<any>(null);
+  const [fillCost, setFillCost] = useState<{ formatted: string } | undefined>(undefined);
+  const [showFillModal, setShowFillModal] = useState(false);
   const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
   const [gapAnalysis, setGapAnalysis] = useState<{
     beat_analysis: Array<{
@@ -261,6 +266,34 @@ export default function OutlineMainView({
       toast.error(getErrorMessage(err));
     } finally {
       setIsAnalyzingGaps(false);
+    }
+  };
+
+  const handleFillFromManuscript = async () => {
+    if (!outline) return;
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      toast.error('Please set your OpenRouter API key in Settings');
+      return;
+    }
+
+    setIsFillingFromManuscript(true);
+    try {
+      const result = await outlineApi.fillFromManuscript(outline.id, {
+        manuscript_id: manuscriptId,
+        api_key: apiKey,
+      });
+
+      if (result.success) {
+        setFillResult(result.data);
+        setFillCost(result.cost);
+        setShowFillModal(true);
+        toast.success(`Structure mapped! ${result.data.beats_created} beats, ${result.data.scenes_created} scenes created.`);
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setIsFillingFromManuscript(false);
     }
   };
 
@@ -693,6 +726,25 @@ export default function OutlineMainView({
             🔄 Switch Structure
           </button>
           <button
+            onClick={handleFillFromManuscript}
+            disabled={isFillingFromManuscript}
+            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-sans text-sm font-medium uppercase tracking-button transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            style={{ borderRadius: '2px' }}
+            title="AI analyzes your manuscript and maps it to outline beats"
+          >
+            {isFillingFromManuscript ? (
+              <>
+                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Analyzing...
+              </>
+            ) : (
+              '📖 Fill from Manuscript'
+            )}
+          </button>
+          <button
             onClick={() => setShowAIPanel(true)}
             className="px-4 py-2 bg-bronze hover:bg-bronze-dark text-white font-sans text-sm font-medium uppercase tracking-button transition-colors shadow-md"
             style={{ borderRadius: '2px' }}
@@ -733,6 +785,17 @@ export default function OutlineMainView({
             onClose={() => setShowAIPanel(false)}
           />
         </>
+      )}
+
+      {/* Fill from Manuscript Modal */}
+      {fillResult && (
+        <FillFromManuscriptModal
+          isOpen={showFillModal}
+          onClose={() => setShowFillModal(false)}
+          result={fillResult}
+          cost={fillCost}
+          onReload={() => loadOutline(manuscriptId)}
+        />
       )}
 
       {/* Structure Info Modal */}

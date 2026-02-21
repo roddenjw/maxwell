@@ -445,6 +445,19 @@ export default function PlotBeatCard({ beat, manuscriptId, onCreateChapter, onOp
                       onDismiss={() => handleDismissSuggestion(idx)}
                       onFeedback={handleSuggestionFeedback}
                       feedback={suggestionFeedback.get(idx)}
+                      onRefineAccept={async (refined) => {
+                        try {
+                          await updateBeat(beat.id, { beat_description: refined.description });
+                          toast.success('Refined suggestion applied!');
+                        } catch {
+                          toast.error('Failed to apply refined suggestion');
+                        }
+                      }}
+                      beatContext={{
+                        beat_name: beat.beat_name,
+                        beat_label: beat.beat_label,
+                        beat_description: beat.beat_description || '',
+                      }}
                     />
                   ))}
 

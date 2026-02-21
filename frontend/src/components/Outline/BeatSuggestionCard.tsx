@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { BeatSuggestion } from '../../types/outline';
+import RefinementPanel from '../shared/RefinementPanel';
 
 interface BeatSuggestionCardProps {
   suggestion: BeatSuggestion;
@@ -8,21 +9,15 @@ interface BeatSuggestionCardProps {
   onDismiss: () => void;
   onFeedback?: (index: number, feedback: 'like' | 'dislike') => void;
   feedback?: 'like' | 'dislike' | null;
+  onRefineAccept?: (refined: any) => void;
+  beatContext?: Record<string, string>;
 }
 
 /**
  * BeatSuggestionCard Component
  *
- * Displays a single AI-generated suggestion for a plot beat with options to apply, dismiss, or provide feedback.
+ * Displays a single AI-generated suggestion for a plot beat with options to apply, dismiss, refine, or provide feedback.
  * Part of the AI beat analysis feature with refinement loop support.
- *
- * Features:
- * - Type-based icons (scene, character, dialogue, subplot)
- * - Expandable description
- * - Apply button to use the suggestion
- * - Dismiss button to mark as used
- * - Like/dislike buttons for refinement feedback
- * - Visual dimming when marked as used
  */
 export default function BeatSuggestionCard({
   suggestion,
@@ -30,9 +25,12 @@ export default function BeatSuggestionCard({
   onApply,
   onDismiss,
   onFeedback,
-  feedback
+  feedback,
+  onRefineAccept,
+  beatContext,
 }: BeatSuggestionCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [showRefine, setShowRefine] = useState(false);
 
   // Type-based icons and colors
   const typeConfig = {
@@ -77,10 +75,16 @@ export default function BeatSuggestionCard({
             </span>
           </div>
 
-          {/* Expanded Description */}
-          {isExpanded && (
+          {/* Description */}
+          {isExpanded ? (
             <p className={`text-sm mt-2 ${suggestion.used ? 'text-gray-500' : 'text-midnight'}`}>
               {suggestion.description}
+            </p>
+          ) : suggestion.description && (
+            <p className={`text-xs mt-1 truncate ${suggestion.used ? 'text-gray-400' : 'text-faded-ink'}`}>
+              {suggestion.description.length > 80
+                ? suggestion.description.slice(0, 80) + '...'
+                : suggestion.description}
             </p>
           )}
         </div>
@@ -108,7 +112,7 @@ export default function BeatSuggestionCard({
             </svg>
           </button>
 
-          {/* Apply and Dismiss Buttons (only if not used) */}
+          {/* Apply, Refine, and Dismiss Buttons (only if not used) */}
           {!suggestion.used && (
             <>
               {/* Feedback Buttons */}
@@ -146,6 +150,23 @@ export default function BeatSuggestionCard({
               )}
 
               <div className="flex flex-col gap-1">
+                {/* Refine Button */}
+                {onRefineAccept && (
+                  <button
+                    onClick={() => setShowRefine(!showRefine)}
+                    className={`p-1 rounded transition-colors ${
+                      showRefine
+                        ? 'bg-purple-100 text-purple-600'
+                        : 'text-purple-400 hover:bg-purple-50 hover:text-purple-600'
+                    }`}
+                    title="Refine this suggestion with AI"
+                    aria-label="Refine suggestion"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                )}
                 <button
                   onClick={onApply}
                   className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
@@ -178,6 +199,35 @@ export default function BeatSuggestionCard({
           )}
         </div>
       </div>
+
+      {/* Inline Refinement Panel */}
+      {showRefine && onRefineAccept && (
+        <RefinementPanel
+          suggestion={{
+            title: suggestion.title,
+            description: suggestion.description,
+            type: suggestion.type,
+          }}
+          domain="beat_suggestion"
+          context={beatContext || {}}
+          renderSuggestion={(s) => (
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-base">{config.icon}</span>
+                <span className={`font-sans font-semibold text-sm ${config.color}`}>
+                  {s.title}
+                </span>
+              </div>
+              <p className="text-sm text-midnight">{s.description}</p>
+            </div>
+          )}
+          onAccept={(refined) => {
+            onRefineAccept(refined);
+            setShowRefine(false);
+          }}
+          onCancel={() => setShowRefine(false)}
+        />
+      )}
     </div>
   );
 }
