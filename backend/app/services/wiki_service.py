@@ -256,6 +256,11 @@ class WikiService:
         if not change or change.status != WikiChangeStatus.PENDING.value:
             return None
 
+        # Update change status FIRST - internal operations may commit/expire the session
+        change.status = WikiChangeStatus.APPROVED.value
+        change.reviewed_at = datetime.utcnow()
+        change.reviewer_note = reviewer_note
+
         # Apply the change based on type
         if change.change_type == WikiChangeType.CREATE.value:
             # Create new entry from proposed_entry
@@ -278,17 +283,16 @@ class WikiService:
             else:
                 entry = self.update_entry(change.wiki_entry_id, change.new_value)
         elif change.change_type == WikiChangeType.DELETE.value:
-            self.delete_entry(change.wiki_entry_id)
+            entry_id = change.wiki_entry_id
+            # Detach change from entry BEFORE deleting to prevent cascade deletion
+            change.wiki_entry_id = None
+            self.db.flush()
+            self.delete_entry(entry_id)
             entry = None
         else:
             entry = None
 
-        # Update change status
-        change.status = WikiChangeStatus.APPROVED.value
-        change.reviewed_at = datetime.utcnow()
-        change.reviewer_note = reviewer_note
         self.db.commit()
-
         return entry
 
     def reject_change(self, change_id: str, reviewer_note: Optional[str] = None) -> bool:

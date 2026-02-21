@@ -364,15 +364,20 @@ def approve_change(
     """Approve a pending change"""
     service = WikiService(db)
 
-    result = service.approve_change(change_id, review.reviewer_note)
+    try:
+        result = service.approve_change(change_id, review.reviewer_note)
+    except Exception as e:
+        logger.error(f"Error approving change {change_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to apply change: {str(e)}")
 
     if result is None:
         # Check if the change existed at all
         from app.models.wiki import WikiChange as WikiChangeModel
         change = db.query(WikiChangeModel).filter(WikiChangeModel.id == change_id).first()
-        if change is None:
-            raise HTTPException(status_code=404, detail="Change not found")
-        # Change existed but was already processed or was a delete (no entry returned)
+        if change is None or change.status != "approved":
+            raise HTTPException(status_code=404, detail="Change not found or already processed")
+        # Change existed but was a delete (no entry returned)
 
     return {
         "status": "approved",

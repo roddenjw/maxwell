@@ -132,9 +132,10 @@ export function WikiChangeQueue({ worldId, manuscriptId, onClose }: WikiChangeQu
     ? changes.filter(c => c.change_type === filterType)
     : changes;
 
-  // Approve change
-  const handleApprove = async (changeId: string, note?: string) => {
+  // Approve change - returns true on success
+  const handleApprove = async (changeId: string, note?: string): Promise<boolean> => {
     setProcessingId(changeId);
+    setError(null);
     try {
       const response = await fetch(
         `${API_BASE}/wiki/changes/${changeId}/approve`,
@@ -145,19 +146,30 @@ export function WikiChangeQueue({ worldId, manuscriptId, onClose }: WikiChangeQu
         }
       );
 
-      if (!response.ok) throw new Error('Failed to approve');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.detail || `Failed to approve (${response.status})`);
+      }
 
       setChanges((prev) => prev.filter((c) => c.id !== changeId));
+      setSelectedChanges((prev) => {
+        const next = new Set(prev);
+        next.delete(changeId);
+        return next;
+      });
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to approve');
+      return false;
     } finally {
       setProcessingId(null);
     }
   };
 
-  // Reject change
-  const handleReject = async (changeId: string, note?: string) => {
+  // Reject change - returns true on success
+  const handleReject = async (changeId: string, note?: string): Promise<boolean> => {
     setProcessingId(changeId);
+    setError(null);
     try {
       const response = await fetch(
         `${API_BASE}/wiki/changes/${changeId}/reject`,
@@ -168,11 +180,21 @@ export function WikiChangeQueue({ worldId, manuscriptId, onClose }: WikiChangeQu
         }
       );
 
-      if (!response.ok) throw new Error('Failed to reject');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.detail || `Failed to reject (${response.status})`);
+      }
 
       setChanges((prev) => prev.filter((c) => c.id !== changeId));
+      setSelectedChanges((prev) => {
+        const next = new Set(prev);
+        next.delete(changeId);
+        return next;
+      });
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reject');
+      return false;
     } finally {
       setProcessingId(null);
     }
@@ -185,7 +207,8 @@ export function WikiChangeQueue({ worldId, manuscriptId, onClose }: WikiChangeQu
       : filteredChanges.map(c => c.id);
 
     for (const changeId of toApprove) {
-      await handleApprove(changeId);
+      const ok = await handleApprove(changeId);
+      if (!ok) break; // Stop on first error
     }
     setSelectedChanges(new Set());
   };
@@ -197,13 +220,15 @@ export function WikiChangeQueue({ worldId, manuscriptId, onClose }: WikiChangeQu
       : filteredChanges.map(c => c.id);
 
     for (const changeId of toReject) {
-      await handleReject(changeId);
+      const ok = await handleReject(changeId);
+      if (!ok) break;
     }
     setSelectedChanges(new Set());
   };
 
   // Auto-approve high confidence
   const handleAutoApprove = async () => {
+    setError(null);
     try {
       const response = await fetch(
         `${API_BASE}/wiki/worlds/${worldId}/auto-approve`,
@@ -214,15 +239,16 @@ export function WikiChangeQueue({ worldId, manuscriptId, onClose }: WikiChangeQu
         }
       );
 
-      if (!response.ok) throw new Error('Auto-approve failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.detail || `Auto-approve failed (${response.status})`);
+      }
 
-      const result = await response.json();
+      await response.json();
 
       // Refresh changes
       await fetchChanges();
       await fetchSummary();
-
-      console.log('Auto-approved:', result.approved_count);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Auto-approve failed');
     }
@@ -348,13 +374,22 @@ export function WikiChangeQueue({ worldId, manuscriptId, onClose }: WikiChangeQu
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
+          {/* Dismissible error banner */}
+          {error && (
+            <div className="mx-4 mt-3 px-4 py-2 bg-red-50 border border-red-200 rounded flex items-center justify-between">
+              <span className="text-sm text-red-700">{error}</span>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-red-600 ml-3"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-gray-500">Loading changes...</div>
-            </div>
-          ) : error ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-red-500">{error}</div>
             </div>
           ) : filteredChanges.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-gray-500">
